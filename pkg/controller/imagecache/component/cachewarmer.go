@@ -19,9 +19,12 @@ import (
 	"github.com/dominodatalab/hephaestus/pkg/config"
 	"github.com/dominodatalab/hephaestus/pkg/controller/credentials"
 	"github.com/dominodatalab/hephaestus/pkg/controller/discovery"
+	"github.com/dominodatalab/hephaestus/pkg/controller/phase"
 )
 
-type CacheWarmerComponent struct{}
+type CacheWarmerComponent struct {
+	phase *phase.TransitionHelper
+}
 
 func CacheWarmer() *CacheWarmerComponent {
 	return &CacheWarmerComponent{}
@@ -41,6 +44,16 @@ func (c *CacheWarmerComponent) Initialize(ctx *core.Context, bldr *ctrl.Builder)
 			timeWindow: 10 * time.Minute,
 		},
 	)
+
+	c.phase = &phase.TransitionHelper{
+		Client: ctx.Client,
+		ConditionMeta: phase.TransitionConditions{
+			Initialize: func() (string, string) { return "Setup", "Starting warming process" },
+			Running:    func() (string, string) { return "Dispatch", "Builders are caching image layers" },
+			Success:    func() (string, string) { return "CacheSynced", "Image layers exported on all builders" },
+		},
+		ReadyCondition: c.GetReadyCondition(),
+	}
 
 	return nil
 }
@@ -90,12 +103,12 @@ func (c *CacheWarmerComponent) Reconcile(ctx *core.Context) (ctrl.Result, error)
 	/*
 		2. Load external data required for building
 	*/
-	c.setStatusPending(ctx, obj)
+	c.phase.SetInitializing(ctx, obj)
 
 	log.Info("Querying for buildkitd endpoints")
 	endpoints, err := discovery.BuildkitEndpoints(ctx, cfg)
 	if err != nil {
-		return ctrl.Result{}, c.setStatusFailed(ctx, obj, fmt.Errorf("buildkit worker lookup failed: %w", err))
+		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkit worker lookup failed: %w", err))
 	}
 
 	if len(endpoints) < len(podNames) {
@@ -112,14 +125,14 @@ func (c *CacheWarmerComponent) Reconcile(ctx *core.Context) (ctrl.Result, error)
 	log.Info("Processing registry credentials")
 	configDir, err := credentials.Persist(ctx, ctx.Config, obj.Spec.RegistryAuth)
 	if err != nil {
-		return ctrl.Result{}, c.setStatusFailed(ctx, obj, fmt.Errorf("registry credentials processing failed: %w", err))
+		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("registry credentials processing failed: %w", err))
 	}
 	defer os.RemoveAll(configDir)
 
 	/*
 		3. Dispatch concurrent cache operations
 	*/
-	c.setStatusRunning(ctx, obj)
+	c.phase.SetRunning(ctx, obj)
 
 	log.Info("Launching cache operation", "endpoints", endpoints, "images", obj.Spec.Images)
 	eg, _ := errgroup.WithContext(ctx)
@@ -163,60 +176,16 @@ func (c *CacheWarmerComponent) Reconcile(ctx *core.Context) (ctrl.Result, error)
 	}
 
 	if err = eg.Wait(); err != nil {
-		return ctrl.Result{}, c.setStatusFailed(ctx, obj, fmt.Errorf("caching operation failed: %w", err))
+		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("caching operation failed: %w", err))
 	}
 
 	/*
 		4. Record build metadata and report success
 	*/
-	c.setStatusSucceeded(ctx, obj, podNames)
+	obj.Status.BuildkitPods = podNames
+	obj.Status.CachedImages = obj.Spec.Images
+	c.phase.SetSucceeded(ctx, obj)
 
 	log.Info("Reconciliation complete")
 	return ctrl.Result{}, nil
-}
-
-func (c *CacheWarmerComponent) setStatusPending(ctx *core.Context, obj *hephv1.ImageCache) {
-	obj.Status.Phase = hephv1.PhaseInitializing
-	ctx.Conditions.SetUnknown(c.GetReadyCondition(), "Setup", "Starting warming process")
-
-	c.updateStatus(ctx, obj)
-}
-
-func (c *CacheWarmerComponent) setStatusRunning(ctx *core.Context, obj *hephv1.ImageCache) {
-	obj.Status.Phase = hephv1.PhaseRunning
-	ctx.Conditions.SetUnknown(c.GetReadyCondition(), "Dispatch", "Builders are caching image layers")
-
-	c.updateStatus(ctx, obj)
-}
-
-func (c *CacheWarmerComponent) setStatusSucceeded(ctx *core.Context, obj *hephv1.ImageCache, podNames []string) {
-	obj.Status.Phase = hephv1.PhaseSucceeded
-	obj.Status.BuildkitPods = podNames
-	obj.Status.CachedImages = obj.Spec.Images
-	ctx.Conditions.SetTrue(c.GetReadyCondition(), "CacheSynced", "Image layers exported on all builders")
-
-	c.updateStatus(ctx, obj)
-}
-
-func (c *CacheWarmerComponent) setStatusFailed(ctx *core.Context, obj *hephv1.ImageCache, err error) error {
-	obj.Status.Phase = hephv1.PhaseFailed
-	ctx.Conditions.SetFalse(c.GetReadyCondition(), "ExecutionError", err.Error())
-
-	c.updateStatus(ctx, obj)
-
-	return err
-}
-
-func (c *CacheWarmerComponent) updateStatus(ctx *core.Context, obj *hephv1.ImageCache) {
-	ctx.Log.Info("Updating status", "status", obj.Status)
-
-	if err := ctx.Client.Status().Update(ctx, obj); err != nil {
-		ctx.Log.Error(err, "Failed to update status, emitting event")
-		ctx.Recorder.Eventf(
-			obj,
-			corev1.EventTypeWarning,
-			"StatusUpdate",
-			"Failed to update phase %s: %w", obj.Status.Phase, err,
-		)
-	}
 }
