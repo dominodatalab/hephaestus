@@ -1,0 +1,18 @@
+CHART NAME: {{ .Chart.Name }}
+CHART VERSION: {{ .Chart.Version }}
+APP VERSION: {{ .Chart.AppVersion }}
+
+** Please be patient while the chart is being deployed **
+
+Supported Operations:
+
+1. Pre-warm image layer cache using `ImageCache` resources
+2. Launch a build using `ImageBuild` resources
+
+Obtain the Controller Configuration:
+
+kubectl get configmap --namespace {{ .Release.Namespace }} {{ include "common.names.fullname" . }} -ojsonpath='{.data.config\.yaml}'
+
+Example Resources:
+
+https://github.com/dominodatalab/hephaestus/tree/main/examples

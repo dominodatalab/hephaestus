@@ -6,19 +6,37 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.7.0
   creationTimestamp: null
-  name: imagebuilds.hephaestus.dominodatalab.com
+  name: imagecaches.hephaestus.dominodatalab.com
 spec:
   group: hephaestus.dominodatalab.com
   names:
-    kind: ImageBuild
-    listKind: ImageBuildList
-    plural: imagebuilds
+    kind: ImageCache
+    listKind: ImageCacheList
+    plural: imagecaches
     shortNames:
-    - imgb
-    singular: imagebuild
+    - ic
+    singular: imagecache
   scope: Namespaced
   versions:
-  - name: v1
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Status
+      type: string
+    - jsonPath: .status.cachedImages
+      name: Cached Images
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    - jsonPath: .spec.images
+      name: Target Images
+      priority: 10
+      type: string
+    - jsonPath: .status.buildkitPods
+      name: Target Pods
+      priority: 10
+      type: string
+    name: v1
     schema:
       openAPIV3Schema:
         properties:
@@ -36,16 +54,6 @@ spec:
             type: object
           spec:
             properties:
-              DisableCacheExports:
-                type: boolean
-              DisableCacheImports:
-                type: boolean
-              buildArgs:
-                items:
-                  type: string
-                type: array
-              context:
-                type: string
               images:
                 items:
                   type: string
@@ -73,9 +81,19 @@ spec:
                       type: string
                   type: object
                 type: array
+            required:
+            - images
             type: object
           status:
             properties:
+              buildkitPods:
+                items:
+                  type: string
+                type: array
+              cachedImages:
+                items:
+                  type: string
+                type: array
               conditions:
                 items:
                   description: "Condition contains details for one aspect of the current
@@ -146,6 +164,7 @@ spec:
                   type: object
                 type: array
               phase:
+                description: Phase represents a step in a resource processing lifecycle.
                 type: string
             type: object
         type: object

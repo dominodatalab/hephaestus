@@ -1,0 +1,23 @@
+apiVersion: hephaestus.dominodatalab.com/v1
+kind: ImageBuild
+metadata:
+  name: local-test
+spec:
+  context: https://remote-server.com/docker-context.tgz
+  images:
+    - username/repo:tag
+  buildArgs:
+    - ENV=development
+  cacheMode: min
+  cacheTag: local-test
+  disableCacheExports: false
+  disableCacheImports: false
+#  registryAuth:
+#    - server: https://index.docker.io/v1/
+#      basicAuth:
+#        username: foo
+#        password: bar
+#      secret:
+#        name: registry-credentials
+#        namespace: default
+#      cloudProvided: true

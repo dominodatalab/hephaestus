@@ -6,19 +6,29 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.7.0
   creationTimestamp: null
-  name: imagecaches.hephaestus.dominodatalab.com
+  name: imagebuilds.hephaestus.dominodatalab.com
 spec:
   group: hephaestus.dominodatalab.com
   names:
-    kind: ImageCache
-    listKind: ImageCacheList
-    plural: imagecaches
+    kind: ImageBuild
+    listKind: ImageBuildList
+    plural: imagebuilds
     shortNames:
-    - imgc
-    singular: imagecache
+    - ib
+    singular: imagebuild
   scope: Namespaced
   versions:
-  - name: v1
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Status
+      type: string
+    - jsonPath: .status.buildTime
+      name: Build Time
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1
     schema:
       openAPIV3Schema:
         properties:
@@ -36,6 +46,20 @@ spec:
             type: object
           spec:
             properties:
+              buildArgs:
+                items:
+                  type: string
+                type: array
+              cacheMode:
+                type: string
+              cacheTag:
+                type: string
+              context:
+                type: string
+              disableCacheExports:
+                type: boolean
+              disableCacheImports:
+                type: boolean
               images:
                 items:
                   type: string
@@ -63,11 +87,12 @@ spec:
                       type: string
                   type: object
                 type: array
-            required:
-            - images
             type: object
           status:
             properties:
+              buildTime:
+                description: BuildTime is the total time spend during the build process.
+                type: string
               conditions:
                 items:
                   description: "Condition contains details for one aspect of the current
@@ -138,6 +163,7 @@ spec:
                   type: object
                 type: array
               phase:
+                description: Phase represents a step in a resource processing lifecycle.
                 type: string
             type: object
         type: object

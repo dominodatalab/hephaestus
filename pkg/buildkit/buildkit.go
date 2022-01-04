@@ -23,6 +23,8 @@ type BuildOptions struct {
 	Context            string
 	Images             []string
 	BuildArgs          []string
+	CacheTag           string
+	CacheMode          string
 	DisableCacheExport bool
 	DisableCacheImport bool
 }
@@ -59,16 +61,16 @@ func NewRemoteClient(ctx context.Context, addr string, opts ...ClientOpt) (*Remo
 		return nil, fmt.Errorf("failed to create buildkit client: %w", err)
 	}
 
-	client := &RemoteClient{
+	rc := &RemoteClient{
 		bk:  bk,
 		ctx: ctx,
 		log: logr.Discard(),
 	}
 	for _, opt := range opts {
-		opt(client)
+		opt(rc)
 	}
 
-	return client, nil
+	return rc, nil
 }
 
 func (c *RemoteClient) Cache(image string) error {
@@ -98,6 +100,7 @@ func (c *RemoteClient) Cache(image string) error {
 
 func (c *RemoteClient) Build(opts BuildOptions) error {
 	return c.solveWith(func(buildDir string, solveOpt *client.SolveOpt) error {
+		c.log.Info("Fetching remote context", "url", opts.Context)
 		extract, err := archive.FetchAndExtract(c.log, c.ctx, opts.Context, buildDir, 5*time.Minute)
 		if err != nil {
 			return err
@@ -118,32 +121,39 @@ func (c *RemoteClient) Build(opts BuildOptions) error {
 			})
 		}
 
-		if !opts.DisableCacheExport {
-			solveOpt.CacheExports = []client.CacheOptionsEntry{
-				{
-					Type: "inline",
+		named, err := reference.ParseNormalizedNamed(opts.Images[0])
+		if err != nil {
+			return err
+		}
+		cacheRef, err := reference.WithTag(named, opts.CacheTag)
+		if err != nil {
+			return err
+		}
+		cacheOpts := []client.CacheOptionsEntry{
+			{
+				Type: "registry",
+				Attrs: map[string]string{
+					"ref": cacheRef.String(),
 				},
-			}
+			},
+		}
+
+		if !opts.DisableCacheExport {
+			solveOpt.CacheExports = cacheOpts
 		}
 		if !opts.DisableCacheImport {
-			// NOTE: this is presumptive but will always work if pushing a single image
-			named, err := reference.ParseNormalizedNamed(opts.Images[0])
-			if err != nil {
-				return err
-			}
-
-			solveOpt.CacheImports = []client.CacheOptionsEntry{
-				{
-					Type: "registry",
-					Attrs: map[string]string{
-						"ref": named.Name(),
-					},
-				},
-			}
+			cacheOpts[0].Attrs["mode"] = opts.CacheMode
+			solveOpt.CacheImports = cacheOpts
 		}
 
 		return nil
 	})
+}
+
+func (c *RemoteClient) Prune() error {
+	c.log.Info("Prune not implemented")
+
+	return nil
 }
 
 func (c *RemoteClient) solveWith(modify func(buildDir string, solveOpt *client.SolveOpt) error) error {

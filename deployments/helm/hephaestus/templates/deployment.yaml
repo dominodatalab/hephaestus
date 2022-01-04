@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "common.names.fullname" . }}
+  labels:
+    {{- include "common.labels.standard" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "common.labels.matchLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- if .Values.prometheus.enabled }}
+        prometheus.io/port: "{{ .Values.config.metricsPort }}"
+        prometheus.io/scrape: "true"
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | trimSuffix "\n" | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "common.labels.matchLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | trimSuffix "\n" | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "hephaestus.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: manager
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: {{ include "hephaestus.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["hephaestus-controller"]
+          args:
+            - start
+            - --config=/etc/hephaestus/config.yaml
+          ports:
+            - name: health
+              containerPort: {{ .Values.config.healthProbePort }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.config.metricsPort }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: config-vol
+              mountPath: /etc/hephaestus
+      volumes:
+        - name: config-vol
+          configMap:
+            name: {{ include "common.names.fullname" . }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+      {{- end }}

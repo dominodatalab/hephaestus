@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "common.names.fullname" . }}
+  labels:
+    {{- include "common.labels.standard" . | nindent 4 }}
+data:
+  config.yaml: |
+    manager:
+      healthProbeAddr: ":{{ .Values.config.healthProbePort }}"
+      metricsAddr: ":{{ .Values.config.metricsPort }}"
+      webhookPort: {{ .Values.config.webhookPort }}
+      watchNamespaces: {{ .Values.config.watchNamespaces }}
+      enabledLeaderElection: {{ gt (.Values.replicaCount | int) 1 }}
+    buildJob:
+      image: {{ include "hephaestus.image" . | quote }}
+    buildkit:
+      labels:
+        {{- include "common.labels.matchLabels" .Subcharts.buildkitd | nindent 8 }}
+      namespace: {{ .Release.Namespace }}
+      daemonPort: {{ .Values.buildkitd.service.port }}
+    logging:
+      development: {{ .Values.config.logDevelopmentMode }}
+      encoder: {{ .Values.config.logEncoder | quote }}
+      logLevel: {{ .Values.config.logLevel | quote }}
+      stacktraceLevel: {{ .Values.config.logStacktraceLevel | quote }}
+    imageBuildMaxConcurrency: {{ .Values.config.imageBuildMaxConcurrency }}

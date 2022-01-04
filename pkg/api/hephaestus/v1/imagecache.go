@@ -8,14 +8,21 @@ type ImageCacheSpec struct {
 }
 
 type ImageCacheStatus struct {
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
-	Phase      string             `json:"phase,omitempty"`
+	BuildkitPods []string           `json:"buildkitPods,omitempty"`
+	CachedImages []string           `json:"cachedImages,omitempty"`
+	Conditions   []metav1.Condition `json:"conditions,omitempty"`
+	Phase        Phase              `json:"phase,omitempty"`
 }
 
 // +genclient
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:scope=Namespaced,shortName=imgc
+// +kubebuilder:resource:scope=Namespaced,shortName=ic
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=".status.phase"
+// +kubebuilder:printcolumn:name="Cached Images",type=string,JSONPath=".status.cachedImages"
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:printcolumn:name="Target Images",type=string,JSONPath=".spec.images",priority=10
+// +kubebuilder:printcolumn:name="Target Pods",type=string,JSONPath=".status.buildkitPods",priority=10
 
 type ImageCache struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -27,6 +34,14 @@ type ImageCache struct {
 
 func (in *ImageCache) GetConditions() *[]metav1.Condition {
 	return &in.Status.Conditions
+}
+
+func (in *ImageCache) GetPhase() Phase {
+	return in.Status.Phase
+}
+
+func (in *ImageCache) SetPhase(p Phase) {
+	in.Status.Phase = p
 }
 
 // +kubebuilder:object:root=true

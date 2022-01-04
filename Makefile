@@ -9,7 +9,7 @@ build: ## Build controller
 	go build -o bin/hephaestus-controller ./cmd/controller/
 
 docker: ## Build docker image
-	docker build -t hephaestus:latest .
+	docker build -t ghcr.io/dominodatalab/hephaestus:latest .
 
 test: ## Run test suite
 	go test -race ./...
@@ -18,8 +18,10 @@ lint: ## Run linter suite
 	golangci-lint run ./...
 
 apply: crds ## Apply CRDs to cluster
-	kubectl apply -f deploy/crds
+	kubectl apply -f deployments/crds
 
+delete: crds ## Delete CRDs from cluster
+	kubectl delete -f deployments/crds
 
 ##@ Generators
 
@@ -27,9 +29,9 @@ api: ## Generate API objects
 	controller-gen object paths="./..."
 
 crds: ## Generate CRDs
-	controller-gen crd paths="./..." output:crd:artifacts:config=deploy/crds
+	controller-gen crd paths="./..." output:crd:artifacts:config=deployments/crds
 
-client: ## Generate API client library
+client: ## Generate client API library
 	client-gen --clientset-name "clientset" --input-base "github.com/dominodatalab/hephaestus/pkg/api" --input "hephaestus/v1" --output-package "github.com/dominodatalab/hephaestus/pkg" --go-header-file "$(shell mktemp)"
 
 ##@ Misc

@@ -1,0 +1,47 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "hephaestus.rbac.managerName" . }}
+  labels:
+    {{- include "common.labels.standard" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - hephaestus.dominodatalab.com
+    resources:
+      - imagebuilds
+      - imagecaches
+    verbs:
+      - get
+      - patch
+      - list
+      - watch
+  - apiGroups:
+      - hephaestus.dominodatalab.com
+    resources:
+      - imagebuilds/status
+      - imagecaches/status
+    verbs:
+      - patch
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - endpoints
+      - pods
+      - services
+    verbs:
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get

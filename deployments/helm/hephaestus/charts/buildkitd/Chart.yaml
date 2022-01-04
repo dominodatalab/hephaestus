@@ -1,0 +1,13 @@
+apiVersion: v2
+type: application
+name: buildkitd
+version: 0.1.0
+appVersion: "v0.9.3-rootless"
+kubeVersion: ">= 1.16.0-0"
+description: A Helm chart for Kubernetes
+home: https://github.com/dominodatalab/hephaestus
+sources:
+  - https://github.com/moby/buildkit
+maintainers:
+  - name: Sonny Garcia
+    email: sonny.garcia@dominodatalab.com

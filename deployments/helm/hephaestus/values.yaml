@@ -1,0 +1,95 @@
+# Buildkit deployment configuration.
+# See charts/buildkitd/values.yaml for a list of available values.
+buildkitd:
+  replicaCount: 2
+
+# Number of controller instances to run. Leader election will be enabled
+# whenever this value is greater than 1; this ensures that only one instance
+# is active at a time.
+replicaCount: 1
+
+config:
+  # Webhook server port
+  webhookPort: 9443
+  # Prometheus metric ports
+  metricsPort: 8080
+  # Health probe port
+  healthProbePort: 8081
+  # Limit watch to a specific set of namespaces, default is all namespaces
+  watchNamespaces: []
+
+  # Logger encoding can be either 'json' or 'console'
+  logEncoder: ""
+  # Logger level can be either 'debug', 'info', 'error', or any integer value >= 0 which corresponds to custom debug levels of increasing verbosity
+  logLevel: ""
+  # Logger level at which stacktraces are printed can be either 'info', 'error', or 'panic'
+  logStacktraceLevel: ""
+  # Development mode enables debug logging, console output and stacktraces suitable for troubleshooting
+  logDevelopmentMode: true
+
+  # Maximum number of concurrent builds which can be run
+  imageBuildMaxConcurrency: 5
+
+prometheus:
+  # Enable prometheus scraping
+  enabled: true
+  # Allow ingress traffic from prometheus pods with the following labels
+  podLabels:
+    app.kubernetes.io/name: prometheus
+  # Namespace labels where prometheus is running if different from app's namespace
+  namespaceLabels: {}
+
+image:
+  registry: ghcr.io
+  repository: dominodatalab/hephaestus
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion
+  tag: ""
+
+imagePullSecrets: []
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podLabels: {}
+podAnnotations: {}
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+priorityClassName: ""
+
+nameOverride: ""
+fullnameOverride: ""
