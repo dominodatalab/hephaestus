@@ -7,28 +7,33 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/docker/docker/api/types"
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/pointer"
 
-	hephapi "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
+	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
+	"github.com/dominodatalab/hephaestus/pkg/controller/credentials/cloudauth"
+	"github.com/dominodatalab/hephaestus/pkg/controller/credentials/cloudauth/acr"
+	"github.com/dominodatalab/hephaestus/pkg/controller/credentials/cloudauth/ecr"
+	"github.com/dominodatalab/hephaestus/pkg/controller/credentials/cloudauth/gcr"
 )
 
-type AuthConfig struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
+var CloudAuthRegistry = &cloudauth.Registry{}
 
-type AuthConfigs map[string]AuthConfig
+// AuthConfigs is a map of registry urls to authentication credentials.
+type AuthConfigs map[string]types.AuthConfig
 
-type DockerConfig struct {
+// DockerConfigJSON models the structure of .dockerconfigjson data.
+type DockerConfigJSON struct {
 	Auths AuthConfigs `json:"auths"`
 }
 
 func Extract(host string, data []byte) (string, string, error) {
-	var conf DockerConfig
+	var conf DockerConfigJSON
 	if err := json.Unmarshal(data, &conf); err != nil {
 		return "", "", nil
 	}
@@ -46,7 +51,7 @@ func Extract(host string, data []byte) (string, string, error) {
 	return ac.Username, ac.Password, nil
 }
 
-func Persist(ctx context.Context, cfg *rest.Config, credentials []hephapi.RegistryCredentials) (string, error) {
+func Persist(ctx context.Context, cfg *rest.Config, credentials []hephv1.RegistryCredentials) (string, error) {
 	dir, err := os.MkdirTemp("", "docker-config-")
 	if err != nil {
 		return "", err
@@ -54,9 +59,11 @@ func Persist(ctx context.Context, cfg *rest.Config, credentials []hephapi.Regist
 
 	auths := AuthConfigs{}
 	for _, cred := range credentials {
+		var ac types.AuthConfig
+
 		switch {
 		case cred.BasicAuth != nil:
-			auths[cred.Server] = AuthConfig{
+			ac = types.AuthConfig{
 				Username: cred.BasicAuth.Username,
 				Password: cred.BasicAuth.Password,
 			}
@@ -80,16 +87,25 @@ func Persist(ctx context.Context, cfg *rest.Config, credentials []hephapi.Regist
 			if err != nil {
 				return "", err
 			}
-			auths[cred.Server] = AuthConfig{
+
+			ac = types.AuthConfig{
 				Username: username,
 				Password: password,
 			}
 		case pointer.BoolDeref(cred.CloudProvided, false):
-			panic("cloud auth credentials not supported")
-		}
-	}
+			pac, err := CloudAuthRegistry.RetrieveAuthorization(ctx, cred.Server)
+			if err != nil {
+				return "", err
+			}
 
-	dockerCfg := DockerConfig{Auths: auths}
+			ac = *pac
+		default:
+			return "", fmt.Errorf("credential %v is missing auth section", cred)
+		}
+
+		auths[cred.Server] = ac
+	}
+	dockerCfg := DockerConfigJSON{Auths: auths}
 
 	configJSON, err := json.Marshal(dockerCfg)
 	if err != nil {
@@ -102,4 +118,19 @@ func Persist(ctx context.Context, cfg *rest.Config, credentials []hephapi.Regist
 	}
 
 	return dir, err
+}
+
+// LoadCloudProviders adds all cloud authentication providers to the CloudAuthRegistry.
+func LoadCloudProviders(log logr.Logger) error {
+	if err := acr.Register(log, CloudAuthRegistry); err != nil {
+		return fmt.Errorf("ACR registration failed: %w", err)
+	}
+	if err := ecr.Register(log, CloudAuthRegistry); err != nil {
+		return fmt.Errorf("ECR registration failed: %w", err)
+	}
+	if err := gcr.Register(log, CloudAuthRegistry); err != nil {
+		return fmt.Errorf("GCR registration failed: %w", err)
+	}
+
+	return nil
 }

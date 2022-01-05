@@ -9,6 +9,7 @@ import (
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/hephaestus/pkg/config"
+	"github.com/dominodatalab/hephaestus/pkg/controller/credentials"
 	"github.com/dominodatalab/hephaestus/pkg/controller/imagebuild"
 	"github.com/dominodatalab/hephaestus/pkg/controller/imagecache"
 	"github.com/dominodatalab/hephaestus/pkg/logger"
@@ -69,6 +70,11 @@ func Start(cfg config.Controller) error {
 
 	log.Info("Registering ImageCache controller")
 	if err = imagecache.Register(mgr, cfg); err != nil {
+		return err
+	}
+
+	log.Info("Registering cloud auth providers")
+	if err = credentials.LoadCloudProviders(log); err != nil {
 		return err
 	}
 

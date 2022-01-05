@@ -1,13 +1,13 @@
 package component
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
 	"time"
 
 	"github.com/dominodatalab/controller-util/core"
-	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
