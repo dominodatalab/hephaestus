@@ -17,6 +17,9 @@ kind create cluster
 make docker
 kind load docker-image ghcr.io/dominodatalab/hephaestus:latest
 
+# register CRDs with cluster
+make apply
+
 # deploy hephaestus & buildkitd
 helm upgrade -i hephaestus deployments/helm/hephaestus
 
