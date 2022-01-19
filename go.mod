@@ -11,6 +11,7 @@ require (
 	github.com/Azure/go-autorest/autorest/adal v0.9.16
 	github.com/Azure/go-autorest/autorest/azure/auth v0.5.8
 	github.com/Azure/go-autorest/autorest/to v0.4.0
+	github.com/avast/retry-go/v4 v4.0.2
 	github.com/aws/aws-sdk-go-v2 v1.11.2
 	github.com/aws/aws-sdk-go-v2/config v1.11.1
 	github.com/aws/aws-sdk-go-v2/service/ecr v1.12.0
@@ -19,12 +20,13 @@ require (
 	github.com/docker/cli v20.10.7+incompatible
 	github.com/docker/distribution v2.7.1+incompatible
 	github.com/docker/docker v20.10.7+incompatible
-	github.com/dominodatalab/controller-util v0.0.0-20211222210420-f4c2adb90166
+	github.com/dominodatalab/controller-util v0.0.0-20220114212532-6b4723a14d97
 	github.com/go-logr/logr v1.2.0
 	github.com/gofrs/flock v0.7.3
 	github.com/h2non/filetype v1.1.1
 	github.com/moby/buildkit v0.9.3
 	github.com/pkg/errors v0.9.1
+	github.com/rabbitmq/amqp091-go v1.2.0
 	github.com/spf13/cobra v1.2.1
 	github.com/stretchr/testify v1.7.0
 	go.uber.org/zap v1.19.1

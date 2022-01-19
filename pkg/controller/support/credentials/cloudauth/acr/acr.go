@@ -15,7 +15,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/go-logr/logr"
 
-	"github.com/dominodatalab/hephaestus/pkg/controller/credentials/cloudauth"
+	cloudauth2 "github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
 )
 
 // https://github.com/Azure/acr/blob/main/docs/AAD-OAuth.md
@@ -34,7 +34,7 @@ type acrProvider struct {
 	servicePrincipalToken *adal.ServicePrincipalToken
 }
 
-func Register(logger logr.Logger, registry *cloudauth.Registry) error {
+func Register(logger logr.Logger, registry *cloudauth2.Registry) error {
 	provider, err := newProvider(logger)
 	if err != nil {
 		logger.Info("ACR not registered", "error", err)
@@ -97,7 +97,7 @@ func (a *acrProvider) authenticate(ctx context.Context, server string) (*types.A
 
 	armAccessToken := a.servicePrincipalToken.OAuthToken()
 	loginServerURL := "https://" + loginServer
-	directive, err := cloudauth.ChallengeLoginServer(ctx, loginServerURL)
+	directive, err := cloudauth2.ChallengeLoginServer(ctx, loginServerURL)
 	if err != nil {
 		return nil, err
 	}

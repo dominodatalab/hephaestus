@@ -16,10 +16,10 @@ import (
 	"k8s.io/utils/pointer"
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
-	"github.com/dominodatalab/hephaestus/pkg/controller/credentials/cloudauth"
-	"github.com/dominodatalab/hephaestus/pkg/controller/credentials/cloudauth/acr"
-	"github.com/dominodatalab/hephaestus/pkg/controller/credentials/cloudauth/ecr"
-	"github.com/dominodatalab/hephaestus/pkg/controller/credentials/cloudauth/gcr"
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth/acr"
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth/ecr"
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth/gcr"
 )
 
 var CloudAuthRegistry = &cloudauth.Registry{}

@@ -14,7 +14,6 @@ import (
 func Register(mgr ctrl.Manager, cfg config.Controller) error {
 	return core.NewReconciler(mgr).
 		For(&hephv1.ImageCache{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		Component("cache-warmer", component.CacheWarmer()).
-		WithContextData("config", cfg.Buildkit).
+		Component("cache-warmer", component.CacheWarmer(cfg.Buildkit)).
 		Complete()
 }

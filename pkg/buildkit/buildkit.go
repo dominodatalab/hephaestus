@@ -76,7 +76,7 @@ func NewRemoteClient(ctx context.Context, addr string, opts ...ClientOpt) (*Remo
 func (c *RemoteClient) Cache(image string) error {
 	return c.solveWith(func(buildDir string, solveOpt *client.SolveOpt) error {
 		dockerfile := filepath.Join(buildDir, "Dockerfile")
-		contents := []byte(fmt.Sprintf("FROM %s", image))
+		contents := []byte(fmt.Sprintf("FROM %s\nRUN echo extract", image))
 		if err := os.WriteFile(dockerfile, contents, 0644); err != nil {
 			return fmt.Errorf("failed to create dockerfile: %w", err)
 		}
@@ -185,7 +185,10 @@ func (c *RemoteClient) runSolve(so client.SolveOpt) error {
 	eg, ctx := errgroup.WithContext(c.ctx)
 
 	eg.Go(func() error {
-		_, err := c.bk.Solve(ctx, nil, so, ch)
+		resp, err := c.bk.Solve(ctx, nil, so, ch)
+		// NOTE: this can be used to limit the size of images pushed to the registry
+		c.log.Info("Solve complete", "image.size", resp.ExporterResponse["size"])
+
 		return err
 	})
 	eg.Go(func() error {

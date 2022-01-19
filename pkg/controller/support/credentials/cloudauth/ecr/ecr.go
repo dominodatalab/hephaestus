@@ -14,7 +14,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/go-logr/logr"
 
-	"github.com/dominodatalab/hephaestus/pkg/controller/credentials/cloudauth"
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
 )
 
 type ecrClient interface {

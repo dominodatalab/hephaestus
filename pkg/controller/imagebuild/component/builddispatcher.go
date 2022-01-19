@@ -11,17 +11,20 @@ import (
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/hephaestus/pkg/buildkit"
 	"github.com/dominodatalab/hephaestus/pkg/config"
-	"github.com/dominodatalab/hephaestus/pkg/controller/credentials"
-	"github.com/dominodatalab/hephaestus/pkg/controller/discovery"
-	"github.com/dominodatalab/hephaestus/pkg/controller/phase"
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials"
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/discovery"
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/phase"
 )
 
 type BuildDispatcherComponent struct {
+	cfg   config.Buildkit
 	phase *phase.TransitionHelper
 }
 
-func BuildDispatcher() *BuildDispatcherComponent {
-	return &BuildDispatcherComponent{}
+func BuildDispatcher(cfg config.Buildkit) *BuildDispatcherComponent {
+	return &BuildDispatcherComponent{
+		cfg: cfg,
+	}
 }
 
 func (c *BuildDispatcherComponent) GetReadyCondition() string {
@@ -45,13 +48,12 @@ func (c *BuildDispatcherComponent) Initialize(ctx *core.Context, _ *ctrl.Builder
 func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, error) {
 	log := ctx.Log
 	obj := ctx.Object.(*hephv1.ImageBuild)
-	cfg := ctx.Data["config"].(config.Buildkit)
 
 	/*
 		determine if we need to reconcile object
 	*/
-	if obj.Status.Phase == hephv1.PhaseSucceeded || obj.Status.Phase == hephv1.PhaseFailed {
-		log.Info("Resource phase complete, ignoring", "phase", obj.Status.Phase)
+	if obj.Status.Phase != "" {
+		log.Info("Resource phase in not blank, ignoring", "phase", obj.Status.Phase)
 		return ctrl.Result{}, nil
 	}
 
@@ -62,7 +64,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	c.phase.SetInitializing(ctx, obj)
 
 	log.Info("Querying for buildkitd service")
-	addr, err := discovery.BuildkitService(ctx, cfg)
+	addr, err := discovery.BuildkitService(ctx, c.cfg)
 	if err != nil {
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkitd service lookup failed: %w", err))
 	}

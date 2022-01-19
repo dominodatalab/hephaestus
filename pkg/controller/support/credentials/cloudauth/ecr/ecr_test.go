@@ -16,7 +16,7 @@ import (
 	dockertypes "github.com/docker/docker/api/types"
 	"github.com/go-logr/logr"
 
-	"github.com/dominodatalab/hephaestus/pkg/controller/credentials/cloudauth"
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
 )
 
 func TestRegister(t *testing.T) {

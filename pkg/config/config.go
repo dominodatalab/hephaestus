@@ -11,9 +11,10 @@ import (
 )
 
 type Controller struct {
-	Manager  Manager  `json:"manager" yaml:"manager"`
-	Buildkit Buildkit `json:"buildkit" yaml:"buildkit"`
-	Logging  Logging  `json:"logging" yaml:"logging"`
+	Logging   Logging   `json:"logging" yaml:"logging"`
+	Manager   Manager   `json:"manager" yaml:"manager"`
+	Buildkit  Buildkit  `json:"buildkit" yaml:"buildkit"`
+	Messaging Messaging `json:"messaging" yaml:"messaging"`
 
 	ImageBuildMaxConcurrency int `json:"imageBuildMaxConcurrency" yaml:"imageBuildMaxConcurrency"`
 }
@@ -48,6 +49,13 @@ func (c Controller) Validate() error {
 	return nil
 }
 
+type Logging struct {
+	Development     bool   `json:"development" yaml:"development"`
+	Encoder         string `json:"encoder" yaml:"encoder"`
+	LogLevel        string `json:"logLevel" yaml:"logLevel"`
+	StacktraceLevel string `json:"stacktraceLevel" yaml:"stacktraceLevel"`
+}
+
 type Manager struct {
 	HealthProbeAddr      string   `json:"healthProbeAddr" yaml:"healthProbeAddr"`
 	MetricsAddr          string   `json:"metricsAddr" yaml:"metricsAddr"`
@@ -62,11 +70,22 @@ type Buildkit struct {
 	DaemonPort int32             `json:"daemonPort" yaml:"daemonPort"`
 }
 
-type Logging struct {
-	Development     bool   `json:"development" yaml:"development"`
-	Encoder         string `json:"encoder" yaml:"encoder"`
-	LogLevel        string `json:"logLevel" yaml:"logLevel"`
-	StacktraceLevel string `json:"stacktraceLevel" yaml:"stacktraceLevel"`
+type Messaging struct {
+	Enabled bool            `json:"enabled" yaml:"enabled"`
+	AMQP    *AMQPMessaging  `json:"amqp" yaml:"amqp"`
+	Kafka   *KafkaMessaging `json:"kafka" yaml:"kafka"`
+}
+
+type AMQPMessaging struct {
+	URL      string `json:"url" yaml:"url"`
+	Exchange string `json:"exchange" yaml:"exchange"`
+	Queue    string `json:"queue" yaml:"queue"`
+}
+
+type KafkaMessaging struct {
+	Servers   []string `json:"servers" yaml:"servers"`
+	Topic     string   `json:"topic" yaml:"topic"`
+	Partition string   `json:"partition" yaml:"partition"`
 }
 
 func GenerateDefaults() Controller {

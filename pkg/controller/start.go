@@ -9,9 +9,9 @@ import (
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/hephaestus/pkg/config"
-	"github.com/dominodatalab/hephaestus/pkg/controller/credentials"
 	"github.com/dominodatalab/hephaestus/pkg/controller/imagebuild"
 	"github.com/dominodatalab/hephaestus/pkg/controller/imagecache"
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials"
 	"github.com/dominodatalab/hephaestus/pkg/logger"
 	// +kubebuilder:scaffold:imports
 )

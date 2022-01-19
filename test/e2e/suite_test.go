@@ -37,5 +37,7 @@ func (s *E2ETestSuite) TearDownSuite() {
 	- multi-stage
 	- multi-tag
 - test messaging
+- test istio
+- test eks, aks, gke
 
 */

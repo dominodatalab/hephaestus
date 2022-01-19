@@ -1,6 +1,8 @@
 package v1
 
 import (
+	"time"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -15,11 +17,19 @@ type ImageBuildSpec struct {
 	RegistryAuth        []RegistryCredentials `json:"registryAuth,omitempty"`
 }
 
+type ImageBuildTransition struct {
+	PreviousPhase Phase        `json:"previousPhase"`
+	Phase         Phase        `json:"phase"`
+	OccurredAt    *metav1.Time `json:"occurredAt"`
+	Processed     bool         `json:"processed"`
+}
+
 type ImageBuildStatus struct {
 	// BuildTime is the total time spend during the build process.
-	BuildTime  string             `json:"buildTime,omitempty"`
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
-	Phase      Phase              `json:"phase,omitempty"`
+	BuildTime   string                 `json:"buildTime,omitempty"`
+	Conditions  []metav1.Condition     `json:"conditions,omitempty"`
+	Transitions []ImageBuildTransition `json:"transitions,omitempty"`
+	Phase       Phase                  `json:"phase,omitempty"`
 }
 
 // +genclient
@@ -47,6 +57,12 @@ func (in *ImageBuild) GetPhase() Phase {
 }
 
 func (in *ImageBuild) SetPhase(p Phase) {
+	in.Status.Transitions = append(in.Status.Transitions, ImageBuildTransition{
+		PreviousPhase: in.Status.Phase,
+		Phase:         p,
+		OccurredAt:    &metav1.Time{Time: time.Now()},
+		Processed:     false,
+	})
 	in.Status.Phase = p
 }
 

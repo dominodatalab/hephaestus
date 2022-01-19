@@ -1,6 +1,7 @@
 package component
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -8,26 +9,40 @@ import (
 	"time"
 
 	"github.com/dominodatalab/controller-util/core"
+	"github.com/go-logr/logr"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/hephaestus/pkg/buildkit"
 	"github.com/dominodatalab/hephaestus/pkg/config"
-	"github.com/dominodatalab/hephaestus/pkg/controller/credentials"
-	"github.com/dominodatalab/hephaestus/pkg/controller/discovery"
-	"github.com/dominodatalab/hephaestus/pkg/controller/phase"
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials"
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/discovery"
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/phase"
 )
 
 type CacheWarmerComponent struct {
-	phase *phase.TransitionHelper
+	cfg        config.Buildkit
+	log        logr.Logger
+	client     client.Client
+	config     config.Buildkit
+	timeWindow time.Duration
+	phase      *phase.TransitionHelper
 }
 
-func CacheWarmer() *CacheWarmerComponent {
-	return &CacheWarmerComponent{}
+func CacheWarmer(cfg config.Buildkit) *CacheWarmerComponent {
+	return &CacheWarmerComponent{
+		cfg: cfg,
+	}
 }
 
 func (c *CacheWarmerComponent) GetReadyCondition() string {
@@ -35,16 +50,9 @@ func (c *CacheWarmerComponent) GetReadyCondition() string {
 }
 
 func (c *CacheWarmerComponent) Initialize(ctx *core.Context, bldr *ctrl.Builder) error {
-	bldr.Watches(
-		&source.Kind{Type: &corev1.Pod{}},
-		&PodMonitorEventHandler{
-			log:        ctx.Log,
-			client:     ctx.Client,
-			config:     ctx.Data["config"].(config.Buildkit),
-			timeWindow: 10 * time.Minute,
-		},
-	)
-
+	c.log = ctx.Log
+	c.client = ctx.Client
+	c.timeWindow = 10 * time.Minute
 	c.phase = &phase.TransitionHelper{
 		Client: ctx.Client,
 		ConditionMeta: phase.TransitionConditions{
@@ -55,13 +63,26 @@ func (c *CacheWarmerComponent) Initialize(ctx *core.Context, bldr *ctrl.Builder)
 		ReadyCondition: c.GetReadyCondition(),
 	}
 
+	bldr.Watches(
+		&source.Kind{Type: &corev1.Pod{}},
+		handler.EnqueueRequestsFromMapFunc(c.mapBuildkitPodChanges),
+		builder.WithPredicates(predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }}),
+		// &eventhandler.PodMonitor{
+		// 	Log:        ctx.Log,
+		// 	Client:     ctx.Client,
+		// 	Config:     ctx.Data["config"].(config.Buildkit),
+		// 	TimeWindow: 10 * time.Minute,
+		// },
+	)
+
 	return nil
 }
 
 func (c *CacheWarmerComponent) Reconcile(ctx *core.Context) (ctrl.Result, error) {
+	// TODO: signal cache build stop on resource delete
+
 	log := ctx.Log
 	obj := ctx.Object.(*hephv1.ImageCache)
-	cfg := ctx.Data["config"].(config.Buildkit)
 
 	/*
 		1. Determine if a cache run is required
@@ -70,11 +91,11 @@ func (c *CacheWarmerComponent) Reconcile(ctx *core.Context) (ctrl.Result, error)
 
 	var podList corev1.PodList
 	listOpts := []client.ListOption{
-		client.InNamespace(cfg.Namespace),
-		client.MatchingLabels(cfg.Labels),
+		client.InNamespace(c.cfg.Namespace),
+		client.MatchingLabels(c.cfg.Labels),
 	}
 
-	log.Info("Querying for buildkitd pods", "labels", cfg.Labels, "namespace", cfg.Namespace)
+	log.Info("Querying for buildkitd pods", "labels", c.cfg.Labels, "namespace", c.cfg.Namespace)
 	if err := ctx.Client.List(ctx, &podList, listOpts...); err != nil {
 		return ctrl.Result{}, fmt.Errorf("buildkitd pod lookup failed: %w", err)
 	}
@@ -106,7 +127,7 @@ func (c *CacheWarmerComponent) Reconcile(ctx *core.Context) (ctrl.Result, error)
 	c.phase.SetInitializing(ctx, obj)
 
 	log.Info("Querying for buildkitd endpoints")
-	endpoints, err := discovery.BuildkitEndpoints(ctx, cfg)
+	endpoints, err := discovery.BuildkitEndpoints(ctx, c.cfg)
 	if err != nil {
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkit worker lookup failed: %w", err))
 	}
@@ -188,4 +209,38 @@ func (c *CacheWarmerComponent) Reconcile(ctx *core.Context) (ctrl.Result, error)
 
 	log.Info("Reconciliation complete")
 	return ctrl.Result{}, nil
+}
+
+func (c *CacheWarmerComponent) mapBuildkitPodChanges(obj client.Object) (requests []reconcile.Request) {
+	if len(c.config.Labels) > len(obj.GetLabels()) {
+		return
+	}
+	for k, v := range c.config.Labels {
+		if ov, found := obj.GetLabels()[k]; !found || ov != v {
+			return
+		}
+	}
+
+	// NOTE: work through the permutations
+	ageLimit := time.Now().Add(-c.timeWindow)
+	if obj.GetCreationTimestamp().Time.Before(ageLimit) {
+		return
+	}
+
+	cacheList := &hephv1.ImageCacheList{}
+	err := c.client.List(context.Background(), cacheList)
+	if err != nil {
+		c.log.Error(err, "cannot list image cache objects")
+	}
+
+	requests = make([]reconcile.Request, len(cacheList.Items))
+	for idx, ic := range cacheList.Items {
+		requests[idx] = reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      ic.Name,
+				Namespace: ic.Namespace,
+			},
+		}
+	}
+	return
 }
