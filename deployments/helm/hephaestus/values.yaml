@@ -30,6 +30,15 @@ config:
   # Maximum number of concurrent builds which can be run
   imageBuildMaxConcurrency: 5
 
+  # Status messaging configuration
+  messaging:
+    enabled: false
+    amqp:
+      url: "amqp://user:password@rabbitmq.default:5672"
+      exchange: ""
+      queue: "hephaestus.imagebuilds.status"
+    kafka: {}
+
 prometheus:
   # Enable prometheus scraping
   enabled: true

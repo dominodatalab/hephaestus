@@ -6,22 +6,31 @@ metadata:
     {{- include "common.labels.standard" . | nindent 4 }}
 data:
   config.yaml: |
-    manager:
-      healthProbeAddr: ":{{ .Values.config.healthProbePort }}"
-      metricsAddr: ":{{ .Values.config.metricsPort }}"
-      webhookPort: {{ .Values.config.webhookPort }}
-      watchNamespaces: {{ .Values.config.watchNamespaces }}
-      enabledLeaderElection: {{ gt (.Values.replicaCount | int) 1 }}
-    buildJob:
-      image: {{ include "hephaestus.image" . | quote }}
     buildkit:
       labels:
         {{- include "common.labels.matchLabels" .Subcharts.buildkitd | nindent 8 }}
       namespace: {{ .Release.Namespace }}
       daemonPort: {{ .Values.buildkitd.service.port }}
+    {{- with .Values.config }}
+    imageBuildMaxConcurrency: {{ .imageBuildMaxConcurrency }}
+    manager:
+      healthProbeAddr: ":{{ .healthProbePort }}"
+      metricsAddr: ":{{ .metricsPort }}"
+      webhookPort: {{ .webhookPort }}
+      watchNamespaces: {{ .watchNamespaces }}
+      enabledLeaderElection: {{ gt ($.Values.replicaCount | int) 1 }}
     logging:
-      development: {{ .Values.config.logDevelopmentMode }}
-      encoder: {{ .Values.config.logEncoder | quote }}
-      logLevel: {{ .Values.config.logLevel | quote }}
-      stacktraceLevel: {{ .Values.config.logStacktraceLevel | quote }}
-    imageBuildMaxConcurrency: {{ .Values.config.imageBuildMaxConcurrency }}
+      development: {{ .logDevelopmentMode }}
+      encoder: {{ .logEncoder | quote }}
+      logLevel: {{ .logLevel | quote }}
+      stacktraceLevel: {{ .logStacktraceLevel | quote }}
+    messaging:
+      {{- with .messaging }}
+      enabled: {{ .enabled }}
+      amqp:
+        url: {{ .amqp.url }}
+        exchange: {{ .amqp.exchange | quote }}
+        queue: {{ .amqp.queue | quote }}
+      kafka: {{ .kafka | toYaml }}
+      {{- end }}
+    {{- end }}

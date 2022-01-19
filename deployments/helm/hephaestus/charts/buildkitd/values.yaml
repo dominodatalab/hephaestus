@@ -2,7 +2,13 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+# Number of buildkitd pods to run
 replicaCount: 1
+# Run buildkitd in rootless mode
+rootless: true
+# Amount of storage GC keeps locally (MB). This value should be less than the
+# total amount of available persistent storage (e.g. 75% of 20Gi)
+gcKeepStorage: 15000
 
 image:
   registry: ""
@@ -18,9 +24,8 @@ persistence:
   storageClass: ""
   accessModes:
     - ReadWriteOnce
-  size: 10Gi
+  size: 20Gi
   annotations: {}
-  mountPath: /home/user/.local/share/buildkit
 
 serviceAccount:
   # Specifies whether a service account should be created
@@ -35,11 +40,6 @@ podAnnotations: {}
 
 podSecurityContext: {}
   # fsGroup: 2000
-
-securityContext:
-  # NOTE: To change UID/GID, you need to rebuild the image
-  runAsUser: 1000
-  runAsGroup: 1000
 
 service:
   type: ClusterIP

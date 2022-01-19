@@ -16,8 +16,10 @@ spec:
   template:
     metadata:
       annotations:
+        {{- if .Values.rootless }}
         container.apparmor.security.beta.kubernetes.io/buildkitd: unconfined
         container.seccomp.security.alpha.kubernetes.io/buildkitd: unconfined
+        {{- end }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -34,13 +36,26 @@ spec:
       containers:
         - name: buildkitd
           securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
-          image: {{ include "hephaestus.image" . }}
+            {{- if .Values.rootless }}
+            # NOTE: To change UID/GID, you need to rebuild the image
+            runAsUser: 1000
+            runAsGroup: 1000
+            {{- else }}
+            privileged: true
+            {{- end }}
+          image: {{ include "buildkitd.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
+            - --addr=tcp://0.0.0.0:{{ .Values.service.port }}
+            {{- if .Values.rootless }}
             - --addr=unix:///run/user/1000/buildkit/buildkitd.sock
-            - "--addr=tcp://0.0.0.0:{{ .Values.service.port }}"
             - --oci-worker-no-process-sandbox
+            {{- else }}
+            - --addr=unix:///run/buildkit/buildkitd.sock
+            {{- end }}
+            {{- if .Values.persistence.enabled }}
+            - --oci-worker-gc-keepstorage={{ .Values.gcKeepStorage }}
+            {{- end }}
           ports:
             - name: {{ .Values.service.portName }}
               protocol: TCP
@@ -51,18 +66,26 @@ spec:
                 - buildctl
                 - debug
                 - workers
+            initialDelaySeconds: 5
+            periodSeconds: 30
           readinessProbe:
             exec:
               command:
                 - buildctl
                 - debug
                 - workers
+            initialDelaySeconds: 5
+            periodSeconds: 30
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           {{- if .Values.persistence.enabled }}
           volumeMounts:
             - name: cache
-              mountPath: {{ .Values.persistence.mountPath }}
+              {{- if .Values.rootless }}
+              mountPath: /home/user/.local/share/buildkit
+              {{- else }}
+              mountPath: /var/lib/buildkit
+              {{- end }}
           {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
