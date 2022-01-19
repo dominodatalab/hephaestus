@@ -6,13 +6,13 @@ SHELL:=/bin/bash
 ##@ Development
 
 build: ## Build controller
-	go build -o bin/hephaestus-controller ./cmd/controller/
+	go build -v -o bin/hephaestus-controller ./cmd/controller/
 
 docker: ## Build docker image
 	docker build -t ghcr.io/dominodatalab/hephaestus:latest .
 
 test: ## Run test suite
-	go test -race ./...
+	go test -v -race ./...
 
 lint: ## Run linter suite
 	golangci-lint run ./...
