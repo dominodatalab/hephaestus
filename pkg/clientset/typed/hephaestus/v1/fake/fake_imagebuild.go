@@ -101,7 +101,7 @@ func (c *FakeImageBuilds) UpdateStatus(ctx context.Context, imageBuild *hephaest
 // Delete takes name of the imageBuild and deletes it. Returns an error if one occurs.
 func (c *FakeImageBuilds) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(imagebuildsResource, c.ns, name), &hephaestusv1.ImageBuild{})
+		Invokes(testing.NewDeleteActionWithOptions(imagebuildsResource, c.ns, name, opts), &hephaestusv1.ImageBuild{})
 
 	return err
 }
