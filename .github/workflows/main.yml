@@ -28,7 +28,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
-      - make: Install tools
+      - name: Install tools
         run: make tools
 
       - name: Build
