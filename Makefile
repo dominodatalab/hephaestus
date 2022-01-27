@@ -31,8 +31,11 @@ api: ## Generate API objects
 crds: ## Generate CRDs
 	controller-gen crd paths="./..." output:crd:artifacts:config=deployments/crds
 
-client: ## Generate client API library
+client: ## Generate Go client API library
 	client-gen --clientset-name "clientset" --input-base "github.com/dominodatalab/hephaestus/pkg/api" --input "hephaestus/v1" --output-package "github.com/dominodatalab/hephaestus/pkg" --go-header-file "$(shell mktemp)"
+
+sdks: crds ## Generate non-GO client libraries
+	scripts/sdk/generate.sh
 
 ##@ Misc
 
