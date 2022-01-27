@@ -83,7 +83,4 @@ jobs:
           if-no-files-found: error
 
       - name: Publish Java JAR
-        run: docker run --rm -v $HOME/.m2:/root/.m2 -v $(pwd)/sdks/java:/wd --workdir /wd maven:3-openjdk-8 mvn -s settings.xml deploy -DskipTests -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/dominodatalab/hephaestus
-        env:
-          JAVA_SDK_MAVEN_USERNAME: ${{ github.actor }}
-          JAVA_SDK_MAVEN_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: docker run --rm -v $HOME/.m2:/root/.m2 -v $(pwd)/sdks/java:/wd -e JAVA_SDK_MAVEN_USERNAME=${{ github.actor }} -e JAVA_SDK_MAVEN_PASSWORD=${{ secrets.GITHUB_TOKEN }} --workdir /wd maven:3-openjdk-8 mvn -s settings.xml deploy -DskipTests -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/dominodatalab/hephaestus
