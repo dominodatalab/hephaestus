@@ -67,7 +67,10 @@ jobs:
         uses: engineerd/setup-kind@v0.5.0
         with:
           skipClusterCreation: true
-          skipClusterDeletion: true
 
       - name: Generate SDKS
-        run: make sdks
+        run: |
+          go version
+          docker version
+          kind version
+          make sdks

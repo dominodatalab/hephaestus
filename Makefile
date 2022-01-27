@@ -14,7 +14,7 @@ docker: ## Build docker image
 test: ## Run test suite
 	go test -v -race ./...
 
-lint: ## Run linter suite
+lint: tools ## Run linter suite
 	golangci-lint run ./...
 
 apply: crds ## Apply CRDs to cluster
@@ -25,13 +25,13 @@ delete: crds ## Delete CRDs from cluster
 
 ##@ Generators
 
-api: ## Generate API objects
+api: tools ## Generate API objects
 	controller-gen object paths="./..."
 
-crds: ## Generate CRDs
+crds: tools ## Generate CRDs
 	controller-gen crd paths="./..." output:crd:artifacts:config=deployments/crds
 
-client: ## Generate Go client API library
+client: tools ## Generate Go client API library
 	client-gen --clientset-name "clientset" --input-base "github.com/dominodatalab/hephaestus/pkg/api" --input "hephaestus/v1" --output-package "github.com/dominodatalab/hephaestus/pkg" --go-header-file "$(shell mktemp)"
 
 sdks: crds ## Generate non-GO client libraries
