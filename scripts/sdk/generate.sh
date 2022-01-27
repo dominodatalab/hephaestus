@@ -118,11 +118,15 @@ docker run --rm -v "$PROJECT_DIR:/wd" --workdir /wd \
     --http-user-agent "Hephaestus Java Client/$VERSION" \
     --generate-alias-as-model
 
+set -x
+
+chown -R "$(id -u)":"$(id -g)" "$SDKS_DIR"/gen
+
 info "Copying generated Java files to sdk/java"
 rm -rf "$SDKS_DIR"/gen/src/main/{java/io,AndroidManifest.xml}
 cp -r "$SDKS_DIR"/gen/docs "$SDKS_DIR"/java/
 cp -r "$SDKS_DIR"/gen/src "$SDKS_DIR"/java/
-rm -rf sdks/gen
+rm -rf "$SDKS_DIR"/gen
 
 info "Copying Maven configurations"
 sed "s/0.0.0-VERSION/$VERSION/" "$SCRIPT_DIR"/pom.xml > "$SDKS_DIR"/java/pom.xml
