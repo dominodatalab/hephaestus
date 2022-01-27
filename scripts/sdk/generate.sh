@@ -35,7 +35,7 @@ error () {
 
 sdk::generate_kubernetes_swagger () {
   info "Creating kind cluster"
-  kind create cluster --config "$SCRIPT_DIR"/kind.yaml --quiet
+  kind create cluster --config "$SCRIPT_DIR"/kind.yaml
 
   info "Apply CRDs to cluster"
   kubectl apply -f "$PROJECT_DIR"/deployments/crds/
@@ -62,7 +62,7 @@ sdk::generate_kubernetes_swagger () {
       done
 
   info "Cleaning up kind cluster"
-  kind delete cluster --quiet
+  kind delete cluster
 }
 
 GIT_TAG=$(git describe --tags --candidates=0 --abbrev=0 2> /dev/null || echo untagged)
