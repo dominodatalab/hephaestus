@@ -97,7 +97,7 @@ info "Generating Swagger JSON"
 go run "$SCRIPT_DIR"/main.go -json $KUBERNETES_SWAGGER_FILE -version "$VERSION" > $SWAGGER_FILE
 
 info "Generating Java client library"
-docker run --rm -it -v "$PROJECT_DIR:/wd" --workdir /wd \
+docker run --rm -v "$PROJECT_DIR:/wd" --workdir /wd \
   openapitools/openapi-generator-cli:$OPENAPI_GENERATOR_CLI_VERSION generate \
     --input-spec /wd/$SWAGGER_FILE \
     --generator-name java \
