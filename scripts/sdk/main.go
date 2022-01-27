@@ -73,7 +73,7 @@ func processRawJSON(path string) (*spec.Swagger, error) {
 }
 
 // modifyRoutes gathers project routes, modifies their operations, and sets them on the swagger object.
-func modifyRoutes(swagger *spec.Swagger) error {
+func modifyRoutes(swagger *spec.Swagger) {
 	paths := map[string]spec.PathItem{}
 
 	for name, item := range swagger.Paths.Paths {
@@ -87,8 +87,6 @@ func modifyRoutes(swagger *spec.Swagger) error {
 			tags = []string{"ImageBuildService"}
 		case strings.Contains(name, "imagecaches"):
 			tags = []string{"ImageCacheService"}
-		default:
-			return fmt.Errorf("unknown service %q", name)
 		}
 
 		if item.Get != nil {
@@ -110,8 +108,6 @@ func modifyRoutes(swagger *spec.Swagger) error {
 		paths[name] = item
 	}
 	swagger.Paths.Paths = paths
-
-	return nil
 }
 
 // modifyOperation affects generated function names and the generated services where they will reside.
