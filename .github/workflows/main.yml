@@ -70,6 +70,13 @@ jobs:
           skipClusterCreation: true
 
       - name: Generate SDKS
-        run: |
-          kind version
-          make sdks
+        run: make sdks
+
+      - name: Generate Java JAR
+        run: docker run --rm -v $HOME/.m2:/root/.m2 -v $(pwd)/sdks/java:/wd --workdir /wd maven:3-openjdk-8 mvn -s settings.xml package
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          path: sdks/java/target/*.jar
+          if-no-files-found: error
