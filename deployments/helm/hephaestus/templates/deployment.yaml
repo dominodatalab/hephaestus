@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "common.names.fullname" . }}
+  name: {{ include "common.names.fullname" . }}-manager
   labels:
     {{- include "common.labels.standard" . | nindent 4 }}
 spec:
@@ -14,7 +14,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/config: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
         {{- if .Values.prometheus.enabled }}
         prometheus.io/port: "{{ .Values.config.metricsPort }}"
         prometheus.io/scrape: "true"
@@ -52,6 +52,9 @@ spec:
             - name: metrics
               containerPort: {{ .Values.config.metricsPort }}
               protocol: TCP
+            - name: webhooks
+              containerPort: {{ .Values.config.webhookPort }}
+              protocol: TCP
           livenessProbe:
             httpGet:
               path: /healthz
@@ -64,11 +67,18 @@ spec:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: config-vol
+              readOnly: true
               mountPath: /etc/hephaestus
+            - name: webhook-vol
+              readOnly: true
+              mountPath: /tmp/k8s-webhook-server/serving-certs
       volumes:
         - name: config-vol
-          configMap:
-            name: {{ include "common.names.fullname" . }}
+          secret:
+            secretName: {{ include "common.names.fullname" . }}
+        - name: webhook-vol
+          secret:
+            secretName: {{ include "hephaestus.webhook.secret" . }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

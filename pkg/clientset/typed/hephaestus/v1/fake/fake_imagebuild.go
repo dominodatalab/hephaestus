@@ -20,9 +20,9 @@ type FakeImageBuilds struct {
 	ns   string
 }
 
-var imagebuildsResource = schema.GroupVersionResource{Group: "hephaestus", Version: "v1", Resource: "imagebuilds"}
+var imagebuildsResource = schema.GroupVersionResource{Group: "hephaestus.dominodatalab.com", Version: "v1", Resource: "imagebuilds"}
 
-var imagebuildsKind = schema.GroupVersionKind{Group: "hephaestus", Version: "v1", Kind: "ImageBuild"}
+var imagebuildsKind = schema.GroupVersionKind{Group: "hephaestus.dominodatalab.com", Version: "v1", Kind: "ImageBuild"}
 
 // Get takes name of the imageBuild, and returns the corresponding imageBuild object, and an error if there is any.
 func (c *FakeImageBuilds) Get(ctx context.Context, name string, options v1.GetOptions) (result *hephaestusv1.ImageBuild, err error) {

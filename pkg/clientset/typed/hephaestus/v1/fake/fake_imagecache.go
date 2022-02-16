@@ -20,9 +20,9 @@ type FakeImageCaches struct {
 	ns   string
 }
 
-var imagecachesResource = schema.GroupVersionResource{Group: "hephaestus", Version: "v1", Resource: "imagecaches"}
+var imagecachesResource = schema.GroupVersionResource{Group: "hephaestus.dominodatalab.com", Version: "v1", Resource: "imagecaches"}
 
-var imagecachesKind = schema.GroupVersionKind{Group: "hephaestus", Version: "v1", Kind: "ImageCache"}
+var imagecachesKind = schema.GroupVersionKind{Group: "hephaestus.dominodatalab.com", Version: "v1", Kind: "ImageCache"}
 
 // Get takes name of the imageCache, and returns the corresponding imageCache object, and an error if there is any.
 func (c *FakeImageCaches) Get(ctx context.Context, name string, options v1.GetOptions) (result *hephaestusv1.ImageCache, err error) {

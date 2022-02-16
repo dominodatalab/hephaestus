@@ -15,6 +15,7 @@ func Register(mgr ctrl.Manager, cfg config.Controller) error {
 		For(&hephv1.ImageBuild{}).
 		Component("build-dispatcher", component.BuildDispatcher(cfg.Buildkit)).
 		Component("status-messenger", component.StatusMessenger(cfg.Messaging)).
+		WithWebhooks().
 		WithControllerOptions(controller.Options{
 			MaxConcurrentReconciles: cfg.ImageBuildMaxConcurrency,
 		}).

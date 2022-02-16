@@ -23,7 +23,7 @@ PROJECT_NAME=github.com/dominodatalab/hephaestus
 API_PACKAGE_PATH=pkg/api/hephaestus/v1
 OPENAPI_GEN_PATH=$PROJECT_NAME/$API_PACKAGE_PATH
 KUBERNETES_SWAGGER_FILE=/tmp/dist.swagger.json
-SWAGGER_FILE=$API_PACKAGE_PATH/swagger.json
+SWAGGER_FILE=api/openapi-spec/swagger.json
 
 OPENAPI_GENERATOR_CLI_VERSION=v5.2.1
 
@@ -91,7 +91,8 @@ openapi-gen \
   --go-header-file "$(mktemp)" \
   --input-dirs $OPENAPI_GEN_PATH \
   --output-package $OPENAPI_GEN_PATH \
-  --report-filename $API_PACKAGE_PATH/violation_exceptions.list
+  --output-file-base zz_generated.openapi \
+  --report-filename $API_PACKAGE_PATH/zz_generated.violation_exceptions.list
 
 generate_kubernetes_swagger
 
@@ -121,7 +122,7 @@ docker run --user "$(id -u):$(id -g)" --rm -v "$PROJECT_DIR:/wd" --workdir /wd \
     --http-user-agent "Hephaestus Java Client/$VERSION" \
     --generate-alias-as-model
 
-info "Copying generated Java files to sdk/java"
+info "Copying generated Java files to $JAVA_DIR"
 rm -rf "$GEN_DIR"/src/main/{java/io,AndroidManifest.xml}
 cp -r "$GEN_DIR"/docs "$JAVA_DIR"
 cp -r "$GEN_DIR"/src "$JAVA_DIR"

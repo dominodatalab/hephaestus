@@ -16,7 +16,7 @@ type HephaestusV1Interface interface {
 	ImageCachesGetter
 }
 
-// HephaestusV1Client is used to interact with features provided by the hephaestus group.
+// HephaestusV1Client is used to interact with features provided by the hephaestus.dominodatalab.com group.
 type HephaestusV1Client struct {
 	restClient rest.Interface
 }

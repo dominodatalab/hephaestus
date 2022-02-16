@@ -1,4 +1,4 @@
-package e2e
+package integration
 
 import (
 	"testing"
@@ -6,21 +6,21 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-func TestE2E(t *testing.T) {
-	suite.Run(t, &E2ETestSuite{})
+func TestIntegration(t *testing.T) {
+	suite.Run(t, &TestSuite{})
 }
 
-type E2ETestSuite struct {
+type TestSuite struct {
 	suite.Suite
 }
 
-func (s *E2ETestSuite) SetupSuite() {
+func (s *TestSuite) SetupSuite() {
 	// create k8s cluster
 	// install docker registry
 	// install rmq
 }
 
-func (s *E2ETestSuite) TearDownSuite() {
+func (s *TestSuite) TearDownSuite() {
 	// clean up resources
 }
 
