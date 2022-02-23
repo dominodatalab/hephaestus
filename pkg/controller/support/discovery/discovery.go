@@ -68,7 +68,7 @@ func BuildkitService(ctx *core.Context, cfg config.Buildkit) (string, error) {
 		return "", err
 	}
 	if len(svcList.Items) == 0 {
-		return "", errors.New("cannot find buildkitd service")
+		return "", errors.New("cannot find buildkit service")
 	}
 
 	var addr string

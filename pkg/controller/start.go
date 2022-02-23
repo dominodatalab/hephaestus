@@ -26,7 +26,7 @@ func Start(cfg config.Controller) error {
 	ctrl.SetLogger(l)
 
 	log := ctrl.Log.WithName("setup")
-	log.Info("Using provided configuration", "config", cfg)
+	log.V(1).Info("Using provided configuration", "config", cfg)
 
 	log.Info("Adding API types to runtime scheme")
 	scheme := runtime.NewScheme()
