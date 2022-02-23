@@ -1,23 +1,23 @@
-{{/*apiVersion: admissionregistration.k8s.io/v1*/}}
-{{/*kind: MutatingWebhookConfiguration*/}}
-{{/*metadata:*/}}
-{{/*  name: {{ include "common.names.fullname" . }}*/}}
-{{/*  labels:*/}}
-{{/*    {{- include "common.labels.standard" . | nindent 4 }}*/}}
-{{/*  annotations:*/}}
-{{/*    {{- include "hephaestus.webhook.annotations" . | nindent 4 }}*/}}
-{{/*webhooks:*/}}
-{{/*  - name: mutate-imagebuild.hephaestus.dominodatalab.com*/}}
-{{/*    admissionReviewVersions: ["v1"]*/}}
-{{/*    failurePolicy: Fail*/}}
-{{/*    sideEffects: None*/}}
-{{/*    clientConfig:*/}}
-{{/*      service:*/}}
-{{/*        name: {{ include "hephaestus.webhook.service" . }}*/}}
-{{/*        namespace: {{ .Release.Namespace }}*/}}
-{{/*        path: /mutate-hephaestus-dominodatalab-com-v1-imagebuild*/}}
-{{/*    rules:*/}}
-{{/*      - apiGroups: ["hephaestus.dominodatalab.com"]*/}}
-{{/*        apiVersions: ["v1"]*/}}
-{{/*        operations: ["CREATE", "UPDATE"]*/}}
-{{/*        resources: ["imagebuilds"]*/}}
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ include "common.names.fullname" . }}
+  labels:
+    {{- include "common.labels.standard" . | nindent 4 }}
+  annotations:
+    {{- include "hephaestus.webhook.annotations" . | nindent 4 }}
+webhooks:
+  - name: mutate-imagebuild.hephaestus.dominodatalab.com
+    admissionReviewVersions: ["v1"]
+    failurePolicy: Fail
+    sideEffects: None
+    clientConfig:
+      service:
+        name: {{ include "hephaestus.webhook.service" . }}
+        namespace: {{ .Release.Namespace }}
+        path: /mutate-hephaestus-dominodatalab-com-v1-imagebuild
+    rules:
+      - apiGroups: ["hephaestus.dominodatalab.com"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["imagebuilds"]

@@ -8,7 +8,14 @@ Return the proper image name.
 {{- end }}
 
 {{/*
-Create the name of the service account to use.
+Return config secret name.
+*/}}
+{{- define "hephaestus.configSecretName" -}}
+{{ include "common.names.fullname" . }}-config
+{{- end }}
+
+{{/*
+Return the service account name.
 */}}
 {{- define "hephaestus.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
@@ -19,18 +26,62 @@ Create the name of the service account to use.
 {{- end }}
 
 {{/*
-Returns a name suitable for all manager RBAC objects.
+Return a name suitable for all manager RBAC objects.
 */}}
 {{- define "hephaestus.rbac.managerName" -}}
 dominodatalab:operator:{{ include "common.names.fullname" . }}
 {{- end }}
 
+{{/*
+Return whether or not securityContext.seccompProfile field is supported.
+*/}}
+{{- define "hephaestus.supportsSeccompGA" -}}
+{{- semverCompare ">1.19-0" .Capabilities.KubeVersion.Version }}
+{{- end }}
 
 {{/*
-Return the webhook certificate CA name.
+Return the self-signed issuer name.
 */}}
-{{- define "hephaestus.webhook.issuer" -}}
+{{- define "hephaestus.certmanager.selfSignedIssuer" -}}
 {{ include "common.names.fullname" . }}-selfsigned-issuer
+{{- end }}
+
+{{/*
+Return the self-signed CA certificate name.
+*/}}
+{{- define "hephaestus.certmanager.selfSignedCA" -}}
+{{ include "common.names.fullname" . }}-selfsigned-ca
+{{- end }}
+
+{{/*
+Return the root CA secret name.
+*/}}
+{{- define "hephaestus.certmanager.rootTLS" -}}
+{{ include "common.names.fullname" . }}-root-tls
+{{- end }}
+
+{{/*
+Return the CA issuer name.
+*/}}
+{{- define "hephaestus.certmanager.caIssuer" -}}
+{{ include "common.names.fullname" . }}-ca-issuer
+{{- end }}
+
+{{/*
+Return the buildkit mtls client secret name.
+*/}}
+{{- define "hephaestus.buildkit.clientSecret" -}}
+{{ include "common.names.fullname" . }}-buildkit-client-tls
+{{- end }}
+
+{{/*
+Return the buildkit mtls server secret name.
+
+Leverage the buildkit subcharts template to
+create a secret with the name it's expecting.
+*/}}
+{{- define "hephaestus.buildkit.serverSecret" -}}
+{{ include "buildkit.mTLSSecret" .Subcharts.buildkit }}
 {{- end }}
 
 {{/*
@@ -41,11 +92,11 @@ Return the webhook certificate name.
 {{- end -}}
 
 {{/*
-Return the webhook annotations.
+Return the webhook certificate secret name.
 */}}
-{{- define "hephaestus.webhook.annotations" -}}
-cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ include "hephaestus.webhook.certificate" . }}
-{{- end }}
+{{- define "hephaestus.webhook.secret" -}}
+{{ include "common.names.fullname" . }}-webhook-tls
+{{- end -}}
 
 {{/*
 Return the webhook service name.
@@ -55,8 +106,8 @@ Return the webhook service name.
 {{- end }}
 
 {{/*
-Return the webhook certificate secret name.
+Return the webhook annotations.
 */}}
-{{- define "hephaestus.webhook.secret" -}}
-{{ include "common.names.fullname" . }}-webhook-cert
-{{- end -}}
+{{- define "hephaestus.webhook.annotations" -}}
+cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ include "hephaestus.webhook.certificate" . }}
+{{- end }}

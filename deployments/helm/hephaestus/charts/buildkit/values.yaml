@@ -1,14 +1,17 @@
-# Default values for buildkitd.
+# Default values for buildkit.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-# Number of buildkitd pods to run
+# Number of buildkit pods to run
 replicaCount: 1
-# Run buildkitd in rootless mode
+# Run buildkit in rootless mode
 rootless: true
 # Amount of storage GC keeps locally (MB). This value should be less than the
 # total amount of available persistent storage (e.g. 75% of 20Gi)
 gcKeepStorage: 15000
+# Control mTLS settings
+mtls:
+  enabled: false
 
 image:
   registry: ""

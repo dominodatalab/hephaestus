@@ -1,0 +1,88 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "hephaestus.certmanager.selfSignedIssuer" . }}
+  labels:
+    {{- include "common.labels.standard" . | nindent 4 }}
+spec:
+  selfSigned: {}
+
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "hephaestus.certmanager.selfSignedCA" . }}
+  labels:
+    {{- include "common.labels.standard" . | nindent 4 }}
+spec:
+  isCA: true
+  commonName: {{ include "hephaestus.certmanager.selfSignedCA" . }}
+  secretName: {{ include "hephaestus.certmanager.rootTLS" . }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: {{ include "hephaestus.certmanager.selfSignedIssuer" . }}
+
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "hephaestus.certmanager.caIssuer" . }}
+  labels:
+    {{- include "common.labels.standard" . | nindent 4 }}
+spec:
+  ca:
+    secretName: {{ include "hephaestus.certmanager.rootTLS" . }}
+
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "hephaestus.webhook.certificate" . }}
+  labels:
+    {{- include "common.labels.standard" . | nindent 4 }}
+spec:
+  dnsNames:
+    - {{ include "hephaestus.webhook.service" . }}.{{ .Release.Namespace }}.svc
+    - {{ include "hephaestus.webhook.service" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: {{ include "hephaestus.certmanager.caIssuer" . }}
+  secretName: {{ include "hephaestus.webhook.secret" . }}
+
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "common.names.fullname" . }}-buildkit-client
+  labels:
+    {{- include "common.labels.standard" . | nindent 4 }}
+spec:
+  commonName: {{ include "hephaestus.certmanager.selfSignedCA" . }}
+  usages:
+    - client auth
+  issuerRef:
+    kind: Issuer
+    name: {{ include "hephaestus.certmanager.caIssuer" . }}
+  secretName: {{ include "hephaestus.buildkit.clientSecret" . }}
+
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "common.names.fullname" . }}-buildkit-server
+  labels:
+    {{- include "common.labels.standard" . | nindent 4 }}
+spec:
+  dnsNames:
+    - "*.{{ include "common.names.fullname" .Subcharts.buildkit }}"
+    - "*.{{ include "common.names.fullname" .Subcharts.buildkit }}.{{ .Release.Namespace }}"
+  usages:
+    - server auth
+  issuerRef:
+    kind: Issuer
+    name: {{ include "hephaestus.certmanager.caIssuer" . }}
+  secretName: {{ include "hephaestus.buildkit.serverSecret" . }}

@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "common.names.fullname" . }}
+  labels:
+    {{- include "common.labels.standard" . | nindent 4 }}
+data:
+  buildkitd.toml: |
+    [grpc]
+      address = [ "tcp://0.0.0.0:{{ .Values.service.port }}", "{{ .Values.rootless | ternary "unix:///run/user/1000/buildkit/buildkitd.sock" "unix:///run/buildkit/buildkitd.sock" }}" ]
+
+      {{- if .Values.mtls.enabled }}
+      [grpc.tls]
+        cert = "/etc/buildkit/x509/tls.crt"
+        key = "/etc/buildkit/x509/tls.key"
+        ca = "/etc/buildkit/x509/ca.crt"
+      {{- end }}
+
+    [worker.oci]
+      {{- if .Values.rootless }}
+      noProcessSandbox = true
+      {{- end }}
+      {{- if .Values.persistence.enabled }}
+      gckeepstorage = {{ .Values.gcKeepStorage }}
+      {{- end }}

@@ -68,14 +68,21 @@ spec:
           volumeMounts:
             - name: config-vol
               readOnly: true
-              mountPath: /etc/hephaestus
+              mountPath: /etc/hephaestus/config.yaml
+              subPath: config.yaml
+            - name: mtls-vol
+              readOnly: true
+              mountPath: /etc/hephaestus/x509
             - name: webhook-vol
               readOnly: true
               mountPath: /tmp/k8s-webhook-server/serving-certs
       volumes:
         - name: config-vol
           secret:
-            secretName: {{ include "common.names.fullname" . }}
+            secretName: {{ include "hephaestus.configSecretName" . }}
+        - name: mtls-vol
+          secret:
+            secretName: {{ include "hephaestus.buildkit.clientSecret" . }}
         - name: webhook-vol
           secret:
             secretName: {{ include "hephaestus.webhook.secret" . }}
