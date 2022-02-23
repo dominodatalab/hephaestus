@@ -68,6 +68,10 @@ type Buildkit struct {
 	Labels     map[string]string `json:"labels" yaml:"labels"`
 	Namespace  string            `json:"namespace" yaml:"namespace"`
 	DaemonPort int32             `json:"daemonPort" yaml:"daemonPort"`
+
+	CACertPath string `json:"caCertPath" yaml:"caCertPath"`
+	CertPath   string `json:"certPath" yaml:"certPath"`
+	KeyPath    string `json:"keyPath" yaml:"keyPath"`
 }
 
 type Messaging struct {
@@ -99,7 +103,7 @@ func GenerateDefaults() Controller {
 		},
 		Buildkit: Buildkit{
 			Labels: map[string]string{
-				"app": "buildkitd",
+				"app": "buildkit",
 			},
 			Namespace:  "default",
 			DaemonPort: 1234,

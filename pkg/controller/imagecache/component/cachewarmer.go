@@ -95,19 +95,19 @@ func (c *CacheWarmerComponent) Reconcile(ctx *core.Context) (ctrl.Result, error)
 		client.MatchingLabels(c.cfg.Labels),
 	}
 
-	log.Info("Querying for buildkitd pods", "labels", c.cfg.Labels, "namespace", c.cfg.Namespace)
+	log.Info("Querying for buildkit pods", "labels", c.cfg.Labels, "namespace", c.cfg.Namespace)
 	if err := ctx.Client.List(ctx, &podList, listOpts...); err != nil {
-		return ctrl.Result{}, fmt.Errorf("buildkitd pod lookup failed: %w", err)
+		return ctrl.Result{}, fmt.Errorf("buildkit pod lookup failed: %w", err)
 	}
 	if len(podList.Items) == 0 {
-		return ctrl.Result{}, errors.New("no buildkitd pods found")
+		return ctrl.Result{}, errors.New("no buildkit pods found")
 	}
 
 	var podNames []string
 	for _, pod := range podList.Items {
 		podNames = append(podNames, pod.Name)
 	}
-	log.Info("Found buildkitd pods", "pods", podNames)
+	log.Info("Found buildkit pods", "pods", podNames)
 
 	if !reflect.DeepEqual(podNames, obj.Status.BuildkitPods) {
 		synced = false
@@ -126,14 +126,14 @@ func (c *CacheWarmerComponent) Reconcile(ctx *core.Context) (ctrl.Result, error)
 	*/
 	c.phase.SetInitializing(ctx, obj)
 
-	log.Info("Querying for buildkitd endpoints")
+	log.Info("Querying for buildkit endpoints")
 	endpoints, err := discovery.BuildkitEndpoints(ctx, c.cfg)
 	if err != nil {
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkit worker lookup failed: %w", err))
 	}
 
 	if len(endpoints) < len(podNames) {
-		log.Info("Not all buildkitd pods ready, requeuing event", "pods", podNames, "endpoints", endpoints)
+		log.Info("Not all buildkit pods ready, requeuing event", "pods", podNames, "endpoints", endpoints)
 		ctx.Conditions.SetFalse(
 			c.GetReadyCondition(),
 			"EndpointsMissing",
@@ -167,14 +167,14 @@ func (c *CacheWarmerComponent) Reconcile(ctx *core.Context) (ctrl.Result, error)
 			eg.Go(func() error {
 				log := log.WithValues("addr", addr, "image", image)
 
-				bkOpts := []buildkit.ClientOpt{
-					buildkit.WithAuthConfig(configDir),
-					buildkit.WithLogger(ctx.Log.WithName("buildkit").WithValues("addr", addr, "image", image)),
-				}
-
-				log.Info("Creating new buildkit client")
-				var bk buildkit.Client
-				if bk, err = buildkit.NewRemoteClient(ctx, addr, bkOpts...); err != nil {
+				log.Info("Building new buildkit client")
+				bk, err := buildkit.
+					RemoteClient(ctx, addr).
+					WithLogger(ctx.Log.WithName("buildkit").WithValues("addr", addr, "image", image)).
+					WithMTLSAuth(c.cfg.CACertPath, c.cfg.CertPath, c.cfg.KeyPath).
+					WithDockerAuthConfig(configDir).
+					Build()
+				if err != nil {
 					return err
 				}
 
