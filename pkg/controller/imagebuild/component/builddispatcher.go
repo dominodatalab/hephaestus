@@ -63,10 +63,10 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	start := time.Now()
 	c.phase.SetInitializing(ctx, obj)
 
-	log.Info("Querying for buildkitd service")
+	log.Info("Querying for buildkit service")
 	addr, err := discovery.BuildkitService(ctx, c.cfg)
 	if err != nil {
-		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkitd service lookup failed: %w", err))
+		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkit service lookup failed: %w", err))
 	}
 
 	log.Info("Processing registry credentials")
@@ -76,11 +76,13 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	}
 	defer os.RemoveAll(configDir)
 
-	bkOpts := []buildkit.ClientOpt{
-		buildkit.WithAuthConfig(configDir),
-		buildkit.WithLogger(log.WithName("buildkit").WithValues("addr", addr)),
-	}
-	bk, err := buildkit.NewRemoteClient(ctx, addr, bkOpts...)
+	log.Info("Building new buildkit client")
+	bk, err := buildkit.
+		RemoteClient(ctx, addr).
+		WithLogger(ctx.Log.WithName("buildkit").WithValues("addr", addr)).
+		WithMTLSAuth(c.cfg.CACertPath, c.cfg.CertPath, c.cfg.KeyPath).
+		WithDockerAuthConfig(configDir).
+		Build()
 	if err != nil {
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, err)
 	}

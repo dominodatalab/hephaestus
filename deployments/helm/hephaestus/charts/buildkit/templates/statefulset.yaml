@@ -16,7 +16,8 @@ spec:
   template:
     metadata:
       annotations:
-        {{- if .Values.rootless }}
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- if and (not (include "hephaestus.supportsSeccompGA" .)) .Values.rootless }}
         container.apparmor.security.beta.kubernetes.io/buildkitd: unconfined
         container.seccomp.security.alpha.kubernetes.io/buildkitd: unconfined
         {{- end }}
@@ -30,7 +31,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "buildkitd.serviceAccountName" . }}
+      serviceAccountName: {{ include "buildkit.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -40,22 +41,16 @@ spec:
             # NOTE: To change UID/GID, you need to rebuild the image
             runAsUser: 1000
             runAsGroup: 1000
+            {{- if include "hephaestus.supportsSeccompGA" . }}
+            seccompProfile:
+              type: Unconfined
+            {{- end }}
             {{- else }}
             privileged: true
             {{- end }}
-          image: {{ include "buildkitd.image" . }}
+          image: {{ include "buildkit.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          args:
-            - --addr=tcp://0.0.0.0:{{ .Values.service.port }}
-            {{- if .Values.rootless }}
-            - --addr=unix:///run/user/1000/buildkit/buildkitd.sock
-            - --oci-worker-no-process-sandbox
-            {{- else }}
-            - --addr=unix:///run/buildkit/buildkitd.sock
-            {{- end }}
-            {{- if .Values.persistence.enabled }}
-            - --oci-worker-gc-keepstorage={{ .Values.gcKeepStorage }}
-            {{- end }}
+          args: ["--config", "/etc/buildkit/buildkitd.toml"]
           ports:
             - name: {{ .Values.service.portName }}
               protocol: TCP
@@ -78,15 +73,33 @@ spec:
             periodSeconds: 30
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          {{- if .Values.persistence.enabled }}
           volumeMounts:
+            - name: config-vol
+              readOnly: true
+              mountPath: /etc/buildkit/buildkitd.toml
+              subPath: buildkitd.toml
+            {{- if .Values.mtls.enabled }}
+            - name: mtls-vol
+              readOnly: true
+              mountPath: /etc/buildkit/x509
+            {{- end }}
+            {{- if .Values.persistence.enabled }}
             - name: cache
               {{- if .Values.rootless }}
               mountPath: /home/user/.local/share/buildkit
               {{- else }}
               mountPath: /var/lib/buildkit
               {{- end }}
-          {{- end }}
+            {{- end }}
+      volumes:
+        - name: config-vol
+          configMap:
+            name: {{ include "common.names.fullname" . }}
+        {{- if .Values.mtls.enabled }}
+        - name: mtls-vol
+          secret:
+            secretName: {{ include "buildkit.mTLSSecret" . }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

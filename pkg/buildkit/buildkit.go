@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -11,13 +12,60 @@ import (
 	"github.com/containerd/console"
 	"github.com/docker/distribution/reference"
 	"github.com/go-logr/logr"
-	"github.com/moby/buildkit/client"
+	bkclient "github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dominodatalab/hephaestus/pkg/buildkit/archive"
 )
+
+type clientBuilder struct {
+	ctx              context.Context
+	addr             string
+	dockerAuthConfig string
+	log              logr.Logger
+	bkOpts           []bkclient.ClientOpt
+}
+
+func RemoteClient(ctx context.Context, addr string) *clientBuilder {
+	return &clientBuilder{ctx: ctx, addr: addr, log: logr.Discard()}
+}
+
+func (b *clientBuilder) WithDockerAuthConfig(configDir string) *clientBuilder {
+	b.dockerAuthConfig = configDir
+	return b
+}
+
+func (b *clientBuilder) WithMTLSAuth(caPath, certPath, keyPath string) *clientBuilder {
+	u, err := url.Parse(b.addr)
+	if err != nil {
+		b.log.Error(err, "Cannot parse hostname, kipping mTLS auth", "addr", b.addr)
+	} else {
+		b.bkOpts = append(b.bkOpts, bkclient.WithCredentials(u.Hostname(), caPath, certPath, keyPath))
+	}
+
+	return b
+}
+
+func (b *clientBuilder) WithLogger(log logr.Logger) *clientBuilder {
+	b.log = log
+	return b
+}
+
+func (b *clientBuilder) Build() (*Client, error) {
+	bk, err := bkclient.New(b.ctx, b.addr, append(b.bkOpts, bkclient.WithFailFast())...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create buildkit client: %w", err)
+	}
+
+	return &Client{
+		bk:               bk,
+		ctx:              b.ctx,
+		log:              b.log,
+		dockerAuthConfig: b.dockerAuthConfig,
+	}, nil
+}
 
 type BuildOptions struct {
 	Context            string
@@ -29,77 +77,20 @@ type BuildOptions struct {
 	DisableCacheImport bool
 }
 
-type Client interface {
-	Cache(image string) error
+type Buildkit interface {
 	Build(opts BuildOptions) error
+	Cache(image string) error
 }
 
-type ClientOpt func(rc *RemoteClient)
-
-func WithAuthConfig(configDir string) ClientOpt {
-	return func(rc *RemoteClient) {
-		rc.authConfig = configDir
-	}
+type Client struct {
+	bk               *bkclient.Client
+	ctx              context.Context
+	log              logr.Logger
+	dockerAuthConfig string
 }
 
-func WithLogger(log logr.Logger) ClientOpt {
-	return func(rc *RemoteClient) {
-		rc.log = log
-	}
-}
-
-type RemoteClient struct {
-	bk         *client.Client
-	ctx        context.Context
-	log        logr.Logger
-	authConfig string
-}
-
-func NewRemoteClient(ctx context.Context, addr string, opts ...ClientOpt) (*RemoteClient, error) {
-	bk, err := client.New(ctx, addr, client.WithFailFast()) // TODO: explore adding jaeger tracing option
-	if err != nil {
-		return nil, fmt.Errorf("failed to create buildkit client: %w", err)
-	}
-
-	rc := &RemoteClient{
-		bk:  bk,
-		ctx: ctx,
-		log: logr.Discard(),
-	}
-	for _, opt := range opts {
-		opt(rc)
-	}
-
-	return rc, nil
-}
-
-func (c *RemoteClient) Cache(image string) error {
-	return c.solveWith(func(buildDir string, solveOpt *client.SolveOpt) error {
-		dockerfile := filepath.Join(buildDir, "Dockerfile")
-		contents := []byte(fmt.Sprintf("FROM %s\nRUN echo extract", image))
-		if err := os.WriteFile(dockerfile, contents, 0644); err != nil {
-			return fmt.Errorf("failed to create dockerfile: %w", err)
-		}
-
-		solveOpt.LocalDirs = map[string]string{
-			"context":    buildDir,
-			"dockerfile": buildDir,
-		}
-		solveOpt.Exports = []client.ExportEntry{
-			{
-				Type: client.ExporterOCI,
-				Output: func(m map[string]string) (io.WriteCloser, error) {
-					return DiscardCloser{io.Discard}, nil
-				},
-			},
-		}
-
-		return nil
-	})
-}
-
-func (c *RemoteClient) Build(opts BuildOptions) error {
-	return c.solveWith(func(buildDir string, solveOpt *client.SolveOpt) error {
+func (c *Client) Build(opts BuildOptions) error {
+	return c.solveWith(func(buildDir string, solveOpt *bkclient.SolveOpt) error {
 		c.log.Info("Fetching remote context", "url", opts.Context)
 		extract, err := archive.FetchAndExtract(c.log, c.ctx, opts.Context, buildDir, 5*time.Minute)
 		if err != nil {
@@ -112,8 +103,8 @@ func (c *RemoteClient) Build(opts BuildOptions) error {
 		}
 
 		for _, name := range opts.Images {
-			solveOpt.Exports = append(solveOpt.Exports, client.ExportEntry{
-				Type: client.ExporterImage,
+			solveOpt.Exports = append(solveOpt.Exports, bkclient.ExportEntry{
+				Type: bkclient.ExporterImage,
 				Attrs: map[string]string{
 					"push": "true",
 					"name": name,
@@ -129,7 +120,7 @@ func (c *RemoteClient) Build(opts BuildOptions) error {
 		if err != nil {
 			return err
 		}
-		cacheOpts := []client.CacheOptionsEntry{
+		cacheOpts := []bkclient.CacheOptionsEntry{
 			{
 				Type: "registry",
 				Attrs: map[string]string{
@@ -150,24 +141,49 @@ func (c *RemoteClient) Build(opts BuildOptions) error {
 	})
 }
 
-func (c *RemoteClient) Prune() error {
+func (c *Client) Cache(image string) error {
+	return c.solveWith(func(buildDir string, solveOpt *bkclient.SolveOpt) error {
+		dockerfile := filepath.Join(buildDir, "Dockerfile")
+		contents := []byte(fmt.Sprintf("FROM %s\nRUN echo extract\n", image))
+		if err := os.WriteFile(dockerfile, contents, 0644); err != nil {
+			return fmt.Errorf("failed to create dockerfile: %w", err)
+		}
+
+		solveOpt.LocalDirs = map[string]string{
+			"context":    buildDir,
+			"dockerfile": buildDir,
+		}
+		solveOpt.Exports = []bkclient.ExportEntry{
+			{
+				Type: bkclient.ExporterOCI,
+				Output: func(m map[string]string) (io.WriteCloser, error) {
+					return DiscardCloser{io.Discard}, nil
+				},
+			},
+		}
+
+		return nil
+	})
+}
+
+func (c *Client) Prune() error {
 	c.log.Info("Prune not implemented")
 
 	return nil
 }
 
-func (c *RemoteClient) solveWith(modify func(buildDir string, solveOpt *client.SolveOpt) error) error {
+func (c *Client) solveWith(modify func(buildDir string, solveOpt *bkclient.SolveOpt) error) error {
 	buildDir, err := os.MkdirTemp("", "hephaestus-build-")
 	if err != nil {
 		return fmt.Errorf("failed to create build dir: %w", err)
 	}
 	defer os.RemoveAll(buildDir)
 
-	solveOpt := client.SolveOpt{
+	solveOpt := bkclient.SolveOpt{
 		Frontend:      "dockerfile.v0",
 		FrontendAttrs: map[string]string{},
 		Session: []session.Attachable{
-			NewDockerAuthProvider(c.authConfig),
+			NewDockerAuthProvider(c.dockerAuthConfig),
 		},
 	}
 
@@ -178,18 +194,21 @@ func (c *RemoteClient) solveWith(modify func(buildDir string, solveOpt *client.S
 	return c.runSolve(solveOpt)
 }
 
-func (c *RemoteClient) runSolve(so client.SolveOpt) error {
+func (c *Client) runSolve(so bkclient.SolveOpt) error {
 	lw := &LogWriter{Logger: c.log}
 
-	ch := make(chan *client.SolveStatus)
+	ch := make(chan *bkclient.SolveStatus)
 	eg, ctx := errgroup.WithContext(c.ctx)
 
 	eg.Go(func() error {
 		resp, err := c.bk.Solve(ctx, nil, so, ch)
+		if err != nil {
+			return err
+		}
+
 		// NOTE: this can be used to limit the size of images pushed to the registry
 		c.log.Info("Solve complete", "image.size", resp.ExporterResponse["size"])
-
-		return err
+		return nil
 	})
 	eg.Go(func() error {
 		var c console.Console
@@ -197,7 +216,8 @@ func (c *RemoteClient) runSolve(so client.SolveOpt) error {
 			c = cn
 		}
 
-		return progressui.DisplaySolveStatus(ctx, "", c, lw, ch)
+		_, err := progressui.DisplaySolveStatus(ctx, "", c, lw, ch)
+		return err
 	})
 
 	if err := eg.Wait(); err != nil {

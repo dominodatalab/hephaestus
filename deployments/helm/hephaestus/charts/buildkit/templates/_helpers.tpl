@@ -1,7 +1,7 @@
 {{/*
 Return the proper image name.
 */}}
-{{- define "buildkitd.image" -}}
+{{- define "buildkit.image" -}}
 {{- $imageRoot := .Values.image }}
 {{- $tag := .Values.image.tag | default .Chart.AppVersion }}
 {{- if not .Values.rootless }}
@@ -12,12 +12,19 @@ Return the proper image name.
 {{- end }}
 
 {{/*
-Create the name of the service account to use.
+Return the service account name.
 */}}
-{{- define "buildkitd.serviceAccountName" -}}
+{{- define "buildkit.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
 {{- default (include "common.names.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
+{{- end }}
+
+{{/*
+Return the mtls server secret name
+*/}}
+{{- define "buildkit.mTLSSecret" -}}
+{{ printf "%s-server-tls" (include "common.names.fullname" .) }}
 {{- end }}

@@ -1,7 +1,9 @@
 # Buildkit deployment configuration.
-# See charts/buildkitd/values.yaml for a list of available values.
-buildkitd:
-  replicaCount: 2
+# See charts/buildkit/values.yaml for a list of available values.
+buildkit:
+  replicaCount: 1
+  mtls:
+    enabled: true
 
 # Number of controller instances to run. Leader election will be enabled
 # whenever this value is greater than 1; this ensures that only one instance
