@@ -1,15 +1,13 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "common.names.fullname" . }}
+  name: {{ include "buildkit.statefulSetName" . }}
   labels:
     {{- include "common.labels.standard" . | nindent 4 }}
 spec:
-  serviceName: {{ include "common.names.fullname" . }}
+  serviceName: {{ include "buildkit.serviceName" . }}
   podManagementPolicy: Parallel
-  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
-  {{- end }}
   selector:
     matchLabels:
       {{- include "common.labels.matchLabels" . | nindent 6 }}

@@ -23,6 +23,20 @@ Return the service account name.
 {{- end }}
 
 {{/*
+Return the service name.
+*/}}
+{{- define "buildkit.serviceName" -}}
+{{ include "common.names.fullname" . }}
+{{- end }}
+
+{{/*
+Return the statefulset name.
+*/}}
+{{- define "buildkit.statefulSetName" -}}
+{{ include "common.names.fullname" . }}
+{{- end }}
+
+{{/*
 Return the mtls server secret name
 */}}
 {{- define "buildkit.mTLSSecret" -}}
