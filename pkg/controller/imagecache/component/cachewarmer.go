@@ -2,15 +2,10 @@ package component
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"os"
-	"reflect"
 	"time"
 
 	"github.com/dominodatalab/controller-util/core"
 	"github.com/go-logr/logr"
-	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -23,10 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
-	"github.com/dominodatalab/hephaestus/pkg/buildkit"
 	"github.com/dominodatalab/hephaestus/pkg/config"
-	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials"
-	"github.com/dominodatalab/hephaestus/pkg/controller/support/discovery"
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/phase"
 )
 
@@ -78,144 +70,147 @@ func (c *CacheWarmerComponent) Initialize(ctx *core.Context, bldr *ctrl.Builder)
 	return nil
 }
 
+// TODO: signal cache build stop on resource delete
+
 func (c *CacheWarmerComponent) Reconcile(ctx *core.Context) (ctrl.Result, error) {
-	// TODO: signal cache build stop on resource delete
-
 	log := ctx.Log
-	obj := ctx.Object.(*hephv1.ImageCache)
+	// obj := ctx.Object.(*hephv1.ImageCache)
 
-	/*
-		1. Determine if a cache run is required
-	*/
-	synced := true
-
-	var podList corev1.PodList
-	listOpts := []client.ListOption{
-		client.InNamespace(c.cfg.Namespace),
-		client.MatchingLabels(c.cfg.Labels),
-	}
-
-	log.Info("Querying for buildkit pods", "labels", c.cfg.Labels, "namespace", c.cfg.Namespace)
-	if err := ctx.Client.List(ctx, &podList, listOpts...); err != nil {
-		return ctrl.Result{}, fmt.Errorf("buildkit pod lookup failed: %w", err)
-	}
-	if len(podList.Items) == 0 {
-		return ctrl.Result{}, errors.New("no buildkit pods found")
-	}
-
-	var podNames []string
-	for _, pod := range podList.Items {
-		podNames = append(podNames, pod.Name)
-	}
-	log.Info("Found buildkit pods", "pods", podNames)
-
-	if !reflect.DeepEqual(podNames, obj.Status.BuildkitPods) {
-		synced = false
-	}
-	if !reflect.DeepEqual(obj.Spec.Images, obj.Status.CachedImages) {
-		synced = false
-	}
-
-	if synced {
-		log.Info("Resource synced, quitting reconciliation")
-		return ctrl.Result{}, nil
-	}
-
-	/*
-		2. Load external data required for building
-	*/
-	c.phase.SetInitializing(ctx, obj)
-
-	log.Info("Querying for buildkit endpoints")
-	endpoints, err := discovery.BuildkitEndpoints(ctx, c.cfg)
-	if err != nil {
-		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkit worker lookup failed: %w", err))
-	}
-
-	if len(endpoints) < len(podNames) {
-		log.Info("Not all buildkit pods ready, requeuing event", "pods", podNames, "endpoints", endpoints)
-		ctx.Conditions.SetFalse(
-			c.GetReadyCondition(),
-			"EndpointsMissing",
-			fmt.Sprintf("Buildkitd workers %v missing endpoints %v", podNames, endpoints),
-		)
-
-		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-	}
-
-	log.Info("Processing registry credentials")
-	configDir, err := credentials.Persist(ctx, ctx.Config, obj.Spec.RegistryAuth)
-	if err != nil {
-		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("registry credentials processing failed: %w", err))
-	}
-	defer os.RemoveAll(configDir)
-
-	/*
-		3. Dispatch concurrent cache operations
-	*/
-	c.phase.SetRunning(ctx, obj)
-
-	log.Info("Launching cache operation", "endpoints", endpoints, "images", obj.Spec.Images)
-	eg, _ := errgroup.WithContext(ctx)
-	for idx, addr := range endpoints {
-		for _, image := range obj.Spec.Images {
-			// close over variables
-			idx := idx
-			addr := addr
-			image := image
-
-			eg.Go(func() error {
-				log := log.WithValues("addr", addr, "image", image)
-
-				log.Info("Building new buildkit client")
-				bk, err := buildkit.
-					RemoteClient(ctx, addr).
-					WithLogger(ctx.Log.WithName("buildkit").WithValues("addr", addr, "image", image)).
-					WithMTLSAuth(c.cfg.CACertPath, c.cfg.CertPath, c.cfg.KeyPath).
-					WithDockerAuthConfig(configDir).
-					Build()
-				if err != nil {
-					return err
-				}
-
-				builderCondition := fmt.Sprintf("BuildkitdPod-%d", idx)
-
-				log.Info("Launching cache export")
-				ctx.Conditions.SetUnknown(builderCondition, "LaunchingCacheRun", "")
-
-				if err = bk.Cache(image); err != nil {
-					ctx.Conditions.SetFalse(builderCondition, "CacheRunFailed", err.Error())
-					return err
-				}
-
-				log.Info("Cache export complete")
-				ctx.Conditions.SetTrue(builderCondition, "CacheRunSucceeded", "")
-
-				return nil
-			})
-		}
-	}
-
-	if err = eg.Wait(); err != nil {
-		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("caching operation failed: %w", err))
-	}
-
-	/*
-		4. Record build metadata and report success
-	*/
-	obj.Status.BuildkitPods = podNames
-	obj.Status.CachedImages = obj.Spec.Images
-	c.phase.SetSucceeded(ctx, obj)
-
-	log.Info("Reconciliation complete")
+	log.Info("Component disabled until modified to work with new buildkit worker pool")
 	return ctrl.Result{}, nil
+
+	// /*
+	// 	1. Determine if a cache run is required
+	// */
+	// synced := true
+	//
+	// var podList corev1.PodList
+	// listOpts := []client.ListOption{
+	// 	client.InNamespace(c.cfg.Namespace),
+	// 	client.MatchingLabels(c.cfg.Labels),
+	// }
+	//
+	// log.Info("Querying for buildkit pods", "labels", c.cfg.Labels, "namespace", c.cfg.Namespace)
+	// if err := ctx.Client.List(ctx, &podList, listOpts...); err != nil {
+	// 	return ctrl.Result{}, fmt.Errorf("buildkit pod lookup failed: %w", err)
+	// }
+	// if len(podList.Items) == 0 {
+	// 	return ctrl.Result{}, errors.New("no buildkit pods found")
+	// }
+	//
+	// var podNames []string
+	// for _, pod := range podList.Items {
+	// 	podNames = append(podNames, pod.Name)
+	// }
+	// log.Info("Found buildkit pods", "pods", podNames)
+	//
+	// if !reflect.DeepEqual(podNames, obj.Status.BuildkitPods) {
+	// 	synced = false
+	// }
+	// if !reflect.DeepEqual(obj.Spec.Images, obj.Status.CachedImages) {
+	// 	synced = false
+	// }
+	//
+	// if synced {
+	// 	log.Info("Resource synced, quitting reconciliation")
+	// 	return ctrl.Result{}, nil
+	// }
+	//
+	// /*
+	// 	2. Load external data required for building
+	// */
+	// c.phase.SetInitializing(ctx, obj)
+	//
+	// log.Info("Querying for buildkit endpoints")
+	// endpoints, err := discovery.BuildkitEndpoints(ctx, c.cfg)
+	// if err != nil {
+	// 	return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkit worker lookup failed: %w", err))
+	// }
+	//
+	// if len(endpoints) < len(podNames) {
+	// 	log.Info("Not all buildkit pods ready, requeuing event", "pods", podNames, "endpoints", endpoints)
+	// 	ctx.Conditions.SetFalse(
+	// 		c.GetReadyCondition(),
+	// 		"EndpointsMissing",
+	// 		fmt.Sprintf("Buildkitd workers %v missing endpoints %v", podNames, endpoints),
+	// 	)
+	//
+	// 	return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+	// }
+	//
+	// log.Info("Processing registry credentials")
+	// configDir, err := credentials.Persist(ctx, ctx.Config, obj.Spec.RegistryAuth)
+	// if err != nil {
+	// 	return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("registry credentials processing failed: %w", err))
+	// }
+	// defer os.RemoveAll(configDir)
+	//
+	// /*
+	// 	3. Dispatch concurrent cache operations
+	// */
+	// c.phase.SetRunning(ctx, obj)
+	//
+	// log.Info("Launching cache operation", "endpoints", endpoints, "images", obj.Spec.Images)
+	// eg, _ := errgroup.WithContext(ctx)
+	// for idx, addr := range endpoints {
+	// 	for _, image := range obj.Spec.Images {
+	// 		// close over variables
+	// 		idx := idx
+	// 		addr := addr
+	// 		image := image
+	//
+	// 		eg.Go(func() error {
+	// 			log := log.WithValues("addr", addr, "image", image)
+	//
+	// 			log.Info("Building new buildkit client")
+	// 			bk, err := buildkit.
+	// 				ClientBuilder(ctx, addr).
+	// 				WithLogger(ctx.Log.WithName("buildkit").WithValues("addr", addr, "image", image)).
+	// 				WithMTLSAuth(c.cfg.CACertPath, c.cfg.CertPath, c.cfg.KeyPath).
+	// 				WithDockerAuthConfig(configDir).
+	// 				Build()
+	// 			if err != nil {
+	// 				return err
+	// 			}
+	//
+	// 			builderCondition := fmt.Sprintf("BuildkitdPod-%d", idx)
+	//
+	// 			log.Info("Launching cache export")
+	// 			ctx.Conditions.SetUnknown(builderCondition, "LaunchingCacheRun", "")
+	//
+	// 			if err = bk.Cache(image); err != nil {
+	// 				ctx.Conditions.SetFalse(builderCondition, "CacheRunFailed", err.Error())
+	// 				return err
+	// 			}
+	//
+	// 			log.Info("Cache export complete")
+	// 			ctx.Conditions.SetTrue(builderCondition, "CacheRunSucceeded", "")
+	//
+	// 			return nil
+	// 		})
+	// 	}
+	// }
+	//
+	// if err = eg.Wait(); err != nil {
+	// 	return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("caching operation failed: %w", err))
+	// }
+	//
+	// /*
+	// 	4. Record build metadata and report success
+	// */
+	// obj.Status.BuildkitPods = podNames
+	// obj.Status.CachedImages = obj.Spec.Images
+	// c.phase.SetSucceeded(ctx, obj)
+	//
+	// log.Info("Reconciliation complete")
+	// return ctrl.Result{}, nil
 }
 
 func (c *CacheWarmerComponent) mapBuildkitPodChanges(obj client.Object) (requests []reconcile.Request) {
-	if len(c.config.Labels) > len(obj.GetLabels()) {
+	if len(c.config.PodLabels) > len(obj.GetLabels()) {
 		return
 	}
-	for k, v := range c.config.Labels {
+	for k, v := range c.config.PodLabels {
 		if ov, found := obj.GetLabels()[k]; !found || ov != v {
 			return
 		}

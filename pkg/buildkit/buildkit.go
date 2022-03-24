@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/containerd/console"
-	"github.com/docker/distribution/reference"
 	"github.com/go-logr/logr"
 	bkclient "github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/session"
@@ -28,7 +27,7 @@ type clientBuilder struct {
 	bkOpts           []bkclient.ClientOpt
 }
 
-func RemoteClient(ctx context.Context, addr string) *clientBuilder {
+func ClientBuilder(ctx context.Context, addr string) *clientBuilder {
 	return &clientBuilder{ctx: ctx, addr: addr, log: logr.Discard()}
 }
 
@@ -68,13 +67,10 @@ func (b *clientBuilder) Build() (*Client, error) {
 }
 
 type BuildOptions struct {
-	Context            string
-	Images             []string
-	BuildArgs          []string
-	CacheTag           string
-	CacheMode          string
-	DisableCacheExport bool
-	DisableCacheImport bool
+	Context    string
+	ContextDir string
+	Images     []string
+	BuildArgs  []string
 }
 
 type Buildkit interface {
@@ -91,15 +87,25 @@ type Client struct {
 
 func (c *Client) Build(opts BuildOptions) error {
 	return c.solveWith(func(buildDir string, solveOpt *bkclient.SolveOpt) error {
-		c.log.Info("Fetching remote context", "url", opts.Context)
-		extract, err := archive.FetchAndExtract(c.log, c.ctx, opts.Context, buildDir, 5*time.Minute)
-		if err != nil {
-			return err
+		var contentsDir string
+
+		if fi, err := os.Stat(opts.ContextDir); err == nil && fi.IsDir() {
+			c.log.Info("Using context dir", "dir", opts.ContextDir)
+			contentsDir = opts.ContextDir
+		} else {
+			c.log.Info("Fetching remote context", "url", opts.Context)
+			extract, err := archive.FetchAndExtract(c.log, c.ctx, opts.Context, buildDir, 5*time.Minute)
+			if err != nil {
+				return err
+			}
+
+			contentsDir = extract.ContentsDir
 		}
+		c.log.V(1).Info(contentsDir)
 
 		solveOpt.LocalDirs = map[string]string{
-			"context":    extract.ContentsDir,
-			"dockerfile": extract.ContentsDir,
+			"context":    contentsDir,
+			"dockerfile": contentsDir,
 		}
 
 		for _, name := range opts.Images {
@@ -110,31 +116,6 @@ func (c *Client) Build(opts BuildOptions) error {
 					"name": name,
 				},
 			})
-		}
-
-		named, err := reference.ParseNormalizedNamed(opts.Images[0])
-		if err != nil {
-			return err
-		}
-		cacheRef, err := reference.WithTag(named, opts.CacheTag)
-		if err != nil {
-			return err
-		}
-		cacheOpts := []bkclient.CacheOptionsEntry{
-			{
-				Type: "registry",
-				Attrs: map[string]string{
-					"ref": cacheRef.String(),
-				},
-			},
-		}
-
-		if !opts.DisableCacheExport {
-			solveOpt.CacheExports = cacheOpts
-		}
-		if !opts.DisableCacheImport {
-			cacheOpts[0].Attrs["mode"] = opts.CacheMode
-			solveOpt.CacheImports = cacheOpts
 		}
 
 		return nil
@@ -177,7 +158,11 @@ func (c *Client) solveWith(modify func(buildDir string, solveOpt *bkclient.Solve
 	if err != nil {
 		return fmt.Errorf("failed to create build dir: %w", err)
 	}
-	defer os.RemoveAll(buildDir)
+	defer func(path string) {
+		if err := os.RemoveAll(path); err != nil {
+			c.log.Error(err, "Failed to delete build context")
+		}
+	}(buildDir)
 
 	solveOpt := bkclient.SolveOpt{
 		Frontend:      "dockerfile.v0",

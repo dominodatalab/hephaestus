@@ -32,8 +32,8 @@ func (c Controller) Validate() error {
 		errs = append(errs, fmt.Sprintf("manager.webhookPort is invalid: %s", err.Error()))
 	}
 
-	if c.Buildkit.Labels == nil {
-		errs = append(errs, "buildkit.labels cannot be nil")
+	if c.Buildkit.PodLabels == nil {
+		errs = append(errs, "buildkit.podLabels cannot be nil")
 	}
 	if c.Buildkit.Namespace == "" {
 		errs = append(errs, "buildkit.namespace cannot be blank")
@@ -65,9 +65,11 @@ type Manager struct {
 }
 
 type Buildkit struct {
-	Labels     map[string]string `json:"labels" yaml:"labels"`
-	Namespace  string            `json:"namespace" yaml:"namespace"`
-	DaemonPort int32             `json:"daemonPort" yaml:"daemonPort"`
+	Namespace       string            `json:"namespace" yaml:"namespace"`
+	PodLabels       map[string]string `json:"podLabels" yaml:"podLabels"`
+	DaemonPort      int32             `json:"daemonPort" yaml:"daemonPort"`
+	ServiceName     string            `json:"serviceName" yaml:"serviceName"`
+	StatefulSetName string            `json:"statefulSetName" yaml:"statefulSetName"`
 
 	CACertPath string `json:"caCertPath" yaml:"caCertPath"`
 	CertPath   string `json:"certPath" yaml:"certPath"`
@@ -102,11 +104,13 @@ func GenerateDefaults() Controller {
 			EnableLeaderElection: false,
 		},
 		Buildkit: Buildkit{
-			Labels: map[string]string{
+			PodLabels: map[string]string{
 				"app": "buildkit",
 			},
-			Namespace:  "default",
-			DaemonPort: 1234,
+			ServiceName:     "buildkit",
+			StatefulSetName: "buildkit",
+			Namespace:       "default",
+			DaemonPort:      1234,
 		},
 		Logging: Logging{
 			Development:     false,

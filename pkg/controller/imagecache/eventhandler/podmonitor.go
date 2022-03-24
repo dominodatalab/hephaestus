@@ -28,10 +28,10 @@ type PodMonitor struct {
 }
 
 func (p *PodMonitor) Create(e event.CreateEvent, q workqueue.RateLimitingInterface) {
-	if len(p.Config.Labels) > len(e.Object.GetLabels()) {
+	if len(p.Config.PodLabels) > len(e.Object.GetLabels()) {
 		return
 	}
-	for k, v := range p.Config.Labels {
+	for k, v := range p.Config.PodLabels {
 		if ov, found := e.Object.GetLabels()[k]; !found || ov != v {
 			return
 		}

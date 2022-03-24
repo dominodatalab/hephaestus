@@ -1,4 +1,4 @@
-FROM golang:1.17-alpine AS build
+FROM golang:1.18-alpine AS build
 WORKDIR /app
 COPY go.mod .
 COPY go.sum .
@@ -8,7 +8,7 @@ COPY pkg ./pkg
 ENV CGO_ENABLED=0 GOOS=linux
 RUN go build -o hephaestus-controller ./cmd/controller
 
-FROM gcr.io/distroless/static:nonroot
+FROM gcr.io/distroless/static:debug
 WORKDIR /
 COPY --from=build /app/hephaestus-controller /usr/bin/
 ENTRYPOINT ["hephaestus-controller"]

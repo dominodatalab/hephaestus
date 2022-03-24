@@ -10,20 +10,22 @@ import (
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/hephaestus/pkg/buildkit"
+	"github.com/dominodatalab/hephaestus/pkg/buildkit/workerpool"
 	"github.com/dominodatalab/hephaestus/pkg/config"
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials"
-	"github.com/dominodatalab/hephaestus/pkg/controller/support/discovery"
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/phase"
 )
 
 type BuildDispatcherComponent struct {
 	cfg   config.Buildkit
+	pool  workerpool.Pool
 	phase *phase.TransitionHelper
 }
 
-func BuildDispatcher(cfg config.Buildkit) *BuildDispatcherComponent {
+func BuildDispatcher(cfg config.Buildkit, pool workerpool.Pool) *BuildDispatcherComponent {
 	return &BuildDispatcherComponent{
-		cfg: cfg,
+		cfg:  cfg,
+		pool: pool,
 	}
 }
 
@@ -64,21 +66,30 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	c.phase.SetInitializing(ctx, obj)
 
 	log.Info("Querying for buildkit service")
-	addr, err := discovery.BuildkitService(ctx, c.cfg)
+	addr, err := c.pool.Get(ctx)
 	if err != nil {
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkit service lookup failed: %w", err))
 	}
+	defer func(pool workerpool.Pool, endpoint string) {
+		if err := pool.Release(endpoint); err != nil {
+			log.Error(err, "Failed to release pool endpoint", "endpoint", endpoint)
+		}
+	}(c.pool, addr)
 
 	log.Info("Processing registry credentials")
 	configDir, err := credentials.Persist(ctx, ctx.Config, obj.Spec.RegistryAuth)
 	if err != nil {
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("registry credentials processing failed: %w", err))
 	}
-	defer os.RemoveAll(configDir)
+	defer func(path string) {
+		if err := os.RemoveAll(path); err != nil {
+			log.Error(err, "Failed to delete registry credentials")
+		}
+	}(configDir)
 
 	log.Info("Building new buildkit client")
 	bk, err := buildkit.
-		RemoteClient(ctx, addr).
+		ClientBuilder(ctx, addr).
 		WithLogger(ctx.Log.WithName("buildkit").WithValues("addr", addr)).
 		WithMTLSAuth(c.cfg.CACertPath, c.cfg.CertPath, c.cfg.KeyPath).
 		WithDockerAuthConfig(configDir).
@@ -93,13 +104,9 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	c.phase.SetRunning(ctx, obj)
 
 	buildOpts := buildkit.BuildOptions{
-		Context:            obj.Spec.Context,
-		Images:             obj.Spec.Images,
-		BuildArgs:          obj.Spec.BuildArgs,
-		CacheTag:           fmt.Sprintf("%s-buildcache", obj.Spec.CacheTag), // NOTE: maybe this belongs elsewhere?
-		CacheMode:          obj.Spec.CacheMode,
-		DisableCacheExport: obj.Spec.DisableCacheExports,
-		DisableCacheImport: obj.Spec.DisableCacheImports,
+		Context:   obj.Spec.Context,
+		Images:    obj.Spec.Images,
+		BuildArgs: obj.Spec.BuildArgs,
 	}
 	if err = bk.Build(buildOpts); err != nil {
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("build failed: %w", err))

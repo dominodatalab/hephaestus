@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"context"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -8,6 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
+	"github.com/dominodatalab/hephaestus/pkg/buildkit/workerpool"
 	"github.com/dominodatalab/hephaestus/pkg/config"
 	"github.com/dominodatalab/hephaestus/pkg/controller/imagebuild"
 	"github.com/dominodatalab/hephaestus/pkg/controller/imagecache"
@@ -63,8 +66,17 @@ func Start(cfg config.Controller) error {
 		return err
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	log.Info("Initializing buildkit worker pool")
+	pool, err := workerpool.New(ctx, mgr.GetConfig(), cfg.Buildkit)
+	if err != nil {
+		return err
+	}
+
 	log.Info("Registering ImageBuild controller")
-	if err = imagebuild.Register(mgr, cfg); err != nil {
+	if err = imagebuild.Register(mgr, cfg, pool); err != nil {
 		return err
 	}
 
