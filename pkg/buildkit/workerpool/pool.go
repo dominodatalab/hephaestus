@@ -292,7 +292,7 @@ func (p *workerPool) reapWorkerPool(ctx context.Context) error {
 	for i := len(p.leases) - 1; i >= 0; i-- {
 		lease := p.leases[i]
 
-		if lease.Idle && time.Now().Sub(lease.Age) > p.maxIdleTime {
+		if lease.Idle && time.Since(lease.Age) > p.maxIdleTime {
 			p.log.V(1).Info("Scheduling builder for removal", "addr", lease.Addr, "age", lease.Age)
 			count--
 		} else {
