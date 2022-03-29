@@ -36,6 +36,13 @@ func MaxIdleTime(d time.Duration) PoolOption {
 	}
 }
 
+func WatchTimeoutSeconds(s int64) PoolOption {
+	return func(o options) options {
+		o.watchTimeoutSeconds = s
+		return o
+	}
+}
+
 func Logger(log logr.Logger) PoolOption {
 	return func(o options) options {
 		o.log = log

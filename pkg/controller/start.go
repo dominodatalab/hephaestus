@@ -70,7 +70,16 @@ func Start(cfg config.Controller) error {
 	defer cancel()
 
 	log.Info("Initializing buildkit worker pool")
-	pool, err := workerpool.New(ctx, mgr.GetConfig(), cfg.Buildkit)
+	poolOpts := []workerpool.PoolOption{
+		workerpool.Logger(ctrl.Log.WithName("buildkit.workerpool")),
+	}
+	if mit := cfg.Buildkit.PoolMaxIdleTime; mit != nil {
+		poolOpts = append(poolOpts, workerpool.MaxIdleTime(*mit))
+	}
+	if swt := cfg.Buildkit.PoolSyncWaitTime; swt != nil {
+		poolOpts = append(poolOpts, workerpool.SyncWaitTime(*swt))
+	}
+	pool, err := workerpool.New(ctx, mgr.GetConfig(), cfg.Buildkit, poolOpts...)
 	if err != nil {
 		return err
 	}

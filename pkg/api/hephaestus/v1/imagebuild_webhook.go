@@ -1,19 +1,15 @@
 package v1
 
 import (
-	"fmt"
 	"net/url"
 	"strings"
 
-	"github.com/docker/distribution/reference"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
-
-const defaultCacheTag = "general"
 
 var imagebuildlog = logf.Log.WithName("webhooks").WithName("imagebuild")
 
@@ -22,16 +18,6 @@ var _ webhook.Defaulter = &ImageBuild{}
 func (in *ImageBuild) Default() {
 	log := imagebuildlog.WithName("defaulter").WithValues("imagebuild", client.ObjectKeyFromObject(in))
 	log.Info("Applying default values")
-
-	spec := &in.Spec
-	if spec.CacheMode == "" {
-		log.Info("Setting default cache mode", "value", CacheModeMin)
-		spec.CacheMode = CacheModeMin
-	}
-	if spec.CacheTag == "" {
-		log.Info("Setting default cache tag", "value", defaultCacheTag)
-		spec.CacheTag = defaultCacheTag
-	}
 }
 
 var _ webhook.Validator = &ImageBuild{}
@@ -76,18 +62,8 @@ func (in *ImageBuild) validateImageBuild(action string) error {
 		}
 	}
 
-	if !reference.TagRegexp.MatchString(in.Spec.CacheTag) {
-		log.V(1).Info("Cache tag is invalid", "tag", in.Spec.CacheTag)
-		errList = append(errList, field.Invalid(
-			fp.Child("cacheTag"), in.Spec.CacheTag, fmt.Sprintf("must conform to the pattern %q", reference.TagRegexp),
-		))
-	}
-
-	if in.Spec.CacheMode != CacheModeMax && in.Spec.CacheMode != CacheModeMin {
-		log.V(1).Info("Cache mode is invalid", "mode", in.Spec.CacheMode)
-		errList = append(errList, field.NotSupported(
-			fp.Child("cacheMode"), in.Spec.CacheMode, []string{CacheModeMax, CacheModeMin},
-		))
+	if strings.TrimSpace(in.Spec.LogKey) == "" {
+		log.V(1).Info("Blank 'logKey' will preclude post-log processing")
 	}
 
 	if errs := validateRegistryAuth(log, fp.Child("registryAuth"), in.Spec.RegistryAuth); errs != nil {

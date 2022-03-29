@@ -26,7 +26,6 @@ rules:
   - apiGroups:
       - ""
     resources:
-      - endpoints
       - pods
       - services
     verbs:
@@ -42,6 +41,15 @@ rules:
   - apiGroups:
       - ""
     resources:
+      - endpoints
       - secrets
     verbs:
       - get
+  - apiGroups:
+      - apps
+    resources:
+      - statefulsets
+    verbs:
+      - get
+      - watch
+      - patch

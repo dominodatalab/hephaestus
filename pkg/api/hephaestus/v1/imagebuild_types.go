@@ -7,14 +7,11 @@ import (
 )
 
 type ImageBuildSpec struct {
-	Context             string                `json:"context,omitempty"`
-	Images              []string              `json:"images,omitempty"`
-	BuildArgs           []string              `json:"buildArgs,omitempty"`
-	CacheTag            string                `json:"cacheTag,omitempty"`
-	CacheMode           string                `json:"cacheMode,omitempty"`
-	DisableCacheExports bool                  `json:"disableCacheExports,omitempty"`
-	DisableCacheImports bool                  `json:"disableCacheImports,omitempty"`
-	RegistryAuth        []RegistryCredentials `json:"registryAuth,omitempty"`
+	Context      string                `json:"context,omitempty"`
+	Images       []string              `json:"images,omitempty"`
+	BuildArgs    []string              `json:"buildArgs,omitempty"`
+	LogKey       string                `json:"logKey,omitempty"`
+	RegistryAuth []RegistryCredentials `json:"registryAuth,omitempty"`
 }
 
 type ImageBuildTransition struct {
