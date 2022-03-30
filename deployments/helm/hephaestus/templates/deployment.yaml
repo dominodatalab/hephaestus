@@ -5,7 +5,7 @@ metadata:
   labels:
     {{- include "common.labels.standard" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: {{ .Values.controller.replicaCount }}
   strategy:
     type: Recreate
   selector:
@@ -15,45 +15,42 @@ spec:
     metadata:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
-        {{- if .Values.prometheus.enabled }}
-        prometheus.io/port: "{{ .Values.config.metricsPort }}"
+        {{- if .Values.controller.metrics.enabled }}
+        prometheus.io/port: "{{ .Values.controller.metricsPort }}"
         prometheus.io/scrape: "true"
         {{- end }}
-        {{- with .Values.podAnnotations }}
+        {{- with .Values.controller.podAnnotations }}
         {{- toYaml . | trimSuffix "\n" | nindent 8 }}
         {{- end }}
       labels:
         {{- include "common.labels.matchLabels" . | nindent 8 }}
-        {{- with .Values.podLabels }}
+        {{- with .Values.controller.podLabels }}
         {{- toYaml . | trimSuffix "\n" | nindent 8 }}
         {{- end }}
     spec:
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+      {{- include "hephaestus.imagePullSecrets" . | nindent 6 }}
       serviceAccountName: {{ include "hephaestus.serviceAccountName" . }}
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- toYaml .Values.controller.podSecurityContext | nindent 8 }}
       containers:
         - name: manager
           securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
-          image: {{ include "hephaestus.image" . }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+            {{- toYaml .Values.controller.containerSecurityContext | nindent 12 }}
+          image: {{ include "hephaestus.controller.image" . }}
+          imagePullPolicy: {{ .Values.controller.image.pullPolicy }}
           command: ["hephaestus-controller"]
           args:
             - start
             - --config=/etc/hephaestus/config.yaml
           ports:
             - name: health
-              containerPort: {{ .Values.config.healthProbePort }}
+              containerPort: {{ .Values.controller.healthProbePort }}
               protocol: TCP
             - name: metrics
-              containerPort: {{ .Values.config.metricsPort }}
+              containerPort: {{ .Values.controller.metricsPort }}
               protocol: TCP
             - name: webhooks
-              containerPort: {{ .Values.config.webhookPort }}
+              containerPort: {{ .Values.controller.webhookPort }}
               protocol: TCP
           livenessProbe:
             httpGet:
@@ -64,7 +61,7 @@ spec:
               path: /readyz
               port: health
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.controller.resources | nindent 12 }}
           volumeMounts:
             - name: config-vol
               readOnly: true
@@ -76,6 +73,27 @@ spec:
             - name: webhook-vol
               readOnly: true
               mountPath: /tmp/k8s-webhook-server/serving-certs
+            {{- if .Values.logProcessor.enabled }}
+            - name: log-vol
+              mountPath: {{ include "hephaestus.logfileDir" . | quote }}
+            {{- end }}
+        {{- if .Values.logProcessor.enabled }}
+        - name: log-processor
+          image: {{ include "hephaestus.logprocessor.image" . }}
+          imagePullPolicy: {{ .Values.logProcessor.image.pullPolicy }}
+          args:
+            - --config
+            - /etc/vector/vector.yaml
+          resources:
+            {{- toYaml .Values.logProcessor.resources | nindent 12 }}
+          volumeMounts:
+            - name: config-vol
+              readOnly: true
+              mountPath: /etc/vector/vector.yaml
+              subPath: vector.yaml
+            - name: log-vol
+              mountPath: {{ include "hephaestus.logfileDir" . | quote }}
+        {{- end }}
       volumes:
         - name: config-vol
           secret:
@@ -86,18 +104,22 @@ spec:
         - name: webhook-vol
           secret:
             secretName: {{ include "hephaestus.webhook.secret" . }}
-      {{- with .Values.nodeSelector }}
+        {{- if .Values.logProcessor.enabled }}
+        - name: log-vol
+          emptyDir: {}
+        {{- end }}
+      {{- with .Values.controller.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.affinity }}
+      {{- with .Values.controller.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.tolerations }}
+      {{- with .Values.controller.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.priorityClassName }}
+      {{- with .Values.controller.priorityClassName }}
       priorityClassName: {{ . | quote }}
       {{- end }}

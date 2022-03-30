@@ -23,7 +23,7 @@ require (
 	github.com/docker/docker v20.10.7+incompatible // master (v21.xx-dev), see replace()
 	github.com/dominodatalab/controller-util v0.0.0-20220114212532-6b4723a14d97
 	github.com/go-logr/logr v1.2.2
-	github.com/go-logr/zapr v1.2.0 // indirect
+	github.com/go-logr/zapr v1.2.0
 	github.com/gofrs/flock v0.7.3
 	github.com/h2non/filetype v1.1.1
 	github.com/moby/buildkit v0.10.0
@@ -36,6 +36,7 @@ require (
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	google.golang.org/grpc v1.44.0
+	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.23.4
 	k8s.io/apimachinery v0.23.4

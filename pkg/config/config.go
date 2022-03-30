@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v2"
 )
@@ -49,11 +50,22 @@ func (c Controller) Validate() error {
 	return nil
 }
 
+type ContainerLogging struct {
+	Encoder  string `json:"encoder" yaml:"encoder"`
+	LogLevel string `json:"level" yaml:"level"`
+}
+
+type LogfileLogging struct {
+	Enabled  bool   `json:"enabled" yaml:"enabled"`
+	Filepath string `json:"filepath" yaml:"filepath"`
+	LogLevel string `json:"level" yaml:"level"`
+}
+
 type Logging struct {
-	Development     bool   `json:"development" yaml:"development"`
-	Encoder         string `json:"encoder" yaml:"encoder"`
-	LogLevel        string `json:"logLevel" yaml:"logLevel"`
 	StacktraceLevel string `json:"stacktraceLevel" yaml:"stacktraceLevel"`
+
+	Container ContainerLogging `json:"container" yaml:"container"`
+	Logfile   LogfileLogging   `json:"logfile" yaml:"logfile"`
 }
 
 type Manager struct {
@@ -74,6 +86,9 @@ type Buildkit struct {
 	CACertPath string `json:"caCertPath" yaml:"caCertPath"`
 	CertPath   string `json:"certPath" yaml:"certPath"`
 	KeyPath    string `json:"keyPath" yaml:"keyPath"`
+
+	PoolSyncWaitTime *time.Duration `json:"poolSyncWaitTime" yaml:"poolSyncWaitTime"`
+	PoolMaxIdleTime  *time.Duration `json:"poolMaxIdleTime" yaml:"poolMaxIdleTime"`
 }
 
 type Messaging struct {
@@ -113,10 +128,14 @@ func GenerateDefaults() Controller {
 			DaemonPort:      1234,
 		},
 		Logging: Logging{
-			Development:     false,
-			Encoder:         "",
-			LogLevel:        "",
-			StacktraceLevel: "",
+			StacktraceLevel: "warn",
+			Container: ContainerLogging{
+				Encoder:  "console",
+				LogLevel: "info",
+			},
+			Logfile: LogfileLogging{
+				LogLevel: "info",
+			},
 		},
 		ImageBuildMaxConcurrency: 5,
 	}

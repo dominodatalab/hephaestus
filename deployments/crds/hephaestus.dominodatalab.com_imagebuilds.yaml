@@ -49,20 +49,14 @@ spec:
                 items:
                   type: string
                 type: array
-              cacheMode:
-                type: string
-              cacheTag:
-                type: string
               context:
                 type: string
-              disableCacheExports:
-                type: boolean
-              disableCacheImports:
-                type: boolean
               images:
                 items:
                   type: string
                 type: array
+              logKey:
+                type: string
               registryAuth:
                 items:
                   properties:

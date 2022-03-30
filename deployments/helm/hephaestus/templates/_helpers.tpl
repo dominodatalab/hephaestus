@@ -1,10 +1,17 @@
 {{/*
-Return the proper image name.
+Return the proper controller image name.
 */}}
-{{- define "hephaestus.image" -}}
-{{- $imageRoot := .Values.image }}
-{{- $_ := set $imageRoot "tag" (.Values.image.tag | default .Chart.AppVersion) }}
-{{- include "common.images.image" (dict "imageRoot" $imageRoot "global" $) }}
+{{- define "hephaestus.controller.image" -}}
+{{- $imageRoot := .Values.controller.image }}
+{{- $_ := set $imageRoot "tag" (.Values.controller.image.tag | default .Chart.AppVersion) }}
+{{- include "common.images.image" (dict "imageRoot" $imageRoot "global" .Values.global) }}
+{{- end }}
+
+{{/*
+Return the proper log processor image name.
+*/}}
+{{- define "hephaestus.logprocessor.image" -}}
+{{- include "common.images.image" (dict "imageRoot" .Values.logProcessor.image "global" .Values.global) }}
 {{- end }}
 
 {{/*
@@ -18,18 +25,32 @@ Return config secret name.
 Return the service account name.
 */}}
 {{- define "hephaestus.serviceAccountName" -}}
-{{- if .Values.serviceAccount.create }}
-{{- default (include "common.names.fullname" .) .Values.serviceAccount.name }}
+{{- if .Values.controller.serviceAccount.create }}
+{{- default (include "common.names.fullname" .) .Values.controller.serviceAccount.name }}
 {{- else }}
-{{- default "default" .Values.serviceAccount.name }}
+{{- default "default" .Values.controller.serviceAccount.name }}
 {{- end }}
 {{- end }}
 
 {{/*
-Return a name suitable for all manager RBAC objects.
+Returns a unified list of image pull secrets.
 */}}
-{{- define "hephaestus.rbac.managerName" -}}
-dominodatalab:operator:{{ include "common.names.fullname" . }}
+{{- define "hephaestus.imagePullSecrets" -}}
+{{- include "common.images.pullSecrets" (dict "images" (list .Values.controller.image .Values.logProcessor.image) "global" .Values.global) }}
+{{- end }}
+
+{{/*
+Returns the logfile directory.
+*/}}
+{{- define "hephaestus.logfileDir" -}}
+/var/log/hephaestus
+{{- end }}
+
+{{/*
+Returns the logfile pathname.
+*/}}
+{{- define "hephaestus.logfilePath" -}}
+{{ include "hephaestus.logfileDir" . }}/output.json
 {{- end }}
 
 {{/*
@@ -37,6 +58,13 @@ Return whether or not securityContext.seccompProfile field is supported.
 */}}
 {{- define "hephaestus.supportsSeccompGA" -}}
 {{- semverCompare ">1.19-0" .Capabilities.KubeVersion.Version }}
+{{- end }}
+
+{{/*
+Return a name suitable for all manager RBAC objects.
+*/}}
+{{- define "hephaestus.rbac.managerName" -}}
+dominodatalab:operator:{{ include "common.names.fullname" . }}
 {{- end }}
 
 {{/*

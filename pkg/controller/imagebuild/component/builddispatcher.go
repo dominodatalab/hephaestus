@@ -90,7 +90,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	log.Info("Building new buildkit client")
 	bk, err := buildkit.
 		ClientBuilder(ctx, addr).
-		WithLogger(ctx.Log.WithName("buildkit").WithValues("addr", addr)).
+		WithLogger(ctx.Log.WithName("buildkit").WithValues("addr", addr, "logKey", obj.Spec.LogKey)).
 		WithMTLSAuth(c.cfg.CACertPath, c.cfg.CertPath, c.cfg.KeyPath).
 		WithDockerAuthConfig(configDir).
 		Build()
