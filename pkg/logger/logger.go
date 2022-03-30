@@ -9,6 +9,7 @@ import (
 	"github.com/go-logr/zapr"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 	ctrlzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/dominodatalab/hephaestus/pkg/config"
@@ -52,7 +53,15 @@ func New(cfg config.Logging) (logr.Logger, error) {
 		if err != nil {
 			return logr.Logger{}, fmt.Errorf("invalid logfile log level: %w", err)
 		}
-		fileCore := zapcore.NewCore(&ctrlzap.KubeAwareEncoder{Encoder: jsonEncoder}, zapcore.Lock(file), level)
+		fileCore := zapcore.NewCore(
+			&ctrlzap.KubeAwareEncoder{Encoder: jsonEncoder},
+			zapcore.AddSync(&lumberjack.Logger{
+				Filename:   file.Name(),
+				MaxSize:    100,
+				MaxBackups: 1,
+			}),
+			level,
+		)
 
 		cores = append(cores, fileCore)
 	}
