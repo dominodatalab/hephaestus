@@ -6,6 +6,27 @@ metadata:
     {{- include "common.labels.standard" . | nindent 4 }}
 rules:
   - apiGroups:
+      - forge.dominodatalab.com
+    resources:
+      - containerimagebuilds
+    verbs:
+      - patch
+      - list
+      - watch
+  - apiGroups:
+      - forge.dominodatalab.com
+    resources:
+      - containerimagebuilds/status
+    verbs:
+      - patch
+  - apiGroups:
+      - hephaestus.dominodatalab.com
+    resources:
+      - imagebuilds
+    verbs:
+      - create
+
+  - apiGroups:
       - hephaestus.dominodatalab.com
     resources:
       - imagebuilds
