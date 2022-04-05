@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -9,6 +10,7 @@ import (
 
 	"github.com/dominodatalab/hephaestus/pkg/config"
 	"github.com/dominodatalab/hephaestus/pkg/controller"
+	"github.com/dominodatalab/hephaestus/pkg/crd"
 )
 
 func NewCommand() *cobra.Command {
@@ -22,6 +24,8 @@ func NewCommand() *cobra.Command {
 	cmd.AddCommand(
 		newInitCommand(),
 		newStartCommand(),
+		newCRDApplyCommand(),
+		newCRDDeleteCommand(),
 	)
 
 	return cmd
@@ -72,4 +76,34 @@ func newStartCommand() *cobra.Command {
 	}
 
 	return cmd
+}
+
+func newCRDApplyCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "crd-apply",
+		Short: "Apply custom resource definitions to a cluster",
+		Long: `Apply all "hephaestus.dominodatalab.com" CRDs to a cluster.
+
+Apply Rules:
+  - When a definition is is missing, it will be created
+  - If a definition is already present, then it will be updated
+  - Updating definitions that have not changed results in a no-op`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return crd.Apply(context.Background())
+		},
+	}
+}
+
+func newCRDDeleteCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "crd-delete",
+		Short: "Delete custom resource definitions from a cluster",
+		Long: `Delete all "hephaestus.dominodatalab.com" CRDs from a cluster.
+
+Any running builds will be decommissioned when this operation runs. This will
+only attempt to remove definitions that are already present in Kubernetes.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return crd.Delete(context.Background())
+		},
+	}
 }
