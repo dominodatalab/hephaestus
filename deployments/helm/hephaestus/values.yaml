@@ -9,6 +9,10 @@ nameOverride: ""
 # Replace the generated name (release+chart name)
 fullnameOverride: ""
 
+# If true, CRD resources will be installed/uninstalled as part of the Helm chart release.
+# Uninstalling CRD resources will DELETE all related custom resources.
+installCRDs: true
+
 # Controller manager configuration
 controller:
   # Controller manager image
