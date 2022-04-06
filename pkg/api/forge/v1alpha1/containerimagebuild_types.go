@@ -194,14 +194,7 @@ func (s *ContainerImageBuildStatus) SetState(state BuildState) {
 	s.State = state
 }
 
-// +genclient
-// +kubebuilder:object:root=true
-// +kubebuilder:resource:scope=Namespaced,shortName=cib
-// +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Image Name",type="string",JSONPath=".spec.imageName"
-// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
-// +kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.state"
-// +kubebuilder:printcolumn:name="Image URLs",type="string",priority=1,JSONPath=".status.imageURLs"
+// +kubebuilder:skip
 
 // ContainerImageBuild is the Schema for the containerimagebuilds API
 type ContainerImageBuild struct {

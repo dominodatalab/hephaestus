@@ -1,5 +1,4 @@
 // Package v1alpha1 contains API Schema definitions for the forge v1alpha1 API group.
-// +groupName=forge.dominodatalab.com
 package v1alpha1
 
 import (

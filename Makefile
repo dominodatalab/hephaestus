@@ -26,7 +26,7 @@ delete: crds ## Delete CRDs from cluster
 ##@ Generators
 
 api: tools ## Generate API objects
-	controller-gen object paths="./..."
+	controller-gen object paths="./pkg/api/hephaestus/..."
 
 crds: tools ## Generate CRDs
 	controller-gen crd paths="./..." output:crd:artifacts:config=deployments/crds
