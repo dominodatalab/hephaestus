@@ -62,12 +62,18 @@ func (in *ImageBuild) validateImageBuild(action string) error {
 		}
 	}
 
-	if strings.TrimSpace(in.Spec.LogKey) == "" {
-		log.V(1).Info("Blank 'logKey' will preclude post-log processing")
-	}
-
 	if errs := validateRegistryAuth(log, fp.Child("registryAuth"), in.Spec.RegistryAuth); errs != nil {
 		errList = append(errList, errs...)
+	}
+
+	if value := in.Spec.ImageSizeLimit; value != nil && *value <= 0 {
+		log.V(1).Info("ImageSizeLimit is invalid", "value", value)
+		errList = append(errList, field.Invalid(fp.Child("imageSizeLimit"), value, "must be greater than zero"))
+	}
+
+	// issue warning when log key is missing
+	if strings.TrimSpace(in.Spec.LogKey) == "" {
+		log.Info("Blank 'logKey' will preclude post-log processing")
 	}
 
 	return invalidIfNotEmpty(ImageBuildKind, in.Name, errList)

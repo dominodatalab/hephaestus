@@ -12,6 +12,12 @@ type ImageBuildSpec struct {
 	BuildArgs    []string              `json:"buildArgs,omitempty"`
 	LogKey       string                `json:"logKey,omitempty"`
 	RegistryAuth []RegistryCredentials `json:"registryAuth,omitempty"`
+
+	// TODO: implement the functionality for the following fields
+
+	ImageSizeLimit          *int64 `json:"imageSizeLimit,omitempty"`
+	DisableBuildCache       bool   `json:"disableBuildCache,omitempty"`
+	DisableLayerCacheExport bool   `json:"disableLayerCacheExport,omitempty"`
 }
 
 type ImageBuildTransition struct {
