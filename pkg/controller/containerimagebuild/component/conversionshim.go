@@ -62,6 +62,14 @@ func (c ConversionShimComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 	annotations := map[string]string{forgeObjectStorageAnnotation: string(bs)}
 
 	/*
+		check for image size limit
+	*/
+	var imageSizeLimit *int64
+	if cib.Spec.ImageSizeLimit > 0 {
+		imageSizeLimit = pointer.Int64(int64(cib.Spec.ImageSizeLimit))
+	}
+
+	/*
 		convert registry credentials to new format
 	*/
 	var auths []hephv1.RegistryCredentials
@@ -98,11 +106,14 @@ func (c ConversionShimComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 			Annotations: annotations,
 		},
 		Spec: hephv1.ImageBuildSpec{
-			Context:      cib.Spec.Context,
-			Images:       []string{cib.Spec.ImageName},
-			BuildArgs:    cib.Spec.BuildArgs,
-			LogKey:       logKey,
-			RegistryAuth: auths,
+			Images:                  []string{cib.Spec.ImageName},
+			Context:                 cib.Spec.Context,
+			BuildArgs:               cib.Spec.BuildArgs,
+			DisableBuildCache:       cib.Spec.DisableBuildCache,
+			DisableLayerCacheExport: cib.Spec.DisableLayerCacheExport,
+			LogKey:                  logKey,
+			RegistryAuth:            auths,
+			ImageSizeLimit:          imageSizeLimit,
 		},
 	}
 
