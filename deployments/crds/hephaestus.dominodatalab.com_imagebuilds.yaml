@@ -51,6 +51,13 @@ spec:
                 type: array
               context:
                 type: string
+              disableBuildCache:
+                type: boolean
+              disableLayerCacheExport:
+                type: boolean
+              imageSizeLimit:
+                format: int64
+                type: integer
               images:
                 items:
                   type: string
