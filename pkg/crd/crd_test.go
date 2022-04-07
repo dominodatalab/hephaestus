@@ -36,7 +36,7 @@ func TestApply(t *testing.T) {
 
 		t.Cleanup(overrideCRDClient(fakeClient))
 
-		require.NoError(t, Apply(context.Background()))
+		require.NoError(t, Apply(context.Background(), false))
 		assert.True(t, created, "New CRD was not created")
 	})
 
@@ -62,7 +62,7 @@ func TestApply(t *testing.T) {
 
 		t.Cleanup(overrideCRDClient(fakeClient))
 
-		require.NoError(t, Apply(context.Background()))
+		require.NoError(t, Apply(context.Background(), false))
 		assert.True(t, updated, "Existing CRD was not updated")
 	})
 
@@ -76,7 +76,7 @@ func TestApply(t *testing.T) {
 
 		t.Cleanup(overrideCRDClient(fakeClient))
 
-		err := Apply(context.Background())
+		err := Apply(context.Background(), false)
 		assert.Equalf(t, expected, err, "Received error %v did not match %v", err, expected)
 	})
 }
@@ -97,7 +97,7 @@ func TestDelete(t *testing.T) {
 
 		t.Cleanup(overrideCRDClient(fakeClient))
 
-		require.NoError(t, Delete(context.Background()))
+		require.NoError(t, Delete(context.Background(), false))
 		assert.True(t, deleted, "Existing CRD was not deleted")
 	})
 
@@ -109,7 +109,7 @@ func TestDelete(t *testing.T) {
 
 		t.Cleanup(overrideCRDClient(fakeClient))
 
-		assert.NoError(t, Delete(context.Background()), "Delete failed when CRD not found")
+		assert.NoError(t, Delete(context.Background(), false), "Delete failed when CRD not found")
 	})
 
 	t.Run("error", func(t *testing.T) {
@@ -121,7 +121,7 @@ func TestDelete(t *testing.T) {
 
 		t.Cleanup(overrideCRDClient(fakeClient))
 
-		err := Delete(context.Background())
+		err := Delete(context.Background(), false)
 		assert.Equalf(t, expected, err, "Received error %v did not match %v", err, expected)
 	})
 }

@@ -32,7 +32,7 @@ func NewCommand() *cobra.Command {
 }
 
 func newInitCommand() *cobra.Command {
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "init",
 		Short: "Generate config skeleton",
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -52,12 +52,10 @@ func newInitCommand() *cobra.Command {
 			return os.WriteFile(cfgFile, bs, 0644)
 		},
 	}
-
-	return cmd
 }
 
 func newStartCommand() *cobra.Command {
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "start",
 		Short: "Start controller",
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -74,12 +72,11 @@ func newStartCommand() *cobra.Command {
 			return controller.Start(cfg)
 		},
 	}
-
-	return cmd
 }
 
 func newCRDApplyCommand() *cobra.Command {
-	return &cobra.Command{
+	var istioEnabled bool
+	cmd := &cobra.Command{
 		Use:   "crd-apply",
 		Short: "Apply custom resource definitions to a cluster",
 		Long: `Apply all "hephaestus.dominodatalab.com" CRDs to a cluster.
@@ -89,13 +86,17 @@ Apply Rules:
   - If a definition is already present, then it will be updated
   - Updating definitions that have not changed results in a no-op`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return crd.Apply(context.Background())
+			return crd.Apply(context.Background(), istioEnabled)
 		},
 	}
+	cmd.PersistentFlags().BoolVar(&istioEnabled, "istio-enabled", false, "Enable support for Istio sidecar container")
+
+	return cmd
 }
 
 func newCRDDeleteCommand() *cobra.Command {
-	return &cobra.Command{
+	var istioEnabled bool
+	cmd := &cobra.Command{
 		Use:   "crd-delete",
 		Short: "Delete custom resource definitions from a cluster",
 		Long: `Delete all "hephaestus.dominodatalab.com" CRDs from a cluster.
@@ -103,7 +104,10 @@ func newCRDDeleteCommand() *cobra.Command {
 Any running builds will be decommissioned when this operation runs. This will
 only attempt to remove definitions that are already present in Kubernetes.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return crd.Delete(context.Background())
+			return crd.Delete(context.Background(), istioEnabled)
 		},
 	}
+	cmd.PersistentFlags().BoolVar(&istioEnabled, "istio-enabled", false, "Enable support for Istio sidecar container")
+
+	return cmd
 }

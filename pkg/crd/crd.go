@@ -58,17 +58,26 @@ var (
 // Apply will create or update all project CRDs inside a Kubernetes cluster.
 //
 // The latest available version of the CRD will be used to perform this operation.
-func Apply(ctx context.Context) error {
-	return operate(ctx, applyFn)
+func Apply(ctx context.Context, istioEnabled bool) error {
+	return operate(ctx, applyFn, istioEnabled)
 }
 
 // Delete will remove all project CRDs from a Kubernetes cluster.
-func Delete(ctx context.Context) error {
-	return operate(ctx, deleteFn)
+func Delete(ctx context.Context, istioEnabled bool) error {
+	return operate(ctx, deleteFn, istioEnabled)
 }
 
 // operate will read all available CRDS and apply state changes to the cluster using the processor func.
-func operate(ctx context.Context, processor crdProcessor) error {
+func operate(ctx context.Context, processor crdProcessor, istio bool) error {
+	if istio {
+		quit, err := waitForIstioSidecar()
+		if err != nil {
+			return err
+		}
+
+		defer quit()
+	}
+
 	log.Info("Loading all CRDs")
 
 	definitions, err := crds.ReadAll()
