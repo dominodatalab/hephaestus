@@ -1,0 +1,17 @@
+{{- if .Values.istio.enabled }}
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: {{ include "hephaestus.webhook.service" .}}
+  labels:
+    {{- include "common.labels.standard" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "common.labels.matchLabels" . | nindent 6 }}
+  mtls:
+    mode: UNSET
+  portLevelMtls:
+    {{ .Values.controller.webhookPort }}:
+      mode: PERMISSIVE
+{{- end }}
