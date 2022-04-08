@@ -53,12 +53,13 @@ jobs:
     needs: build
     strategy:
       matrix:
-        - registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-        - registry: quay.io
-          username: ${{ secrets.QUAY_USERNAME }}
-          password: ${{ secrets.QUAY_PASSWORD }}
+        include:
+          - registry: ghcr.io
+            username: ${{ github.actor }}
+            password: ${{ secrets.GITHUB_TOKEN }}
+          - registry: quay.io
+            username: ${{ secrets.QUAY_USERNAME }}
+            password: ${{ secrets.QUAY_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v2
