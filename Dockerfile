@@ -5,6 +5,7 @@ COPY go.sum .
 RUN go mod download
 COPY cmd ./cmd
 COPY pkg ./pkg
+COPY deployments/crds ./deployments/crds
 ENV CGO_ENABLED=0 GOOS=linux
 RUN go build -o hephaestus-controller ./cmd/controller
 

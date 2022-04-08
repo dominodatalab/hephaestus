@@ -9,6 +9,19 @@ nameOverride: ""
 # Replace the generated name (release+chart name)
 fullnameOverride: ""
 
+# If true, CRD resources will be installed/uninstalled as part of the Helm chart release.
+# Uninstalling CRD resources will DELETE all related custom resources.
+installCRDs: true
+
+# Istio configuration
+istio:
+  # Enable support for environments with Istio installed
+  enabled: false
+  # NOTE: check if this setting is necessary (i.e. run with Istio with CNI and PSPs)
+  # Elevate pod execution permissions so that Istio's init container can modify
+  # network settings when CNI plugin is NOT installed.
+  cniPluginInstalled: true
+
 # Controller manager configuration
 controller:
   # Controller manager image
