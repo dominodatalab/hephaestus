@@ -69,6 +69,7 @@ jobs:
         uses: ./.github/actions/push-docker-image
         with:
           registry: quay.io
+          repository: domino
           username: ${{ secrets.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_PASSWORD }}
 

@@ -4,6 +4,10 @@ inputs:
   registry:
     required: true
     description: The registry where the image will be pushed
+  repository:
+    required: true
+    description: The name of the repository where the image will be stored
+    default: ${{ github.repository }}
   username:
     required: true
     description: The private regsitry username
@@ -24,7 +28,7 @@ runs:
       id: meta
       uses: docker/metadata-action@v3
       with:
-        images: ${{ inputs.registry }}/${{ github.repository }}
+        images: ${{ inputs.registry }}/${{ inputs.repository }}
         tags: |
           type=ref,event=branch
           type=ref,event=pr
