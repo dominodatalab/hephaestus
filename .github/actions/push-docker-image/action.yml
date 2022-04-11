@@ -1,0 +1,42 @@
+name: Push Docker Image
+description: Logs into a private registry, builds a Docker image, and and pushes it there
+inputs:
+  registry:
+    required: true
+    description: The registry where the image will be pushed
+  username:
+    required: true
+    description: The private regsitry username
+  password:
+    required: true
+    description: The private regsitry password
+runs:
+  using: composite
+  steps:
+    - name: Login to container registry
+      uses: docker/login-action@v1
+      with:
+        registry: ${{ inputs.registry }}
+        username: ${{ inputs.username }}
+        password: ${{ inputs.password }}
+    - name: Extract Docker metadata
+      id: meta
+      uses: docker/metadata-action@v3
+      with:
+        images: ${{ inputs.registry }}/${{ github.repository }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha
+    - name: Build and push Docker image
+      id: docker_build
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha, scope=${{ github.job }}
+        cache-to: type=gha, scope=${{ github.job }}
