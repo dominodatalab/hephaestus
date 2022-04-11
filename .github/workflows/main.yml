@@ -65,15 +65,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-#    strategy:
-#      matrix:
-#        include:
-#            registry: ghcr.io
-#            username: ${{ github.actor }}
-#            password: ${{ secrets.GITHUB_TOKEN }}
-#          - registry: quay.io
-#            username: ${{ secrets.QUAY_USERNAME }}
-#            password: ${{ secrets.QUAY_PASSWORD }}
+      - name: Push Docker image to Quay
+        uses: ./.github/actions/push-docker-image
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_PASSWORD }}
 
 #  sdks:
 #    runs-on: ubuntu-latest
