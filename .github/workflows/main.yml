@@ -117,6 +117,7 @@ jobs:
           namespace: ${{ secrets.GCR_NAMESPACE }}
           username: ${{ secrets.GCR_USERNAME }}
           password: ${{ secrets.GCR_PASSWORD }}
+          password_base64_encoded: "true"
           artifact: ${{ steps.helm_pkg.outputs.artifact }}
 
 #  sdks:
