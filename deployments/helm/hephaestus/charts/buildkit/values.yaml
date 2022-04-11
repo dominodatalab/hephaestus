@@ -68,6 +68,19 @@ tolerations: []
 affinity: |-
   podAntiAffinity:
     preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 50
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/instance
+                operator: In
+                values:
+                  - {{ .Release.Name }}
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - {{ .Chart.Name }}
+          topologyKey: "topology.kubernetes.io/zone"
       - weight: 100
         podAffinityTerm:
           labelSelector:
