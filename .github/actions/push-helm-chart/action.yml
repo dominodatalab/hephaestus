@@ -13,6 +13,9 @@ inputs:
   password:
     required: true
     description: Private registry password
+  artifact:
+    required: true
+    description: Gzipped tarball produced by 'helm package' commmand
 runs:
   using: composite
   steps:
