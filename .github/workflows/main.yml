@@ -88,10 +88,8 @@ jobs:
         with:
           version: v3.8.1
 
-      - name: Login to Helm registry
-        run: echo ${{ secrets.GITHUB_TOKEN }} | helm registry login ghcr.io --username ${{ github.actor }} --password-stdin
-
-      - name: Package Helm chart
+      - id: helm_pkg
+        name: Package Helm chart
         shell: bash
         run: |
           app_version="${{ needs.docker.outputs.version }}"
@@ -104,9 +102,14 @@ jobs:
 
           helm package deployments/helm/hephaestus --app-version "$app_version" --version "$semantic_version"
 
-      # TODO --namespace for GCR
-#      - name: Push Helm chart
-#        run: helm push hephaestus-0.0.0.tgz ghcr.io/
+          echo ::set-output name=artifact::"hephaestus:${semantic_version}"
+
+      - name: Login to Helm registry
+        run: echo ${{ secrets.GITHUB_TOKEN }} | helm registry login ghcr.io --username ${{ github.actor }} --password-stdin
+
+      # TODO add --namespace flag for GCR
+      - name: Push Helm chart
+        run: echo "helm push ${{ steps.helm_pkg.outputs.artifact }} oci://ghcr.io/dominodatalab/helm"
 
 #  sdks:
 #    runs-on: ubuntu-latest
