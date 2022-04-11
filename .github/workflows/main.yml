@@ -89,7 +89,7 @@ jobs:
           version: v3.8.1
 
       - name: Login to Helm registry
-        run: echo ${{ secrets.GITHUB_TOKEN }} | helm registry login --username ${{ github.actor }} --password-stdin
+        run: echo ${{ secrets.GITHUB_TOKEN }} | helm registry login ghcr.io --username ${{ github.actor }} --password-stdin
 
       - name: Package Helm chart
         shell: bash
