@@ -48,7 +48,12 @@ spec:
             {{- end }}
           image: {{ include "buildkit.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          args: ["--config", "/etc/buildkit/buildkitd.toml"]
+          args:
+            - --config
+            - /etc/buildkit/buildkitd.toml
+            {{- if .Values.debug }}
+            - --debug
+            {{- end }}
           ports:
             - name: {{ .Values.service.portName }}
               protocol: TCP

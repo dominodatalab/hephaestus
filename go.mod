@@ -17,8 +17,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.11.1
 	github.com/aws/aws-sdk-go-v2/service/ecr v1.12.0
 	github.com/containerd/console v1.0.3
-	github.com/containerd/containerd v1.6.1
-	github.com/docker/cli v20.10.12+incompatible
+	github.com/containerd/containerd v1.6.3-0.20220401172941-5ff8fce1fcc6
+	github.com/docker/cli v20.10.13+incompatible
 	github.com/docker/distribution v2.8.0+incompatible
 	github.com/docker/docker v20.10.7+incompatible // master (v21.xx-dev), see replace()
 	github.com/dominodatalab/controller-util v0.0.0-20220114212532-6b4723a14d97
@@ -26,7 +26,7 @@ require (
 	github.com/go-logr/zapr v1.2.0
 	github.com/gofrs/flock v0.7.3
 	github.com/h2non/filetype v1.1.1
-	github.com/moby/buildkit v0.10.0
+	github.com/moby/buildkit v0.10.1
 	github.com/pkg/errors v0.9.1
 	github.com/rabbitmq/amqp091-go v1.2.0
 	github.com/spf13/cobra v1.2.1
@@ -35,7 +35,7 @@ require (
 	golang.org/x/crypto v0.0.0-20211202192323-5770296d904e
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	google.golang.org/grpc v1.44.0
+	google.golang.org/grpc v1.45.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.23.4
@@ -75,7 +75,7 @@ require (
 	github.com/banzaicloud/k8s-objectmatcher v1.7.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
-	github.com/containerd/continuity v0.2.2 // indirect
+	github.com/containerd/continuity v0.2.3-0.20220330195504-d132b287edc8 // indirect
 	github.com/containerd/typeurl v1.0.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dimchansky/utfbom v1.1.1 // indirect
@@ -115,7 +115,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
-	github.com/opencontainers/image-spec v1.0.2-0.20211117181255-693428a734f5 // indirect
+	github.com/opencontainers/image-spec v1.0.3-0.20211202183452-c5a74bcca799 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.12.1 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
