@@ -94,7 +94,6 @@ jobs:
       - name: Package Helm chart
         shell: bash
         run: |
-          version="${{ needs.docker.outputs.version }}"
           app_version="${{ needs.docker.outputs.version }}"
 
           if [[ $app_version =~ ^(pr-[[:digit:]]+|main)$ ]]; then
@@ -103,10 +102,11 @@ jobs:
             semantic_version=$app_version
           fi
 
-          helm package deployments/helm/hephaestus --app-version "$app_version" --version "$version"
+          helm package deployments/helm/hephaestus --app-version "$app_version" --version "$semantic_version"
 
+      # TODO --namespace for GCR
 #      - name: Push Helm chart
-#        run: helm push hephaestus-0.0.0.tgz # TODO --namespace for GCR
+#        run: helm push hephaestus-0.0.0.tgz ghcr.io/
 
 #  sdks:
 #    runs-on: ubuntu-latest
