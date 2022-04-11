@@ -1,19 +1,19 @@
 name: Push Docker Image
-description: Logs into a private registry, builds a Docker image, and and pushes it there
+description: Logs into an OCI registry, builds a Docker image, and and pushes it there
 inputs:
   registry:
     required: true
-    description: The registry where the image will be pushed
+    description: Registry where Docker image will be pushed
   repository:
     required: true
-    description: The name of the repository where the image will be stored
+    description: Repository where Docker image will be stored
     default: ${{ github.repository }}
   username:
     required: true
-    description: The private regsitry username
+    description: Private regsitry username
   password:
     required: true
-    description: The private regsitry password
+    description: Private regsitry password
 outputs:
   version:
     description: Docker image version

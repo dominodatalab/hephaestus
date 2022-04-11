@@ -1,0 +1,24 @@
+name: Push Helm Chart
+description: Logs into an OCI registry and pushes a Helm chart artifact there
+inputs:
+  registry:
+    required: true
+    description: Registry where Helm artifact will be pushed
+  namespace:
+    required: true
+    description: Registry namespace where chart will reside; this must not contain the basename or tag
+  username:
+    required: true
+    description: Private registry username
+  password:
+    required: true
+    description: Private registry password
+runs:
+  using: composite
+  steps:
+    - name: Login to Helm registry
+      run: echo ${{ inputs.password }} | helm registry login ${{ inputs.registry }} --username ${{ inputs.username }} --password-stdin
+      shell: bash
+    - name: Push Helm chart
+      run: echo "helm push ${{ inputs.artifact }} oci://${{ inputs.registry }}/${{ inputs.namespace }} --debug"
+      shell: bash
