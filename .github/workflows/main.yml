@@ -102,8 +102,7 @@ jobs:
 
           helm package deployments/helm/hephaestus --app-version "$app_version" --version "$semantic_version"
 
-          echo ::set-output name=artifact::"hephaestus:${semantic_version}.tgz"
-          pwd && ls -l
+          echo ::set-output name=artifact::"hephaestus-${semantic_version}.tgz"
 
       - name: Login to Helm registry
         run: echo ${{ secrets.GITHUB_TOKEN }} | helm registry login ghcr.io --username ${{ github.actor }} --password-stdin
