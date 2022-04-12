@@ -1,0 +1,49 @@
+name: Push Docker Image
+description: Logs into an OCI registry, builds a Docker image, and and pushes it there
+inputs:
+  registry:
+    required: true
+    description: Registry where Docker image will be pushed
+  repository:
+    required: true
+    description: Repository where Docker image will be stored
+    default: ${{ github.repository }}
+  username:
+    required: true
+    description: Private regsitry username
+  password:
+    required: true
+    description: Private regsitry password
+outputs:
+  version:
+    description: Docker image version
+    value: ${{ steps.meta.outputs.version }}
+runs:
+  using: composite
+  steps:
+    - name: Login to container registry
+      uses: docker/login-action@v1
+      with:
+        registry: ${{ inputs.registry }}
+        username: ${{ inputs.username }}
+        password: ${{ inputs.password }}
+    - id: meta
+      name: Extract Docker metadata
+      uses: docker/metadata-action@v3
+      with:
+        images: ${{ inputs.registry }}/${{ inputs.repository }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha, scope=${{ github.job }}
+        cache-to: type=gha, scope=${{ github.job }}

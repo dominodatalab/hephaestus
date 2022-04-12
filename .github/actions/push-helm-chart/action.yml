@@ -1,0 +1,35 @@
+name: Push Helm Chart
+description: Logs into an OCI registry and pushes a Helm chart artifact there
+inputs:
+  registry:
+    required: true
+    description: Registry where Helm artifact will be pushed
+  namespace:
+    required: true
+    description: Registry namespace where chart will reside; this must not contain the basename or tag
+  username:
+    required: true
+    description: Private registry username
+  password:
+    required: true
+    description: Private registry password
+  password_base64_encoded:
+    default: "false"
+    description: Indicate if password should be decoded
+  artifact:
+    required: true
+    description: Gzipped tarball produced by 'helm package' commmand
+runs:
+  using: composite
+  steps:
+    - name: Login to Helm registry
+      run: |
+        password="${{ inputs.password }}"
+        if [[ "${{ inputs.password_base64_encoded }}" == "true" ]]; then
+          password="$(echo "$password" | base64 --decode)"
+        fi
+        echo "$password" | helm registry login "${{ inputs.registry }}" --username "${{ inputs.username }}" --password-stdin
+      shell: bash
+    - name: Push Helm chart
+      run: helm push ${{ inputs.artifact }} oci://${{ inputs.registry }}/${{ inputs.namespace }}
+      shell: bash
