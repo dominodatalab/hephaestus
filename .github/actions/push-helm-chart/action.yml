@@ -31,5 +31,5 @@ runs:
         echo "$password" | helm registry login "${{ inputs.registry }}" --username "${{ inputs.username }}" --password-stdin
       shell: bash
     - name: Push Helm chart
-      run: echo "helm push ${{ inputs.artifact }} oci://${{ inputs.registry }}/${{ inputs.namespace }} --debug"
+      run: helm push ${{ inputs.artifact }} oci://${{ inputs.registry }}/${{ inputs.namespace }} --debug
       shell: bash
