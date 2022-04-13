@@ -13,10 +13,11 @@ fullnameOverride: ""
 # Uninstalling CRD resources will DELETE all related custom resources.
 installCRDs: true
 
-# Network policy configuration
-networkPolicy:
-  # Restrict network ingress to pod webhook, health check, and metrics ports
-  enabled: true
+# Restrict network access to controller and buildkit pods
+enableNetworkPolicies: true
+
+# Creates policy/RBAC rules that allow this application to function when the PSP admission controller is enabled
+enablePodSecurityPolicies: false
 
 # Istio configuration
 istio:

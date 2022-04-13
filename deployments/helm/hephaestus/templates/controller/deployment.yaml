@@ -79,6 +79,9 @@ spec:
             {{- end }}
         {{- if .Values.logProcessor.enabled }}
         - name: log-processor
+          securityContext:
+            runAsUser: 65532
+            runAsGroup: 65532
           image: {{ include "hephaestus.logprocessor.image" . }}
           imagePullPolicy: {{ .Values.logProcessor.image.pullPolicy }}
           args:
@@ -93,6 +96,8 @@ spec:
               subPath: vector.yaml
             - name: log-vol
               mountPath: {{ include "hephaestus.logfileDir" . | quote }}
+            - name: log-vol
+              mountPath: /var/lib/vector
         {{- end }}
       volumes:
         - name: config-vol
