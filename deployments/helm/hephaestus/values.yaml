@@ -13,6 +13,11 @@ fullnameOverride: ""
 # Uninstalling CRD resources will DELETE all related custom resources.
 installCRDs: true
 
+# Network policy configuration
+networkPolicy:
+  # Restrict network ingress to pod webhook, health check, and metrics ports
+  enabled: true
+
 # Istio configuration
 istio:
   # Enable support for environments with Istio installed
@@ -21,11 +26,6 @@ istio:
   # Elevate pod execution permissions so that Istio's init container can modify
   # network settings when CNI plugin is NOT installed.
   cniPluginInstalled: true
-
-# Network policy configuration
-networkPolicy:
-  # Restrict network ingress to pod webhook, health check, and metrics ports
-  enabled: false
 
 # Controller manager configuration
 controller:

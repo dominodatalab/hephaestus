@@ -1,0 +1,22 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "hephaestus.buildkit.fullname" . }}
+  labels:
+    {{- include "hephaestus.buildkit.labels.standard" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "hephaestus.buildkit.labels.matchLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: {{ .Values.buildkit.service.port }}
+          protocol: TCP
+      from:
+        - podSelector:
+            matchLabels:
+              {{- include "hephaestus.controller.labels.matchLabels" . | nindent 14 }}
+{{- end }}
