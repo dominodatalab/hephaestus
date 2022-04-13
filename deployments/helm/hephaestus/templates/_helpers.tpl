@@ -1,5 +1,5 @@
 {{/*
-Return the proper controller image name.
+Return the controller image name.
 */}}
 {{- define "hephaestus.controller.image" -}}
 {{- $imageRoot := .Values.controller.image }}
@@ -8,21 +8,30 @@ Return the proper controller image name.
 {{- end }}
 
 {{/*
-Return the proper log processor image name.
+Return the controller standard labels.
 */}}
-{{- define "hephaestus.logprocessor.image" -}}
-{{- include "common.images.image" (dict "imageRoot" .Values.logProcessor.image "global" .Values.global) }}
+{{- define "hephaestus.controller.labels.standard" -}}
+{{- include "common.labels.standard" . }}
+app.kubernetes.io/component: controller
 {{- end }}
 
 {{/*
-Return config secret name.
+Return the controller selector lablels.
+*/}}
+{{- define "hephaestus.controller.labels.matchLabels" -}}
+{{- include "common.labels.matchLabels" . }}
+app.kubernetes.io/component: controller
+{{- end }}
+
+{{/*
+Return the controller config secret name.
 */}}
 {{- define "hephaestus.configSecretName" -}}
 {{ include "common.names.fullname" . }}-config
 {{- end }}
 
 {{/*
-Return the service account name.
+Return the controller service account name.
 */}}
 {{- define "hephaestus.serviceAccountName" -}}
 {{- if .Values.controller.serviceAccount.create }}
@@ -36,7 +45,28 @@ Return the service account name.
 Returns a unified list of image pull secrets.
 */}}
 {{- define "hephaestus.imagePullSecrets" -}}
-{{- include "common.images.pullSecrets" (dict "images" (list .Values.controller.image .Values.logProcessor.image) "global" .Values.global) }}
+{{- include "common.images.renderPullSecrets" (dict "images" (list .Values.controller.image .Values.logProcessor.image .Values.buildkit.image) "global" .Values.global) }}
+{{- end }}
+
+{{/*
+Return whether or not securityContext.seccompProfile field is supported.
+*/}}
+{{- define "hephaestus.supportsSeccompGA" -}}
+{{- semverCompare ">1.19-0" .Capabilities.KubeVersion.Version }}
+{{- end }}
+
+{{/*
+Return a name suitable for all manager RBAC objects.
+*/}}
+{{- define "hephaestus.rbac.managerName" -}}
+dominodatalab:controller:{{ include "common.names.fullname" . }}
+{{- end }}
+
+{{/*
+Return the log processor image name.
+*/}}
+{{- define "hephaestus.logprocessor.image" -}}
+{{- include "common.images.image" (dict "imageRoot" .Values.logProcessor.image "global" .Values.global) }}
 {{- end }}
 
 {{/*
@@ -51,20 +81,6 @@ Returns the logfile pathname.
 */}}
 {{- define "hephaestus.logfilePath" -}}
 {{ include "hephaestus.logfileDir" . }}/output.json
-{{- end }}
-
-{{/*
-Return whether or not securityContext.seccompProfile field is supported.
-*/}}
-{{- define "hephaestus.supportsSeccompGA" -}}
-{{- semverCompare ">1.19-0" .Capabilities.KubeVersion.Version }}
-{{- end }}
-
-{{/*
-Return a name suitable for all manager RBAC objects.
-*/}}
-{{- define "hephaestus.rbac.managerName" -}}
-dominodatalab:operator:{{ include "common.names.fullname" . }}
 {{- end }}
 
 {{/*
@@ -96,23 +112,6 @@ Return the CA issuer name.
 {{- end }}
 
 {{/*
-Return the buildkit mtls client secret name.
-*/}}
-{{- define "hephaestus.buildkit.clientSecret" -}}
-{{ include "common.names.fullname" . }}-buildkit-client-tls
-{{- end }}
-
-{{/*
-Return the buildkit mtls server secret name.
-
-Leverage the buildkit subcharts template to
-create a secret with the name it's expecting.
-*/}}
-{{- define "hephaestus.buildkit.serverSecret" -}}
-{{ include "buildkit.mTLSSecret" .Subcharts.buildkit }}
-{{- end }}
-
-{{/*
 Return the webhook certificate name.
 */}}
 {{- define "hephaestus.webhook.certificate" -}}
@@ -138,4 +137,65 @@ Return the webhook annotations.
 */}}
 {{- define "hephaestus.webhook.annotations" -}}
 cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ include "hephaestus.webhook.certificate" . }}
+{{- end }}
+
+{{/*
+Return the buildkit fully-qualified app name.
+*/}}
+{{- define "hephaestus.buildkit.fullname" -}}
+{{- printf "%s-buildkit" (include "common.names.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Return the buildkit standard labels.
+*/}}
+{{- define "hephaestus.buildkit.labels.standard" -}}
+{{- include "common.labels.standard" . }}
+app.kubernetes.io/component: buildkit
+{{- end }}
+
+{{/*
+Return the buildkit selector lablels.
+*/}}
+{{- define "hephaestus.buildkit.labels.matchLabels" -}}
+{{- include "common.labels.matchLabels" . }}
+app.kubernetes.io/component: buildkit
+{{- end }}
+
+{{/*
+Return the buildkit mtls client secret name.
+*/}}
+{{- define "hephaestus.buildkit.clientSecret" -}}
+{{ include "hephaestus.buildkit.fullname" . }}-client-tls
+{{- end }}
+
+{{/*
+Return the buildkit mtls server secret name.
+*/}}
+{{- define "hephaestus.buildkit.serverSecret" -}}
+{{ include "hephaestus.buildkit.fullname" . }}-server-tls
+{{- end }}
+
+{{/*
+Return the buildkit image name.
+*/}}
+{{- define "hephaestus.buildkit.image" -}}
+{{- $imageRoot := .Values.buildkit.image }}
+{{- $tag := .Values.buildkit.image.tag | default .Chart.AppVersion }}
+{{- if not .Values.buildkit.rootless }}
+{{- $tag = trimSuffix "-rootless" $tag }}
+{{- end }}
+{{- $_ := set $imageRoot "tag" $tag }}
+{{- include "common.images.image" (dict "imageRoot" $imageRoot "global" $) }}
+{{- end }}
+
+{{/*
+Return the buildkit service account name.
+*/}}
+{{- define "hephaestus.buildkit.serviceAccountName" -}}
+{{- if .Values.buildkit.serviceAccount.create }}
+{{- default (include "hephaestus.buildkit.fullname" .) .Values.buildkit.serviceAccount.name }}
+{{- else }}
+{{- default "default" .Values.buildkit.serviceAccount.name }}
+{{- end }}
 {{- end }}

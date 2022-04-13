@@ -3,7 +3,7 @@ kind: ValidatingWebhookConfiguration
 metadata:
   name: {{ include "common.names.fullname" . }}
   labels:
-    {{- include "common.labels.standard" . | nindent 4 }}
+    {{- include "hephaestus.controller.labels.standard" . | nindent 4 }}
   annotations:
     {{- include "hephaestus.webhook.annotations" . | nindent 4 }}
 webhooks:

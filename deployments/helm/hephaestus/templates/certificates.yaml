@@ -57,7 +57,7 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: {{ include "common.names.fullname" . }}-buildkit-client
+  name: {{ include "hephaestus.buildkit.fullname" . }}-client
   labels:
     {{- include "common.labels.standard" . | nindent 4 }}
 spec:
@@ -73,13 +73,13 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: {{ include "common.names.fullname" . }}-buildkit-server
+  name: {{ include "hephaestus.buildkit.fullname" . }}-server
   labels:
     {{- include "common.labels.standard" . | nindent 4 }}
 spec:
   dnsNames:
-    - "*.{{ include "common.names.fullname" .Subcharts.buildkit }}"
-    - "*.{{ include "common.names.fullname" .Subcharts.buildkit }}.{{ .Release.Namespace }}"
+    - "*.{{ include "hephaestus.buildkit.fullname" . }}"
+    - "*.{{ include "hephaestus.buildkit.fullname" . }}.{{ .Release.Namespace }}"
   usages:
     - server auth
   issuerRef:

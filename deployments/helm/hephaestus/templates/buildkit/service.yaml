@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "hephaestus.buildkit.fullname" . }}
+  labels:
+    {{- include "hephaestus.buildkit.labels.standard" . | nindent 4 }}
+spec:
+  clusterIP: None
+  {{- with .Values.buildkit }}
+  type: {{ .service.type }}
+  ports:
+    - name: {{ .service.portName }}
+      port: {{ .service.port }}
+      targetPort: {{ .service.portName }}
+      protocol: TCP
+  {{- end }}
+  selector:
+    {{- include "hephaestus.buildkit.labels.matchLabels" . | nindent 4 }}

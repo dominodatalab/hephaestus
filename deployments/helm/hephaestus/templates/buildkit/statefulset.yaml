@@ -1,41 +1,41 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "buildkit.statefulSetName" . }}
+  name: {{ include "hephaestus.buildkit.fullname" . }}
   labels:
-    {{- include "common.labels.standard" . | nindent 4 }}
+    {{- include "hephaestus.buildkit.labels.standard" . | nindent 4 }}
 spec:
-  serviceName: {{ include "buildkit.serviceName" . }}
+  serviceName: {{ include "hephaestus.buildkit.fullname" . }}
   podManagementPolicy: Parallel
-  replicas: {{ .Values.replicaCount }}
+  replicas: {{ .Values.buildkit.replicaCount }}
   selector:
     matchLabels:
-      {{- include "common.labels.matchLabels" . | nindent 6 }}
+      {{- include "hephaestus.buildkit.labels.matchLabels" . | nindent 6 }}
   template:
     metadata:
       annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        {{- if and (not (include "hephaestus.supportsSeccompGA" .)) .Values.rootless }}
+        checksum/config: {{ include (print $.Template.BasePath "/buildkit/configmap.yaml") . | sha256sum }}
+        {{- if and (not (include "hephaestus.supportsSeccompGA" .)) .Values.buildkit.rootless }}
         container.apparmor.security.beta.kubernetes.io/buildkitd: unconfined
         container.seccomp.security.alpha.kubernetes.io/buildkitd: unconfined
         {{- end }}
-        {{- with .Values.podAnnotations }}
+        {{- with .Values.buildkit.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
       labels:
-        {{- include "common.labels.matchLabels" . | nindent 8 }}
+        {{- include "hephaestus.buildkit.labels.matchLabels" . | nindent 8 }}
+        {{- with .Values.buildkit.podLabels }}
+        {{- toYaml . | trimSuffix "\n" | nindent 8 }}
+        {{- end }}
     spec:
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      serviceAccountName: {{ include "buildkit.serviceAccountName" . }}
+      {{- include "hephaestus.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "hephaestus.buildkit.fullname" . }}
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- toYaml .Values.buildkit.podSecurityContext | nindent 8 }}
       containers:
         - name: buildkitd
           securityContext:
-            {{- if .Values.rootless }}
+            {{- if .Values.buildkit.rootless }}
             # NOTE: To change UID/GID, you need to rebuild the image
             runAsUser: 1000
             runAsGroup: 1000
@@ -46,18 +46,18 @@ spec:
             {{- else }}
             privileged: true
             {{- end }}
-          image: {{ include "buildkit.image" . }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: {{ include "hephaestus.buildkit.image" . }}
+          imagePullPolicy: {{ .Values.buildkit.image.pullPolicy }}
           args:
             - --config
             - /etc/buildkit/buildkitd.toml
-            {{- if .Values.debug }}
+            {{- if .Values.buildkit.debug }}
             - --debug
             {{- end }}
           ports:
-            - name: {{ .Values.service.portName }}
+            - name: {{ .Values.buildkit.service.portName }}
               protocol: TCP
-              containerPort: {{ .Values.service.port }}
+              containerPort: {{ .Values.buildkit.service.port }}
           livenessProbe:
             exec:
               command:
@@ -75,20 +75,20 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 30
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.buildkit.resources | nindent 12 }}
           volumeMounts:
             - name: config-vol
               readOnly: true
               mountPath: /etc/buildkit/buildkitd.toml
               subPath: buildkitd.toml
-            {{- if .Values.mtls.enabled }}
+            {{- if .Values.buildkit.mtls.enabled }}
             - name: mtls-vol
               readOnly: true
               mountPath: /etc/buildkit/x509
             {{- end }}
-            {{- if .Values.persistence.enabled }}
+            {{- if .Values.buildkit.persistence.enabled }}
             - name: cache
-              {{- if .Values.rootless }}
+              {{- if .Values.buildkit.rootless }}
               mountPath: /home/user/.local/share/buildkit
               {{- else }}
               mountPath: /var/lib/buildkit
@@ -97,37 +97,37 @@ spec:
       volumes:
         - name: config-vol
           configMap:
-            name: {{ include "common.names.fullname" . }}
-        {{- if .Values.mtls.enabled }}
+            name: {{ include "hephaestus.buildkit.fullname" . }}
+        {{- if .Values.buildkit.mtls.enabled }}
         - name: mtls-vol
           secret:
-            secretName: {{ include "buildkit.mTLSSecret" . }}
+            secretName: {{ include "hephaestus.buildkit.serverSecret" . }}
         {{- end }}
-      {{- with .Values.nodeSelector }}
+      {{- with .Values.buildkit.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.affinity }}
+      {{- with .Values.buildkit.affinity }}
       affinity:
         {{- tpl . $ | nindent 8 }}
       {{- end }}
-      {{- with .Values.tolerations }}
+      {{- with .Values.buildkit.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.priorityClassName }}
+      {{- with .Values.buildkit.priorityClassName }}
       priorityClassName: {{ . | quote }}
       {{- end }}
-  {{- if .Values.persistence.enabled }}
+  {{- if .Values.buildkit.persistence.enabled }}
   volumeClaimTemplates:
     - metadata:
         name: cache
         labels:
-          {{- include "common.labels.standard" . | nindent 10 }}
+          {{- include "hephaestus.buildkit.labels.standard" . | nindent 10 }}
       spec:
         accessModes:
-          {{- toYaml .Values.persistence.accessModes | nindent 10 }}
+          {{- toYaml .Values.buildkit.persistence.accessModes | nindent 10 }}
         resources:
           requests:
-            storage: {{ .Values.persistence.size }}
+            storage: {{ .Values.buildkit.persistence.size }}
   {{- end }}

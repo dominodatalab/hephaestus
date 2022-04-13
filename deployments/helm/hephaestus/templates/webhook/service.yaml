@@ -3,11 +3,11 @@ kind: Service
 metadata:
   name: {{ include "hephaestus.webhook.service" . }}
   labels:
-    {{- include "common.labels.standard" . | nindent 4 }}
+    {{- include "hephaestus.controller.labels.standard" . | nindent 4 }}
 spec:
   ports:
     - name: tcp-webhook
       port: 443
       targetPort: webhooks
   selector:
-    {{- include "common.labels.matchLabels" . | nindent 4 }}
+    {{- include "hephaestus.controller.labels.matchLabels" . | nindent 4 }}

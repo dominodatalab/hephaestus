@@ -3,7 +3,7 @@ kind: ClusterRole
 metadata:
   name: {{ include "hephaestus.rbac.managerName" . }}
   labels:
-    {{- include "common.labels.standard" . | nindent 4 }}
+    {{- include "hephaestus.controller.labels.standard" . | nindent 4 }}
 rules:
   - apiGroups:
       - forge.dominodatalab.com

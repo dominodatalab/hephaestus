@@ -3,18 +3,18 @@ kind: Deployment
 metadata:
   name: {{ include "common.names.fullname" . }}-manager
   labels:
-    {{- include "common.labels.standard" . | nindent 4 }}
+    {{- include "hephaestus.controller.labels.standard" . | nindent 4 }}
 spec:
   replicas: {{ .Values.controller.replicaCount }}
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      {{- include "common.labels.matchLabels" . | nindent 6 }}
+      {{- include "hephaestus.controller.labels.matchLabels" . | nindent 6 }}
   template:
     metadata:
       annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        checksum/config: {{ include (print $.Template.BasePath "/controller/secret.yaml") . | sha256sum }}
         {{- if .Values.controller.metrics.enabled }}
         prometheus.io/port: "{{ .Values.controller.metricsPort }}"
         prometheus.io/scrape: "true"
@@ -23,7 +23,7 @@ spec:
         {{- toYaml . | trimSuffix "\n" | nindent 8 }}
         {{- end }}
       labels:
-        {{- include "common.labels.matchLabels" . | nindent 8 }}
+        {{- include "hephaestus.controller.labels.matchLabels" . | nindent 8 }}
         {{- with .Values.controller.podLabels }}
         {{- toYaml . | trimSuffix "\n" | nindent 8 }}
         {{- end }}

@@ -1,5 +1,4 @@
 {{- if .Values.installCRDs }}
-
 {{- $serviceAccountName := printf "%s-hook" (include "hephaestus.serviceAccountName" .) -}}
 {{- $hookName := printf "dominodatalab:operator:%s:hook" (include "common.names.fullname" .) -}}
 

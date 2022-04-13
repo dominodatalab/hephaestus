@@ -22,6 +22,11 @@ istio:
   # network settings when CNI plugin is NOT installed.
   cniPluginInstalled: true
 
+# Network policy configuration
+networkPolicy:
+  # Restrict network ingress to pod webhook, health check, and metrics ports
+  enabled: false
+
 # Controller manager configuration
 controller:
   # Controller manager image
@@ -31,6 +36,7 @@ controller:
     repository: dominodatalab/hephaestus
     tag: ""
     pullPolicy: IfNotPresent
+    pullSecrets: []
 
   # Build status messaging configuration
   messaging:
@@ -143,6 +149,7 @@ logProcessor:
     repository: timberio/vector
     tag: 0.20.X-distroless-static
     pullPolicy: IfNotPresent
+    pullSecrets: []
 
   # Enable the deployment of the log processing sidecar
   enabled: true
@@ -178,8 +185,108 @@ logProcessor:
         encoding:
           codec: json
 
-# Buildkit subchart configuration
-# See charts/buildkit/values.yaml for a list of available values.
+# Buildkit cluster configuration
 buildkit:
+  # Run buildkit in rootless mode
+  rootless: true
+
+  # Amount of storage GC keeps locally (bytes). This value should be less than the
+  # total amount of available persistent storage (e.g. 75% of 20Gi)
+  gcKeepStorage: 15000000000
+
+  # Enable debug logging
+  debug: false
+
+  # Buildkit image
+  image:
+    registry: ""
+    repository: moby/buildkit
+    tag: "v0.10.1-rootless"
+    pullPolicy: IfNotPresent
+    pullSecrets: []
+
+  # Peristent build cache settings
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 20Gi
+    annotations: {}
+
+  # Resource requests and limits
+  resources:
+    requests: {}
+    limits: {}
+
+  # Control client/server mTLS settings
   mtls:
     enabled: true
+
+  # gRPC API service settings
+  service:
+    type: ClusterIP
+    port: 1234
+    portName: daemon
+
+  # Service account configuration
+  serviceAccount:
+    # Specifies whether a service account should be created
+    create: true
+    # Annotations to add to the service account
+    annotations: {}
+    # The name of the service account to use.
+    # If not set and create is true, a name is generated using the fullname template
+    name: ""
+
+  # Number of buildkit pods to run
+  replicaCount: 0
+
+  # Configure pod security context
+  podSecurityContext: {}
+
+  # Extra labels for buildkit pods
+  podLabels: {}
+
+  # Annotations for buildkit pods
+  podAnnotations: {}
+
+  # Tolerations for buildkit pod assignment
+  tolerations: []
+
+  # Node labels for buildkit pod assignment
+  nodeSelector: {}
+
+  # Buildkit pods priorityClassName
+  priorityClassName: ""
+
+  # Affinities for buildkit pod assignment
+  affinity: |-
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 50
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/instance
+                  operator: In
+                  values:
+                    - {{ .Release.Name }}
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - {{ .Chart.Name }}
+            topologyKey: "topology.kubernetes.io/zone"
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/instance
+                  operator: In
+                  values:
+                    - {{ .Release.Name }}
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - {{ .Chart.Name }}
+            topologyKey: "kubernetes.io/hostname"
