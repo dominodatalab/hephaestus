@@ -7,7 +7,9 @@ metadata:
 spec:
   serviceName: {{ include "hephaestus.buildkit.fullname" . }}
   podManagementPolicy: Parallel
-  replicas: {{ .Values.buildkit.replicaCount }}
+  {{- with .Values.buildkit.replicaCount }}
+  replicas: {{ . }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "hephaestus.buildkit.labels.matchLabels" . | nindent 6 }}
