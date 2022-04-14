@@ -1,4 +1,5 @@
 {{- if include "hephaestus.pspRequired" . }}
+{{- $rbacName := printf "%s:buildkit" (include "hephaestus.rbac.managerName" .) }}
 {{- $privileged := not .Values.buildkit.rootless }}
 {{- $istioWithoutCNI := include "hephaestus.istioWithoutCNI" . }}
 apiVersion: policy/v1beta1
@@ -50,7 +51,7 @@ spec:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "hephaestus.buildkit.fullname" . }}
+  name: {{ $rbacName }}
   labels:
     {{- include "hephaestus.buildkit.labels.standard" . | nindent 4 }}
 rules:
@@ -63,13 +64,13 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ include "hephaestus.buildkit.fullname" . }}
+  name: {{ $rbacName }}
   labels:
     {{- include "hephaestus.buildkit.labels.standard" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ include "hephaestus.buildkit.fullname" . }}
+  name: {{ $rbacName }}
 subjects:
   - kind: ServiceAccount
     name: {{ include "hephaestus.buildkit.serviceAccountName" . }}

@@ -1,6 +1,6 @@
 {{- if .Values.installCRDs }}
 {{- $serviceAccountName := printf "%s-hook" (include "hephaestus.serviceAccountName" .) -}}
-{{- $hookName := printf "dominodatalab:operator:%s:hook" (include "common.names.fullname" .) -}}
+{{- $hookName := printf "%s:hook" (include "hephaestus.rbac.managerName" .)-}}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
