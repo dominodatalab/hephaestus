@@ -16,17 +16,17 @@ installCRDs: true
 # Restrict network access to controller and buildkit pods
 enableNetworkPolicies: true
 
-# Creates policy/RBAC rules that allow this application to function when the PSP admission controller is enabled
+# Creates policy/RBAC rules that allow this application to function when the PSP admission controller is enabled.
+# This flag will have no effect in k8s >= 1.25.
 enablePodSecurityPolicies: false
 
 # Istio configuration
 istio:
   # Enable support for environments with Istio installed
   enabled: false
-  # NOTE: check if this setting is necessary (i.e. run with Istio with CNI and PSPs)
   # Elevate pod execution permissions so that Istio's init container can modify
   # network settings when CNI plugin is NOT installed.
-  cniPluginInstalled: true
+  cniPluginInstalled: false
 
 # Controller manager configuration
 controller:

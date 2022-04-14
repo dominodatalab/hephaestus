@@ -1,5 +1,6 @@
-{{- if and .Values.enablePodSecurityPolicies (semverCompare "<1.25-0" .Capabilities.KubeVersion.Version) }}
+{{- if include "hephaestus.pspRequired" . }}
 {{- $privileged := not .Values.buildkit.rootless }}
+{{- $istioWithoutCNI := include "hephaestus.istioWithoutCNI" . }}
 apiVersion: policy/v1beta1
 kind: PodSecurityPolicy
 metadata:
@@ -7,22 +8,30 @@ metadata:
   labels:
     {{- include "hephaestus.buildkit.labels.standard" . | nindent 4 }}
   annotations:
-    seccomp.security.alpha.kubernetes.io/allowedProfileNames: 'unconfined,runtime/default'
     apparmor.security.beta.kubernetes.io/allowedProfileNames: 'unconfined,runtime/default'
-    seccomp.security.alpha.kubernetes.io/defaultProfileName:  'unconfined'
     apparmor.security.beta.kubernetes.io/defaultProfileName:  'unconfined'
+    seccomp.security.alpha.kubernetes.io/allowedProfileNames: 'unconfined,runtime/default'
+    seccomp.security.alpha.kubernetes.io/defaultProfileName:  'unconfined'
 spec:
   privileged: {{ $privileged }}
   allowPrivilegeEscalation: true
+  {{- if $istioWithoutCNI }}
+  allowedCapabilities:
+    - NET_ADMIN
+    - NET_RAW
+  {{- end }}
   volumes:
     - configMap
+    - downwardAPI
+    - emptyDir
     - persistentVolumeClaim
+    - projected
     - secret
   hostNetwork: false
   hostIPC: false
   hostPID: false
   runAsUser:
-    rule: {{ if $privileged }}RunAsAny{{ else }}MustRunAsNonRoot{{ end }}
+    rule: {{ if or $privileged $istioWithoutCNI }}RunAsAny{{ else }}MustRunAsNonRoot{{ end }}
   seLinux:
     rule: RunAsAny
   supplementalGroups:

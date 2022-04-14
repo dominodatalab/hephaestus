@@ -56,6 +56,24 @@ Return whether or not securityContext.seccompProfile field is supported.
 {{- end }}
 
 {{/*
+Return whether or not pod security policies are enabled and supported.
+*/}}
+{{- define "hephaestus.pspRequired" -}}
+{{- if and .Values.enablePodSecurityPolicies (semverCompare "<1.25-0" .Capabilities.KubeVersion.Version) }}
+{{- true }}
+{{- end }}
+{{- end }}
+
+{{/*
+Return if istio is enabled without the use of the CNI plugin.
+*/}}
+{{- define "hephaestus.istioWithoutCNI" -}}
+{{- if and .Values.istio.enabled (not .Values.istio.cniPluginInstalled) }}
+{{- true }}
+{{- end }}
+{{- end }}
+
+{{/*
 Return a name suitable for all manager RBAC objects.
 */}}
 {{- define "hephaestus.rbac.managerName" -}}
