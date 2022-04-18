@@ -127,6 +127,7 @@ spec:
         labels:
           {{- include "hephaestus.buildkit.labels.standard" . | nindent 10 }}
       spec:
+        storageClassName: {{ .Values.buildkit.persistence.storageClass }}
         accessModes:
           {{- toYaml .Values.buildkit.persistence.accessModes | nindent 10 }}
         resources:
