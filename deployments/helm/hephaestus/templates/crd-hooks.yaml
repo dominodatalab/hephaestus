@@ -1,6 +1,6 @@
 {{- if .Values.installCRDs }}
 {{- $serviceAccountName := printf "%s-hook" (include "hephaestus.serviceAccountName" .) -}}
-{{- $hookName := printf "%s:hook" (include "hephaestus.rbac.managerName" .)-}}
+{{- $hookName := printf "%s:hook" (include "hephaestus.rbac.managerName" .) -}}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
