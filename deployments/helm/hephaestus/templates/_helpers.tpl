@@ -49,13 +49,6 @@ Returns a unified list of image pull secrets.
 {{- end }}
 
 {{/*
-Return whether or not securityContext.seccompProfile field is supported.
-*/}}
-{{- define "hephaestus.supportsSeccompGA" -}}
-{{- semverCompare ">1.19-0" .Capabilities.KubeVersion.Version }}
-{{- end }}
-
-{{/*
 Return whether or not pod security policies are enabled and supported.
 */}}
 {{- define "hephaestus.pspRequired" -}}

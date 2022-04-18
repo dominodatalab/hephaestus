@@ -3,7 +3,7 @@ type: application
 name: hephaestus
 version: 0.0.0
 appVersion: "latest"
-kubeVersion: ">= 1.16.0-0"
+kubeVersion: ">= 1.19.0-0"
 description: Kubernetes operator that builds OCI images using buildkit.
 home: https://github.com/dominodatalab/hephaestus
 sources:
