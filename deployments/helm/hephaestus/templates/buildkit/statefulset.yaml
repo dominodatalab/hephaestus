@@ -28,8 +28,10 @@ spec:
     spec:
       {{- include "hephaestus.imagePullSecrets" . | nindent 6 }}
       serviceAccountName: {{ include "hephaestus.buildkit.fullname" . }}
+      {{- if .Values.buildkit.rootless }}
       securityContext:
-        {{- toYaml .Values.buildkit.podSecurityContext | nindent 8 }}
+        fsGroup: 1000
+      {{- end }}
       containers:
         - name: buildkitd
           securityContext:

@@ -243,9 +243,6 @@ buildkit:
   # Number of buildkit pods to run
   replicaCount: 0
 
-  # Configure pod security context
-  podSecurityContext: {}
-
   # Extra labels for buildkit pods
   podLabels: {}
 
