@@ -68,7 +68,7 @@ Return whether or not pod security policies are enabled and supported.
 Return if istio is enabled without the use of the CNI plugin.
 */}}
 {{- define "hephaestus.istioWithoutCNI" -}}
-{{- if and .Values.istio.enabled (not .Values.istio.cniPluginInstalled) }}
+{{- if and .Values.istio.enabled (not .Values.istio.cni) }}
 {{- true }}
 {{- end }}
 {{- end }}
