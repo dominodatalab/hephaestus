@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/dominodatalab/controller-util/core"
@@ -70,6 +71,14 @@ func (c ConversionShimComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 	}
 
 	/*
+		convert push registries into fully-qualified image paths
+	*/
+	var images []string
+	for _, reg := range cib.Spec.PushRegistries {
+		images = append(images, filepath.Join(reg, cib.Spec.ImageName))
+	}
+
+	/*
 		convert registry credentials to new format
 	*/
 	var auths []hephv1.RegistryCredentials
@@ -106,11 +115,11 @@ func (c ConversionShimComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 			Annotations: annotations,
 		},
 		Spec: hephv1.ImageBuildSpec{
-			Images:                  []string{cib.Spec.ImageName},
 			Context:                 cib.Spec.Context,
 			BuildArgs:               cib.Spec.BuildArgs,
 			DisableBuildCache:       cib.Spec.DisableBuildCache,
 			DisableLayerCacheExport: cib.Spec.DisableLayerCacheExport,
+			Images:                  images,
 			LogKey:                  logKey,
 			RegistryAuth:            auths,
 			ImageSizeLimit:          imageSizeLimit,
