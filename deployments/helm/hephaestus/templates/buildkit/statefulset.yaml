@@ -84,6 +84,11 @@ spec:
               readOnly: true
               mountPath: /etc/buildkit/x509
             {{- end }}
+            {{- with .Values.buildkit.customCABundle }}
+            - name: ca-bundle-vol
+              readOnly: true
+              mountPath: /etc/ssl/certs
+            {{- end }}
             {{- if .Values.buildkit.persistence.enabled }}
             - name: cache
               {{- if .Values.buildkit.rootless }}
@@ -100,6 +105,11 @@ spec:
         - name: mtls-vol
           secret:
             secretName: {{ include "hephaestus.buildkit.serverSecret" . }}
+        {{- end }}
+        {{- with .Values.buildkit.customCABundle }}
+        - name: ca-bundle-vol
+          configMap:
+            name: {{ . }}
         {{- end }}
       {{- with .Values.buildkit.nodeSelector }}
       nodeSelector:

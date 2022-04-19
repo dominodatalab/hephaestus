@@ -198,6 +198,10 @@ buildkit:
   # Enable debug logging
   debug: false
 
+  # Add a ConfigMap containing custom CAs if you need to push images to one or
+  # more registries that use self-signed certificates
+  customCABundle: ""
+
   # Buildkit image
   image:
     registry: ""
