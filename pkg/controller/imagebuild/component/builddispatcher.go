@@ -66,7 +66,12 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	c.phase.SetInitializing(ctx, obj)
 
 	log.Info("Querying for buildkit service")
-	addr, err := c.pool.Get(ctx)
+	future, err := c.pool.Get(ctx)
+	if err != nil {
+		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkit service lookup failed: %w", err))
+	}
+
+	addr, err := future()
 	if err != nil {
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkit service lookup failed: %w", err))
 	}
