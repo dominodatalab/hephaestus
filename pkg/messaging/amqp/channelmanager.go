@@ -85,13 +85,19 @@ func (m *channelManager) handleNotifications() {
 	chanCloses := m.channel.NotifyClose(make(chan *amqp.Error, 1))
 	chanCancels := m.channel.NotifyCancel(make(chan string, 1))
 
+	// TODO: this design seems a little silly
+	// 	it turns out that calling ...Passive() will close both the channel and connection
+	//  so both need to be re-established. i think a better design would be to perform a
+	//  series of checks inside reconnect() and (a) re-establish the connection if conn.IsClosed()
+	//  or (b) just the channel when the former is still open.
+
 	select {
 	case err := <-connCloses:
 		m.log.Error(err, "Connection closed, attempting full reconnect")
 		m.reconnectWithRetry(true)
 	case err := <-chanCloses:
 		m.log.Error(err, "Channel closed, attempting to reconnect")
-		m.reconnectWithRetry(false)
+		m.reconnectWithRetry(true) // NOTE: changed to accommodate Passive() funcs behavior
 	case msg := <-chanCancels:
 		m.log.Error(errors.New(msg), "Channel canceled, attempting to reconnect")
 		m.reconnectWithRetry(false)

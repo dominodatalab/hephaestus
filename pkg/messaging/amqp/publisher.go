@@ -154,9 +154,11 @@ func (p *publisher) ensureQueue(exchange, queue string) error {
 			}
 		}
 
-		err = p.manager.Channel().QueueBind(queue, queue, exchange, QueueNoWait, nil)
-		if err != nil {
-			return fmt.Errorf("cannot bind queue %q: %w", queue, err)
+		if exchange != "" {
+			err = p.manager.Channel().QueueBind(queue, queue, exchange, QueueNoWait, nil)
+			if err != nil {
+				return fmt.Errorf("cannot bind queue %q: %w", queue, err)
+			}
 		}
 	}
 

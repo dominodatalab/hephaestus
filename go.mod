@@ -28,7 +28,7 @@ require (
 	github.com/h2non/filetype v1.1.1
 	github.com/moby/buildkit v0.10.1
 	github.com/pkg/errors v0.9.1
-	github.com/rabbitmq/amqp091-go v1.2.0
+	github.com/rabbitmq/amqp091-go v1.3.4
 	github.com/spf13/cobra v1.2.1
 	github.com/stretchr/testify v1.7.0
 	go.uber.org/zap v1.19.1
