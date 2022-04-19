@@ -92,7 +92,7 @@ func (c ConversionShimComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 			}
 		}
 
-		auths = append(auths)
+		auths = append(auths, auth)
 	}
 
 	/*
