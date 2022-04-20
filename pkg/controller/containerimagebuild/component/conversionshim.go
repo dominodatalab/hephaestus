@@ -54,13 +54,16 @@ func (c ConversionShimComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 	}
 
 	/*
-		capture original object in annotations
+		pass annotations with original object
 	*/
 	bs, err := json.Marshal(cib)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("cannot serialize containerimagebuild %q: %w", cib.Name, err)
 	}
 	annotations := map[string]string{forgeObjectStorageAnnotation: string(bs)}
+	for k, v := range cib.Annotations {
+		annotations[k] = v
+	}
 
 	/*
 		check for image size limit

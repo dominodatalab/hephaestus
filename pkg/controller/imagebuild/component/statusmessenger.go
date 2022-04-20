@@ -16,11 +16,12 @@ import (
 )
 
 type StatusMessage struct {
-	Name          string       `json:"name"`
-	ObjectLink    string       `json:"objectLink"`
-	PreviousPhase hephv1.Phase `json:"previousPhase"`
-	CurrentPhase  hephv1.Phase `json:"currentPhase"`
-	OccurredAt    time.Time    `json:"occurredAt"`
+	Name          string            `json:"name"`
+	Annotations   map[string]string `json:"annotations"`
+	ObjectLink    string            `json:"objectLink"`
+	PreviousPhase hephv1.Phase      `json:"previousPhase"`
+	CurrentPhase  hephv1.Phase      `json:"currentPhase"`
+	OccurredAt    time.Time         `json:"occurredAt"`
 }
 
 type StatusMessengerComponent struct {
@@ -68,6 +69,7 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 
 		msg := StatusMessage{
 			Name:          obj.Name,
+			Annotations:   obj.Annotations,
 			ObjectLink:    objLink,
 			PreviousPhase: tr.PreviousPhase,
 			CurrentPhase:  tr.Phase,
