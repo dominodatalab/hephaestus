@@ -21,7 +21,9 @@ type StatusMessage struct {
 	ObjectLink    string            `json:"objectLink"`
 	PreviousPhase hephv1.Phase      `json:"previousPhase"`
 	CurrentPhase  hephv1.Phase      `json:"currentPhase"`
-	OccurredAt    time.Time         `json:"occurredAt"`
+	OccurredAt    time.Time         `json:"-"`
+
+	// NOTE: think about adding ErrorMessage, ImageURLs and ImageSize
 }
 
 type StatusMessengerComponent struct {
