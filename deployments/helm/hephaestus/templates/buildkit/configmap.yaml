@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "hephaestus.buildkit.fullname" . }}
+  labels:
+    {{- include "hephaestus.buildkit.labels.standard" . | nindent 4 }}
+data:
+  {{- with .Values.buildkit }}
+  buildkitd.toml: |
+    [grpc]
+      address = [ "tcp://0.0.0.0:{{ .service.port }}", "{{ .rootless | ternary "unix:///run/user/1000/buildkit/buildkitd.sock" "unix:///run/buildkit/buildkitd.sock" }}" ]
+
+      {{- if .mtls.enabled }}
+      [grpc.tls]
+        cert = "/etc/buildkit/x509/tls.crt"
+        key = "/etc/buildkit/x509/tls.key"
+        ca = "/etc/buildkit/x509/ca.crt"
+      {{- end }}
+
+    [worker.oci]
+      {{- if .rootless }}
+      noProcessSandbox = true
+      {{- end }}
+      {{- if .persistence.enabled }}
+      [[worker.oci.gcpolicy]]
+        all = true
+        keepBytes = {{ .gcKeepStorage | int64 }}
+      {{- end }}
+  {{- end }}
