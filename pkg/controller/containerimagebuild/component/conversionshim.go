@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	forgeBuildIDAnnotation       = "imagebuilder.dominodatalab.com/build-id"
+	forgeLogKeyAnnotation        = "logKey"
 	forgeObjectStorageAnnotation = "hephaestus.dominodatalab.com/converted-object"
 )
 
@@ -47,9 +47,9 @@ func (c ConversionShimComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 	/*
 		ensure logKey is present
 	*/
-	logKey := cib.Annotations[forgeBuildIDAnnotation]
+	logKey := cib.Annotations[forgeLogKeyAnnotation]
 	if strings.TrimSpace(logKey) == "" {
-		err := fmt.Errorf("log key not in annotation %q: %w", forgeBuildIDAnnotation, errInconvertible)
+		err := fmt.Errorf("%q not in annotations %v: %w", forgeLogKeyAnnotation, cib.Annotations, errInconvertible)
 		return ctrl.Result{}, err
 	}
 
