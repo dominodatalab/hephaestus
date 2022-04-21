@@ -33,7 +33,7 @@ rules:
       - create
       - update
       - delete
-  {{- if and (include "hephaestus.pspRequired" .) (include "hephaestus.istioWithoutCNI" .) }}
+  {{- if or (include "hephaestus.pspRequired" .) (include "hephaestus.istioWithoutCNI" .) }}
   - apiGroups:
       - policy
     resources:

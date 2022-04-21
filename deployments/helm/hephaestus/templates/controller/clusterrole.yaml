@@ -74,7 +74,7 @@ rules:
       - get
       - watch
       - patch
-  {{- if and (include "hephaestus.pspRequired" .) (include "hephaestus.istioWithoutCNI" .) }}
+  {{- if or (include "hephaestus.pspRequired" .) (include "hephaestus.istioWithoutCNI" .) }}
   - apiGroups:
       - policy
     resources:
