@@ -163,7 +163,7 @@ logProcessor:
   # Configure the ingestion, transformation, and delivery of your logs
   config:
     sources: |-
-      hephaestus_logs:
+      hephaestus_output:
         type: file
         include:
           - {{ include "hephaestus.logfilePath" . }}
@@ -171,13 +171,20 @@ logProcessor:
       remap:
         type: remap
         inputs:
-          - hephaestus_logs
+          - hephaestus_output
         source: |-
-          incoming = parse_json!(.message)
-          if !exists(incoming.logKey) || is_nullish(incoming.logKey) {
+          message = parse_json!(.message)
+          if !exists(message.logKey) || is_nullish(message.logKey) {
             abort
           }
-          . = {"logKey": incoming.logKey, "timestamp": incoming.ts, "message": incoming.msg}
+          . = {
+            "event": .,
+            "stream": "stdout",
+            "time": message.ts,
+            "time_nano": to_string(to_unix_timestamp(to_timestamp!(message.ts), unit: "nanoseconds")),
+            "log": message.msg,
+            "logKey": message.logKey,
+          }
     sinks: |-
       stdout:
         type: console
