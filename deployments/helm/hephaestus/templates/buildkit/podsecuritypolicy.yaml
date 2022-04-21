@@ -1,0 +1,78 @@
+{{- if include "hephaestus.pspRequired" . }}
+{{- $rbacName := printf "%s:buildkit" (include "hephaestus.rbac.managerName" .) }}
+{{- $privileged := not .Values.buildkit.rootless }}
+{{- $istioWithoutCNI := include "hephaestus.istioWithoutCNI" . }}
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: {{ include "hephaestus.buildkit.fullname" . }}
+  labels:
+    {{- include "hephaestus.buildkit.labels.standard" . | nindent 4 }}
+  annotations:
+    apparmor.security.beta.kubernetes.io/allowedProfileNames: 'unconfined,runtime/default'
+    apparmor.security.beta.kubernetes.io/defaultProfileName:  'unconfined'
+    seccomp.security.alpha.kubernetes.io/allowedProfileNames: 'unconfined,runtime/default'
+    seccomp.security.alpha.kubernetes.io/defaultProfileName:  'unconfined'
+spec:
+  privileged: {{ $privileged }}
+  allowPrivilegeEscalation: true
+  {{- if $istioWithoutCNI }}
+  allowedCapabilities:
+    - NET_ADMIN
+    - NET_RAW
+  {{- end }}
+  volumes:
+    - configMap
+    - downwardAPI
+    - emptyDir
+    - persistentVolumeClaim
+    - projected
+    - secret
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: {{ if or $privileged $istioWithoutCNI }}RunAsAny{{ else }}MustRunAsNonRoot{{ end }}
+  seLinux:
+    rule: RunAsAny
+  supplementalGroups:
+    rule: MustRunAs
+    ranges:
+      - min: 1
+        max: 65535
+  fsGroup:
+    rule: MustRunAs
+    ranges:
+      - min: 1
+        max: 65535
+  readOnlyRootFilesystem: false
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $rbacName }}
+  labels:
+    {{- include "hephaestus.buildkit.labels.standard" . | nindent 4 }}
+rules:
+  - apiGroups: ["policy"]
+    resources: ["podsecuritypolicies"]
+    verbs: ["use"]
+    resourceNames: ["{{ include "hephaestus.buildkit.fullname" . }}"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $rbacName }}
+  labels:
+    {{- include "hephaestus.buildkit.labels.standard" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $rbacName }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "hephaestus.buildkit.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
