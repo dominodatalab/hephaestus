@@ -160,36 +160,16 @@ logProcessor:
     requests: {}
     limits: {}
 
-  # Configure the ingestion, transformation, and delivery of your logs
+  # Configure the transformation and delivery of your logs using "hephaestus_output" as the name of your input
   config:
-    sources: |-
-      hephaestus_output:
-        type: file
-        include:
-          - {{ include "hephaestus.logfilePath" . }}
-    transforms: |-
-      remap:
-        type: remap
-        inputs:
-          - hephaestus_output
-        source: |-
-          message = parse_json!(.message)
-          if !exists(message.logKey) || is_nullish(message.logKey) {
-            abort
-          }
-          . = {
-            "event": .,
-            "stream": "stdout",
-            "time": message.ts,
-            "time_nano": to_string(to_unix_timestamp(to_timestamp!(message.ts), unit: "nanoseconds")),
-            "log": message.msg,
-            "logKey": message.logKey,
-          }
-    sinks: |-
+    # See https://vector.dev/docs/reference/configuration/transforms/
+    transforms: {}
+    # See https://vector.dev/docs/reference/configuration/sinks/
+    sinks:
       stdout:
         type: console
         inputs:
-          - remap
+          - hephaestus_output
         encoding:
           codec: json
 
