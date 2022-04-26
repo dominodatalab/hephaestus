@@ -27,6 +27,10 @@ const (
 	QueueNoWait     = false
 )
 
+var queueArgs = amqp.Table{
+	"x-single-active-consumer": true,
+}
+
 type PublishOptions struct {
 	ExchangeName string
 	QueueName    string
@@ -133,7 +137,7 @@ func (p *publisher) ensureQueue(exchange, queue string) error {
 			QueueAutoDelete,
 			QueueExclusive,
 			QueueNoWait,
-			nil,
+			queueArgs,
 		)
 
 		if err != nil {
@@ -147,7 +151,7 @@ func (p *publisher) ensureQueue(exchange, queue string) error {
 				QueueAutoDelete,
 				QueueExclusive,
 				QueueNoWait,
-				nil,
+				queueArgs,
 			)
 			if err != nil {
 				return fmt.Errorf("cannot declare queue %q: %w", queue, err)
