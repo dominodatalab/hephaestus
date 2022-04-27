@@ -15,6 +15,8 @@ import (
 	"github.com/dominodatalab/hephaestus/pkg/messaging/amqp"
 )
 
+var publishContentType = "application/json"
+
 type StatusMessage struct {
 	Name          string            `json:"name"`
 	Annotations   map[string]string `json:"annotations"`
@@ -41,29 +43,52 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	obj := ctx.Object.(*hephv1.ImageBuild)
 
 	if !c.cfg.Enabled {
-		log.V(1).Info("Messaging is not enabled, skipping")
+		log.V(1).Info("Aborting reconcile, messaging is not enabled")
 		return ctrl.Result{}, nil
 	}
 
-	log.Info("Creating AMQP publisher")
+	log.Info("Creating AMQP message publisher")
 	publisher, err := amqp.NewPublisher(ctx.Log, c.cfg.AMQP.URL)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	defer publisher.Close()
 
-	log.Info("Processing status transitions", "count", len(obj.Status.Transitions))
-	for _, tr := range obj.Status.Transitions {
-		l := log.WithValues("from", tr.PreviousPhase, "to", tr.Phase)
+	defer func() {
+		log.V(1).Info("Closing message publisher")
+		if err := publisher.Close(); err != nil {
+			log.Error(err, "Failed to close message publisher")
+		}
 
-		if tr.Processed {
-			l.Info("Transition has been processed, skipping")
+		log.V(1).Info("Message publisher closed")
+	}()
+
+	publishOpts := amqp.PublishOptions{
+		ExchangeName: c.cfg.AMQP.Exchange,
+		QueueName:    c.cfg.AMQP.Queue,
+		ContentType:  publishContentType,
+	}
+
+	if ov := obj.Spec.AMQPOverrides; ov != nil {
+		if ov.ExchangeName != "" {
+			log.Info("Overriding target AMQP Exchange", "name", ov.ExchangeName)
+			publishOpts.ExchangeName = ov.ExchangeName
+		}
+
+		if ov.QueueName != "" {
+			log.Info("Overriding target AMQP Queue", "name", ov.QueueName)
+			publishOpts.QueueName = ov.QueueName
+		}
+	}
+
+	for _, transition := range obj.Status.Transitions {
+		if transition.Processed {
+			log.Info("Transition has been processed, skipping", "transition", transition)
 			continue
 		}
 
-		l.Info("Processing transition")
+		log.Info("Processing phase transition", "from", transition.PreviousPhase, "to", transition.Phase)
 
-		l.V(1).Info("Building object link")
+		log.V(1).Info("Building object link")
 		objLink, err := BuildObjectLink(ctx)
 		if err != nil {
 			return ctrl.Result{}, err
@@ -73,31 +98,26 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 			Name:          obj.Name,
 			Annotations:   obj.Annotations,
 			ObjectLink:    objLink,
-			PreviousPhase: tr.PreviousPhase,
-			CurrentPhase:  tr.Phase,
-			OccurredAt:    tr.OccurredAt.Time,
+			PreviousPhase: transition.PreviousPhase,
+			CurrentPhase:  transition.Phase,
+			OccurredAt:    transition.OccurredAt.Time,
 		}
 
-		l.V(1).Info("Marshalling StatusMessage into JSON")
+		log.V(1).Info("Marshalling StatusMessage into JSON", "object", msg)
 		content, err := json.Marshal(msg)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 
-		opts := amqp.PublishOptions{
-			ExchangeName: c.cfg.AMQP.Exchange,
-			QueueName:    c.cfg.AMQP.Queue,
-			Body:         content,
-			ContentType:  "application/json",
-		}
+		publishOpts.Body = content
 
-		l.Info("Publishing status")
-		if err = publisher.Publish(opts); err != nil {
+		log.Info("Publishing transition message")
+		if err = publisher.Publish(publishOpts); err != nil {
 			return ctrl.Result{}, err
 		}
 
-		l.Info("Updating status transition")
-		tr.Processed = true
+		log.Info("Marking phase transition complete", "phase", transition.Phase)
+		transition.Processed = true
 		if err := ctx.Client.Status().Update(ctx, obj); err != nil {
 			return ctrl.Result{}, err
 		}
