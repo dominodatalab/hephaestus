@@ -35,17 +35,20 @@ type channelManager struct {
 }
 
 func NewChannelManager(log logr.Logger, url string) (*channelManager, error) {
-	log.Info("Dialing AMQP server", "url", url)
+	log = log.WithName("amqp.channel-manager")
+
+	log.V(1).Info("Dialing server", "url", url)
 	conn, ch, err := Dial(url)
 	if err != nil {
 		return nil, err
 	}
 
 	manager := &channelManager{
-		log:     log.WithName("amqp.channel-manager"),
-		url:     url,
-		conn:    conn,
-		channel: ch,
+		log:      log,
+		url:      url,
+		conn:     conn,
+		channel:  ch,
+		shutdown: make(chan struct{}),
 	}
 	go manager.handleNotifications()
 
@@ -64,7 +67,9 @@ func (m *channelManager) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	m.log.V(1).Info("Sending shutdown signal")
 	m.shutdown <- struct{}{}
+	m.log.V(1).Info("Shutdown signal sent")
 
 	if !m.channel.IsClosed() {
 		if err := m.channel.Close(); err != nil {
@@ -102,7 +107,7 @@ func (m *channelManager) handleNotifications() {
 		m.log.Error(errors.New(msg), "Channel canceled, attempting to reconnect")
 		m.reconnectWithRetry(false)
 	case <-m.shutdown:
-		m.log.Info("Shutting down")
+		m.log.V(1).Info("Shutting down")
 		return
 	}
 

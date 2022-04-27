@@ -81,7 +81,7 @@ func (p *publisher) Publish(opts PublishOptions) error {
 		Body:         opts.Body,
 	}
 
-	p.log.Info("Publishing message", "appId", message.AppId, "deliveryMode", message.DeliveryMode, "contentType", message.ContentType, "body", string(message.Body))
+	p.log.V(1).Info("Sending message to server", "exchange", opts.ExchangeName, "queue", opts.QueueName)
 	err := p.manager.Channel().Publish(opts.ExchangeName, opts.QueueName, MandatoryDelivery, ImmediateDelivery, message)
 	if err != nil {
 		return fmt.Errorf("message publishing failed: %w", err)
