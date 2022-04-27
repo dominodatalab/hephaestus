@@ -2,7 +2,8 @@ module github.com/dominodatalab/hephaestus
 
 go 1.18
 
-//replace github.com/dominodatalab/controller-util => ../controller-util // NOTE: local development
+// NOTE: local development
+//replace github.com/dominodatalab/controller-util => ../controller-util
 
 replace github.com/docker/docker => github.com/docker/docker v20.10.3-0.20220224222438-c78f6963a1c0+incompatible
 
@@ -21,7 +22,7 @@ require (
 	github.com/docker/cli v20.10.13+incompatible
 	github.com/docker/distribution v2.8.0+incompatible
 	github.com/docker/docker v20.10.7+incompatible // master (v21.xx-dev), see replace()
-	github.com/dominodatalab/controller-util v0.0.0-20220114212532-6b4723a14d97
+	github.com/dominodatalab/controller-util v0.0.0-20220427140634-68c5f6e87fab
 	github.com/go-logr/logr v1.2.2
 	github.com/go-logr/zapr v1.2.0
 	github.com/gofrs/flock v0.7.3
@@ -38,17 +39,17 @@ require (
 	google.golang.org/grpc v1.45.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.23.4
-	k8s.io/apimachinery v0.23.4
-	k8s.io/client-go v0.23.4
+	k8s.io/api v0.23.5
+	k8s.io/apimachinery v0.23.5
+	k8s.io/client-go v0.23.5
 	k8s.io/kube-openapi v0.0.0-20220124234850-424119656bbf
 	k8s.io/utils v0.0.0-20211116205334-6203023598ed
-	sigs.k8s.io/controller-runtime v0.11.1
+	sigs.k8s.io/controller-runtime v0.11.2
 )
 
 require (
 	github.com/hashicorp/go-retryablehttp v0.7.0
-	k8s.io/apiextensions-apiserver v0.23.0
+	k8s.io/apiextensions-apiserver v0.23.5
 	sigs.k8s.io/yaml v1.3.0
 )
 
@@ -145,7 +146,7 @@ require (
 	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
-	k8s.io/component-base v0.23.0 // indirect
+	k8s.io/component-base v0.23.5 // indirect
 	k8s.io/klog/v2 v2.30.0 // indirect
 	sigs.k8s.io/json v0.0.0-20211020170558-c049b76a60c6 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
