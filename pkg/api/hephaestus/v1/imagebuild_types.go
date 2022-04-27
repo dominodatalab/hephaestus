@@ -6,15 +6,20 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type ImageBuildAMQPOverrides struct {
+	ExchangeName string `json:"exchangeName,omitempty"`
+	QueueName    string `json:"queueName,omitempty"`
+}
+
 type ImageBuildSpec struct {
-	Context      string                `json:"context,omitempty"`
-	Images       []string              `json:"images,omitempty"`
-	BuildArgs    []string              `json:"buildArgs,omitempty"`
-	LogKey       string                `json:"logKey,omitempty"`
-	RegistryAuth []RegistryCredentials `json:"registryAuth,omitempty"`
+	Context       string                   `json:"context,omitempty"`
+	Images        []string                 `json:"images,omitempty"`
+	BuildArgs     []string                 `json:"buildArgs,omitempty"`
+	LogKey        string                   `json:"logKey,omitempty"`
+	RegistryAuth  []RegistryCredentials    `json:"registryAuth,omitempty"`
+	AMQPOverrides *ImageBuildAMQPOverrides `json:"amqpOverrides,omitempty"`
 
 	// TODO: implement the functionality for the following fields
-
 	ImageSizeLimit          *int64 `json:"imageSizeLimit,omitempty"`
 	DisableBuildCache       bool   `json:"disableBuildCache,omitempty"`
 	DisableLayerCacheExport bool   `json:"disableLayerCacheExport,omitempty"`

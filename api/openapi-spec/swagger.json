@@ -1797,6 +1797,17 @@
         }
       }
     },
+    ".ImageBuildAMQPOverrides": {
+      "type": "object",
+      "properties": {
+        "exchangeName": {
+          "type": "string"
+        },
+        "queueName": {
+          "type": "string"
+        }
+      }
+    },
     ".ImageBuildList": {
       "type": "object",
       "required": [
@@ -1827,6 +1838,9 @@
     ".ImageBuildSpec": {
       "type": "object",
       "properties": {
+        "amqpOverrides": {
+          "$ref": "#/definitions/.ImageBuildAMQPOverrides"
+        },
         "buildArgs": {
           "type": "array",
           "items": {
@@ -1834,20 +1848,18 @@
             "default": ""
           }
         },
-        "cacheMode": {
-          "type": "string"
-        },
-        "cacheTag": {
-          "type": "string"
-        },
         "context": {
           "type": "string"
         },
-        "disableCacheExports": {
+        "disableBuildCache": {
           "type": "boolean"
         },
-        "disableCacheImports": {
+        "disableLayerCacheExport": {
           "type": "boolean"
+        },
+        "imageSizeLimit": {
+          "type": "integer",
+          "format": "int64"
         },
         "images": {
           "type": "array",
@@ -1855,6 +1867,9 @@
             "type": "string",
             "default": ""
           }
+        },
+        "logKey": {
+          "type": "string"
         },
         "registryAuth": {
           "type": "array",

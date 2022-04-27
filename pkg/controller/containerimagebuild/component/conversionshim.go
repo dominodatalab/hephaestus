@@ -22,7 +22,7 @@ const (
 	forgeObjectStorageAnnotation = "hephaestus.dominodatalab.com/converted-object"
 )
 
-var errInconvertible = errors.New("cannot convert containerimagebuild object")
+var ErrInconvertible = errors.New("cannot convert containerimagebuild object")
 
 type ConversionShimComponent struct{}
 
@@ -49,7 +49,7 @@ func (c ConversionShimComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 	*/
 	logKey := cib.Annotations[forgeLogKeyAnnotation]
 	if strings.TrimSpace(logKey) == "" {
-		err := fmt.Errorf("%q not in annotations %v: %w", forgeLogKeyAnnotation, cib.Annotations, errInconvertible)
+		err := fmt.Errorf("%q not in annotations %v: %w", forgeLogKeyAnnotation, cib.Annotations, ErrInconvertible)
 		return ctrl.Result{}, err
 	}
 
@@ -108,6 +108,16 @@ func (c ConversionShimComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 	}
 
 	/*
+		conditionally override status update queue
+	*/
+	var amqpOverrides *hephv1.ImageBuildAMQPOverrides
+	if queue := cib.Spec.MessageQueueName; queue != "" {
+		amqpOverrides = &hephv1.ImageBuildAMQPOverrides{
+			QueueName: queue,
+		}
+	}
+
+	/*
 		compose final object and submit to api for actual processing
 	*/
 	imageBuild := &hephv1.ImageBuild{
@@ -126,6 +136,7 @@ func (c ConversionShimComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 			LogKey:                  logKey,
 			RegistryAuth:            auths,
 			ImageSizeLimit:          imageSizeLimit,
+			AMQPOverrides:           amqpOverrides,
 		},
 	}
 

@@ -45,6 +45,13 @@ spec:
             type: object
           spec:
             properties:
+              amqpOverrides:
+                properties:
+                  exchangeName:
+                    type: string
+                  queueName:
+                    type: string
+                type: object
               buildArgs:
                 items:
                   type: string
@@ -56,6 +63,8 @@ spec:
               disableLayerCacheExport:
                 type: boolean
               imageSizeLimit:
+                description: 'TODO: implement the functionality for the following
+                  fields'
                 format: int64
                 type: integer
               images:

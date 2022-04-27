@@ -14,18 +14,19 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.BasicAuthCredentials": schema_pkg_api_hephaestus_v1_BasicAuthCredentials(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuild":           schema_pkg_api_hephaestus_v1_ImageBuild(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildList":       schema_pkg_api_hephaestus_v1_ImageBuildList(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildSpec":       schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildStatus":     schema_pkg_api_hephaestus_v1_ImageBuildStatus(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildTransition": schema_pkg_api_hephaestus_v1_ImageBuildTransition(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCache":           schema_pkg_api_hephaestus_v1_ImageCache(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCacheList":       schema_pkg_api_hephaestus_v1_ImageCacheList(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCacheSpec":       schema_pkg_api_hephaestus_v1_ImageCacheSpec(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCacheStatus":     schema_pkg_api_hephaestus_v1_ImageCacheStatus(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.RegistryCredentials":  schema_pkg_api_hephaestus_v1_RegistryCredentials(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.SecretCredentials":    schema_pkg_api_hephaestus_v1_SecretCredentials(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.BasicAuthCredentials":    schema_pkg_api_hephaestus_v1_BasicAuthCredentials(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuild":              schema_pkg_api_hephaestus_v1_ImageBuild(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildAMQPOverrides": schema_pkg_api_hephaestus_v1_ImageBuildAMQPOverrides(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildList":          schema_pkg_api_hephaestus_v1_ImageBuildList(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildSpec":          schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildStatus":        schema_pkg_api_hephaestus_v1_ImageBuildStatus(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildTransition":    schema_pkg_api_hephaestus_v1_ImageBuildTransition(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCache":              schema_pkg_api_hephaestus_v1_ImageCache(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCacheList":          schema_pkg_api_hephaestus_v1_ImageCacheList(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCacheSpec":          schema_pkg_api_hephaestus_v1_ImageCacheSpec(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCacheStatus":        schema_pkg_api_hephaestus_v1_ImageCacheStatus(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.RegistryCredentials":     schema_pkg_api_hephaestus_v1_RegistryCredentials(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.SecretCredentials":       schema_pkg_api_hephaestus_v1_SecretCredentials(ref),
 	}
 }
 
@@ -96,6 +97,30 @@ func schema_pkg_api_hephaestus_v1_ImageBuild(ref common.ReferenceCallback) commo
 		},
 		Dependencies: []string{
 			"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildSpec", "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_api_hephaestus_v1_ImageBuildAMQPOverrides(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"exchangeName": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"queueName": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -187,27 +212,9 @@ func schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref common.ReferenceCallback) c
 							},
 						},
 					},
-					"cacheTag": {
+					"logKey": {
 						SchemaProps: spec.SchemaProps{
 							Type:   []string{"string"},
-							Format: "",
-						},
-					},
-					"cacheMode": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
-						},
-					},
-					"disableCacheExports": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"boolean"},
-							Format: "",
-						},
-					},
-					"disableCacheImports": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"boolean"},
 							Format: "",
 						},
 					},
@@ -224,11 +231,34 @@ func schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref common.ReferenceCallback) c
 							},
 						},
 					},
+					"amqpOverrides": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildAMQPOverrides"),
+						},
+					},
+					"imageSizeLimit": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int64",
+						},
+					},
+					"disableBuildCache": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"boolean"},
+							Format: "",
+						},
+					},
+					"disableLayerCacheExport": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"boolean"},
+							Format: "",
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.RegistryCredentials"},
+			"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildAMQPOverrides", "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.RegistryCredentials"},
 	}
 }
 
