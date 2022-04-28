@@ -51,7 +51,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	log := ctx.Log
 	obj := ctx.Object.(*hephv1.ImageBuild)
 
-	if obj.Status.Phase != "" {
+	if obj.Status.Phase != hephv1.PhaseCreated {
 		log.Info("Aborting reconcile, status phase in not blank", "phase", obj.Status.Phase)
 		return ctrl.Result{}, nil
 	}

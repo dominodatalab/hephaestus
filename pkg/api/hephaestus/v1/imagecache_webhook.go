@@ -8,7 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
-var imagecachelog = logf.Log.WithName("webhooks").WithName("imagecache")
+var imagecachelog = logf.Log.WithName("webhook").WithName("imagecache")
 
 var _ webhook.Validator = &ImageCache{}
 

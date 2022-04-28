@@ -348,7 +348,7 @@ func schema_pkg_api_hephaestus_v1_ImageBuildTransition(ref common.ReferenceCallb
 						},
 					},
 				},
-				Required: []string{"previousPhase", "phase", "occurredAt", "processed"},
+				Required: []string{"previousPhase", "phase", "processed"},
 			},
 		},
 		Dependencies: []string{

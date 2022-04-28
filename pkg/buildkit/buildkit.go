@@ -96,7 +96,7 @@ func (c *Client) Build(opts BuildOptions) error {
 			c.log.Info("Fetching remote context", "url", opts.Context)
 			extract, err := archive.FetchAndExtract(c.log, c.ctx, opts.Context, buildDir, 5*time.Minute)
 			if err != nil {
-				return err
+				return fmt.Errorf("cannot fetch remote context: %w", err)
 			}
 
 			contentsDir = extract.ContentsDir

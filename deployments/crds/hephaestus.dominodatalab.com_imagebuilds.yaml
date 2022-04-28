@@ -98,6 +98,12 @@ spec:
                 type: array
             type: object
           status:
+            default:
+              phase: Created
+              transitions:
+              - phase: Created
+                previousPhase: ""
+                processed: false
             properties:
               buildTime:
                 description: BuildTime is the total time spend during the build process.
@@ -190,7 +196,6 @@ spec:
                     processed:
                       type: boolean
                   required:
-                  - occurredAt
                   - phase
                   - previousPhase
                   - processed

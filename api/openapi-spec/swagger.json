@@ -1911,7 +1911,6 @@
       "required": [
         "previousPhase",
         "phase",
-        "occurredAt",
         "processed"
       ],
       "properties": {

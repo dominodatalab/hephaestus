@@ -4,6 +4,10 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/dominodatalab/hephaestus/pkg/jsonpatch"
 )
 
 type ImageBuildAMQPOverrides struct {
@@ -28,7 +32,7 @@ type ImageBuildSpec struct {
 type ImageBuildTransition struct {
 	PreviousPhase Phase        `json:"previousPhase"`
 	Phase         Phase        `json:"phase"`
-	OccurredAt    *metav1.Time `json:"occurredAt"`
+	OccurredAt    *metav1.Time `json:"occurredAt,omitempty"`
 	Processed     bool         `json:"processed"`
 }
 
@@ -38,6 +42,8 @@ type ImageBuildStatus struct {
 	Conditions  []metav1.Condition     `json:"conditions,omitempty"`
 	Transitions []ImageBuildTransition `json:"transitions,omitempty"`
 	Phase       Phase                  `json:"phase,omitempty"`
+
+	unappliedTransition ImageBuildTransition `json:"-"`
 }
 
 // +genclient
@@ -52,7 +58,8 @@ type ImageBuild struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ImageBuildSpec   `json:"spec,omitempty"`
+	Spec ImageBuildSpec `json:"spec,omitempty"`
+	// +kubebuilder:default={phase: "Created", transitions: {{previousPhase: "", phase: "Created", processed: false}}}
 	Status ImageBuildStatus `json:"status,omitempty"`
 }
 
@@ -65,13 +72,38 @@ func (in *ImageBuild) GetPhase() Phase {
 }
 
 func (in *ImageBuild) SetPhase(p Phase) {
-	in.Status.Transitions = append(in.Status.Transitions, ImageBuildTransition{
+	ibt := ImageBuildTransition{
 		PreviousPhase: in.Status.Phase,
 		Phase:         p,
 		OccurredAt:    &metav1.Time{Time: time.Now()},
 		Processed:     false,
-	})
+	}
+
+	in.Status.unappliedTransition = ibt
+	in.Status.Transitions = append(in.Status.Transitions, ibt)
 	in.Status.Phase = p
+}
+
+func (in *ImageBuild) GetPatch() client.Patch {
+	ops := jsonpatch.Operations{
+		{
+			Operation: "replace",
+			Path:      "/status/phase",
+			Value:     in.Status.Phase,
+		},
+		{
+			Operation: "add",
+			Path:      "/status/transitions/-",
+			Value:     in.Status.unappliedTransition,
+		},
+	}
+
+	patch, err := ops.MarshallJSON()
+	if err != nil {
+		panic(err)
+	}
+
+	return client.RawPatch(types.JSONPatchType, patch)
 }
 
 // +kubebuilder:object:root=true

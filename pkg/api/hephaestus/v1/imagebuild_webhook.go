@@ -11,7 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
-var imagebuildlog = logf.Log.WithName("webhooks").WithName("imagebuild")
+var imagebuildlog = logf.Log.WithName("webhook").WithName("imagebuild")
 
 var _ webhook.Defaulter = &ImageBuild{}
 

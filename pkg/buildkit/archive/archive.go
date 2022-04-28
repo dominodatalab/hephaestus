@@ -90,7 +90,7 @@ func FetchAndExtract(log logr.Logger, ctx context.Context, url, wd string, timeo
 		return nil, err
 	}
 	if ct != mimeTypeGzip && ct != mimeTypeTar {
-		return nil, fmt.Errorf("unsupported file type %q", ct)
+		return nil, fmt.Errorf("unsupported file content type %q", ct)
 	}
 
 	dest := filepath.Join(wd, "extracted")

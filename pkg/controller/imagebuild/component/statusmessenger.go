@@ -2,16 +2,20 @@ package component
 
 import (
 	"encoding/json"
+	"fmt"
 	"path"
 	"strings"
 	"time"
 
 	"github.com/dominodatalab/controller-util/core"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/hephaestus/pkg/config"
+	"github.com/dominodatalab/hephaestus/pkg/jsonpatch"
 	"github.com/dominodatalab/hephaestus/pkg/messaging/amqp"
 )
 
@@ -80,9 +84,9 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		}
 	}
 
-	for _, transition := range obj.Status.Transitions {
+	for idx, transition := range obj.Status.Transitions {
 		if transition.Processed {
-			log.Info("Transition has been processed, skipping", "transition", transition)
+			log.V(1).Info("Transition has been processed, skipping", "transition", transition)
 			continue
 		}
 
@@ -94,17 +98,22 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 			return ctrl.Result{}, err
 		}
 
-		msg := StatusMessage{
+		occurredAt := time.Now()
+		if transition.OccurredAt != nil {
+			occurredAt = transition.OccurredAt.Time
+		}
+
+		message := StatusMessage{
 			Name:          obj.Name,
 			Annotations:   obj.Annotations,
 			ObjectLink:    objLink,
 			PreviousPhase: transition.PreviousPhase,
 			CurrentPhase:  transition.Phase,
-			OccurredAt:    transition.OccurredAt.Time,
+			OccurredAt:    occurredAt,
 		}
 
-		log.V(1).Info("Marshalling StatusMessage into JSON", "object", msg)
-		content, err := json.Marshal(msg)
+		log.V(1).Info("Marshalling StatusMessage into JSON", "message", message)
+		content, err := json.Marshal(message)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -116,9 +125,24 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 			return ctrl.Result{}, err
 		}
 
-		log.Info("Marking phase transition complete", "phase", transition.Phase)
+		log.Info("Generating JSON patch for status transition")
 		transition.Processed = true
-		if err := ctx.Client.Status().Update(ctx, obj); err != nil {
+		operation := jsonpatch.Operations{
+			{
+				Operation: "replace",
+				Path:      fmt.Sprintf("/status/transitions/%d", idx),
+				Value:     transition,
+			},
+		}
+
+		patch, err := operation.MarshallJSON()
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("could not generate transition patch: %w", err)
+		}
+		log.V(1).Info("Generated JSON", "patch", string(patch))
+
+		log.Info("Patching processed status transition", "phase", transition.Phase)
+		if err := ctx.Client.Status().Patch(ctx, obj, client.RawPatch(types.JSONPatchType, patch)); err != nil {
 			return ctrl.Result{}, err
 		}
 	}

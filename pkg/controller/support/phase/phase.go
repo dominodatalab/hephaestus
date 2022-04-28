@@ -12,6 +12,7 @@ type PhasedObject interface {
 	client.Object
 	core.ConditionObject
 
+	GetPatch() client.Patch
 	GetPhase() hephv1.Phase
 	SetPhase(p hephv1.Phase)
 }
@@ -34,7 +35,7 @@ func (h *TransitionHelper) SetInitializing(ctx *core.Context, obj PhasedObject) 
 	reason, message := h.ConditionMeta.Initialize()
 	ctx.Conditions.SetUnknown(h.ReadyCondition, reason, message)
 
-	h.updateStatus(ctx, obj)
+	h.patchStatus(ctx, obj)
 }
 
 func (h *TransitionHelper) SetSucceeded(ctx *core.Context, obj PhasedObject) {
@@ -43,7 +44,7 @@ func (h *TransitionHelper) SetSucceeded(ctx *core.Context, obj PhasedObject) {
 	reason, message := h.ConditionMeta.Success()
 	ctx.Conditions.SetTrue(h.ReadyCondition, reason, message)
 
-	h.updateStatus(ctx, obj)
+	h.patchStatus(ctx, obj)
 }
 
 func (h *TransitionHelper) SetRunning(ctx *core.Context, obj PhasedObject) {
@@ -52,24 +53,22 @@ func (h *TransitionHelper) SetRunning(ctx *core.Context, obj PhasedObject) {
 	reason, message := h.ConditionMeta.Success()
 	ctx.Conditions.SetUnknown(h.ReadyCondition, reason, message)
 
-	h.updateStatus(ctx, obj)
+	h.patchStatus(ctx, obj)
 }
 
 func (h *TransitionHelper) SetFailed(ctx *core.Context, obj PhasedObject, err error) error {
 	obj.SetPhase(hephv1.PhaseFailed)
 	ctx.Conditions.SetFalse(h.ReadyCondition, "ExecutionError", err.Error())
 
-	h.updateStatus(ctx, obj)
+	h.patchStatus(ctx, obj)
 
 	return err
 }
 
-func (h *TransitionHelper) updateStatus(ctx *core.Context, obj PhasedObject) {
-	ctx.Log.Info("Updating status", "phase", obj.GetPhase())
+func (h *TransitionHelper) patchStatus(ctx *core.Context, obj PhasedObject) {
+	ctx.Log.Info("Transitioning status", "phase", obj.GetPhase())
 
-	// TODO: use a Patch() operation instead of Update()
-
-	if err := ctx.Client.Status().Update(ctx, obj); err != nil {
+	if err := ctx.Client.Status().Patch(ctx, obj, obj.GetPatch()); err != nil {
 		ctx.Log.Error(err, "Failed to update status, emitting event")
 		ctx.Recorder.Eventf(
 			obj,

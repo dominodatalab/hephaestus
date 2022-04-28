@@ -22,7 +22,7 @@ require (
 	github.com/docker/cli v20.10.13+incompatible
 	github.com/docker/distribution v2.8.0+incompatible
 	github.com/docker/docker v20.10.7+incompatible // master (v21.xx-dev), see replace()
-	github.com/dominodatalab/controller-util v0.0.0-20220427140634-68c5f6e87fab
+	github.com/dominodatalab/controller-util v0.0.0-20220428201130-ad497a3793c1
 	github.com/go-logr/logr v1.2.2
 	github.com/go-logr/zapr v1.2.0
 	github.com/gofrs/flock v0.7.3
@@ -49,6 +49,7 @@ require (
 
 require (
 	github.com/hashicorp/go-retryablehttp v0.7.0
+	gomodules.xyz/jsonpatch/v2 v2.2.0
 	k8s.io/apiextensions-apiserver v0.23.5
 	sigs.k8s.io/yaml v1.3.0
 )
@@ -140,7 +141,6 @@ require (
 	golang.org/x/term v0.0.0-20210615171337-6886f2dfbf5b // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
-	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20211208223120-3a66f561d7aa // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
