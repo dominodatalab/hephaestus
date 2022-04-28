@@ -62,7 +62,6 @@ spec:
                 - buildctl
                 - debug
                 - workers
-            initialDelaySeconds: 5
             periodSeconds: 30
           readinessProbe:
             exec:
@@ -70,7 +69,6 @@ spec:
                 - buildctl
                 - debug
                 - workers
-            initialDelaySeconds: 5
             periodSeconds: 30
           resources:
             {{- toYaml .Values.buildkit.resources | nindent 12 }}
