@@ -12,8 +12,10 @@ import (
 	"github.com/containerd/console"
 	"github.com/go-logr/logr"
 	bkclient "github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/cmd/buildctl/build"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/util/progress/progressui"
+	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dominodatalab/hephaestus/pkg/buildkit/archive"
@@ -67,10 +69,13 @@ func (b *clientBuilder) Build() (*Client, error) {
 }
 
 type BuildOptions struct {
-	Context    string
-	ContextDir string
-	Images     []string
-	BuildArgs  []string
+	Context                  string
+	ContextDir               string
+	Images                   []string
+	BuildArgs                []string
+	NoCache                  bool
+	ImportCache              []string
+	DisableInlineCacheExport bool
 }
 
 type Buildkit interface {
@@ -86,40 +91,115 @@ type Client struct {
 }
 
 func (c *Client) Build(opts BuildOptions) error {
-	return c.solveWith(func(buildDir string, solveOpt *bkclient.SolveOpt) error {
-		var contentsDir string
+	// setup build directory
+	buildDir, err := os.MkdirTemp("", "hephaestus-build-")
+	if err != nil {
+		return fmt.Errorf("failed to create build dir: %w", err)
+	}
 
-		if fi, err := os.Stat(opts.ContextDir); err == nil && fi.IsDir() {
-			c.log.Info("Using context dir", "dir", opts.ContextDir)
-			contentsDir = opts.ContextDir
-		} else {
-			c.log.Info("Fetching remote context", "url", opts.Context)
-			extract, err := archive.FetchAndExtract(c.log, c.ctx, opts.Context, buildDir, 5*time.Minute)
-			if err != nil {
-				return fmt.Errorf("cannot fetch remote context: %w", err)
-			}
-
-			contentsDir = extract.ContentsDir
+	defer func(path string) {
+		if err := os.RemoveAll(path); err != nil {
+			c.log.Error(err, "Failed to delete build context")
 		}
-		c.log.V(1).Info(contentsDir)
+	}(buildDir)
 
-		solveOpt.LocalDirs = map[string]string{
+	// process build context
+	var contentsDir string
+
+	if fi, err := os.Stat(opts.ContextDir); err == nil && fi.IsDir() {
+		c.log.Info("Using context dir", "dir", opts.ContextDir)
+		contentsDir = opts.ContextDir
+	} else {
+		c.log.Info("Fetching remote context", "url", opts.Context)
+		extract, err := archive.FetchAndExtract(c.log, c.ctx, opts.Context, buildDir, 5*time.Minute)
+		if err != nil {
+			return fmt.Errorf("cannot fetch remote context: %w", err)
+		}
+
+		contentsDir = extract.ContentsDir
+	}
+	c.log.V(1).Info("Context extracted", "dir", contentsDir)
+
+	// verify manifest is present
+	dockerfile := filepath.Join(contentsDir, "Dockerfile")
+	if _, err := os.Stat(dockerfile); errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("build requires a Dockerfile inside context dir: %w", err)
+	}
+
+	if l := c.log.V(1); l.Enabled() {
+		bs, err := os.ReadFile(dockerfile)
+		if err != nil {
+			return fmt.Errorf("cannot read Dockerfile: %w", err)
+
+		}
+		l.Info("Dockerfile contents:\n" + string(bs))
+	}
+
+	// build solve options
+	solveOpt := bkclient.SolveOpt{
+		Frontend:      "dockerfile.v0",
+		FrontendAttrs: map[string]string{},
+		LocalDirs: map[string]string{
 			"context":    contentsDir,
 			"dockerfile": contentsDir,
-		}
+		},
+		Session: []session.Attachable{
+			NewDockerAuthProvider(c.dockerAuthConfig),
+		},
+		CacheExports: []bkclient.CacheOptionsEntry{
+			{
+				Type: "inline",
+			},
+		},
+	}
 
-		for _, name := range opts.Images {
-			solveOpt.Exports = append(solveOpt.Exports, bkclient.ExportEntry{
-				Type: bkclient.ExporterImage,
+	if opts.NoCache {
+		solveOpt.FrontendAttrs["no-cache"] = ""
+	}
+
+	if opts.DisableInlineCacheExport {
+		solveOpt.CacheExports = nil
+	}
+
+	for _, ref := range opts.ImportCache {
+		solveOpt.CacheImports = []bkclient.CacheOptionsEntry{
+			{
+				Type: "registry",
 				Attrs: map[string]string{
-					"push": "true",
-					"name": name,
+					"ref": ref,
 				},
-			})
+			},
+		}
+	}
+
+	if len(opts.BuildArgs) != 0 {
+		var args []string
+		for _, arg := range opts.BuildArgs {
+			args = append(args, fmt.Sprintf("build-arg:%s", arg))
 		}
 
-		return nil
-	})
+		attrs, err := build.ParseOpt(args, nil)
+		if err != nil {
+			return fmt.Errorf("cannot parse build args: %w", err)
+		}
+
+		for k, v := range attrs {
+			solveOpt.FrontendAttrs[k] = v
+		}
+	}
+
+	for _, name := range opts.Images {
+		solveOpt.Exports = append(solveOpt.Exports, bkclient.ExportEntry{
+			Type: bkclient.ExporterImage,
+			Attrs: map[string]string{
+				"name": name,
+				"push": "true",
+			},
+		})
+	}
+
+	// build/push images
+	return c.runSolve(solveOpt)
 }
 
 func (c *Client) Cache(image string) error {
@@ -181,20 +261,19 @@ func (c *Client) solveWith(modify func(buildDir string, solveOpt *bkclient.Solve
 
 func (c *Client) runSolve(so bkclient.SolveOpt) error {
 	lw := &LogWriter{Logger: c.log}
-
 	ch := make(chan *bkclient.SolveStatus)
 	eg, ctx := errgroup.WithContext(c.ctx)
 
 	eg.Go(func() error {
-		resp, err := c.bk.Solve(ctx, nil, so, ch)
+		_, err := c.bk.Solve(ctx, nil, so, ch)
 		if err != nil {
 			return err
 		}
 
-		// NOTE: this can be used to limit the size of images pushed to the registry
-		c.log.Info("Solve complete", "image.size", resp.ExporterResponse["size"])
+		c.log.Info("Solve complete")
 		return nil
 	})
+
 	eg.Go(func() error {
 		var c console.Console
 		if cn, err := console.ConsoleFromFile(os.Stderr); err != nil {

@@ -44,8 +44,11 @@ spec:
           metadata:
             type: object
           spec:
+            description: ImageBuildSpec specifies the desired state of an ImageBuild
+              resource.
             properties:
               amqpOverrides:
+                description: AMQPOverrides to the main controller configuration.
                 properties:
                   exchangeName:
                     type: string
@@ -53,27 +56,38 @@ spec:
                     type: string
                 type: object
               buildArgs:
+                description: BuildArgs are applied to the build at runtime.
                 items:
                   type: string
                 type: array
               context:
+                description: Context is a remote URL used to fetch the build context.
                 type: string
-              disableBuildCache:
+              disableCacheExport:
+                description: DisableCacheLayerExport will remove the "inline" cache
+                  metadata from the image configuration.
                 type: boolean
-              disableLayerCacheExport:
-                type: boolean
-              imageSizeLimit:
-                description: 'TODO: implement the functionality for the following
-                  fields'
-                format: int64
-                type: integer
               images:
+                description: Images is a list of images to build and push.
+                items:
+                  type: string
+                type: array
+              importCache:
+                description: ImportCacheFrom one or more canonical image references
+                  when building the images.
                 items:
                   type: string
                 type: array
               logKey:
+                description: LogKey is used to uniquely annotate build logs for post-processing
                 type: string
+              noBuildCache:
+                description: NoBuildCache will disable the use of the local cache
+                  when building the images.
+                type: boolean
               registryAuth:
+                description: RegistryAuth credentials used to pull/push images from/to
+                  private registries.
                 items:
                   properties:
                     basicAuth:

@@ -105,9 +105,12 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	c.phase.SetRunning(ctx, obj)
 
 	buildOpts := buildkit.BuildOptions{
-		Context:   obj.Spec.Context,
-		Images:    obj.Spec.Images,
-		BuildArgs: obj.Spec.BuildArgs,
+		Context:                  obj.Spec.Context,
+		Images:                   obj.Spec.Images,
+		BuildArgs:                obj.Spec.BuildArgs,
+		NoCache:                  obj.Spec.NoBuildCache,
+		ImportCache:              obj.Spec.ImportCacheFrom,
+		DisableInlineCacheExport: obj.Spec.DisableCacheLayerExport,
 	}
 
 	log.Info("Dispatching image build", "images", buildOpts.Images)

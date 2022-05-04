@@ -15,18 +15,26 @@ type ImageBuildAMQPOverrides struct {
 	QueueName    string `json:"queueName,omitempty"`
 }
 
+// ImageBuildSpec specifies the desired state of an ImageBuild resource.
 type ImageBuildSpec struct {
-	Context       string                   `json:"context,omitempty"`
-	Images        []string                 `json:"images,omitempty"`
-	BuildArgs     []string                 `json:"buildArgs,omitempty"`
-	LogKey        string                   `json:"logKey,omitempty"`
-	RegistryAuth  []RegistryCredentials    `json:"registryAuth,omitempty"`
+	// Context is a remote URL used to fetch the build context.
+	Context string `json:"context,omitempty"`
+	// Images is a list of images to build and push.
+	Images []string `json:"images,omitempty"`
+	// BuildArgs are applied to the build at runtime.
+	BuildArgs []string `json:"buildArgs,omitempty"`
+	// LogKey is used to uniquely annotate build logs for post-processing
+	LogKey string `json:"logKey,omitempty"`
+	// RegistryAuth credentials used to pull/push images from/to private registries.
+	RegistryAuth []RegistryCredentials `json:"registryAuth,omitempty"`
+	// AMQPOverrides to the main controller configuration.
 	AMQPOverrides *ImageBuildAMQPOverrides `json:"amqpOverrides,omitempty"`
-
-	// TODO: implement the functionality for the following fields
-	ImageSizeLimit          *int64 `json:"imageSizeLimit,omitempty"`
-	DisableBuildCache       bool   `json:"disableBuildCache,omitempty"`
-	DisableLayerCacheExport bool   `json:"disableLayerCacheExport,omitempty"`
+	// ImportCacheFrom one or more canonical image references when building the images.
+	ImportCacheFrom []string `json:"importCache,omitempty"`
+	// NoBuildCache will disable the use of the local cache when building the images.
+	NoBuildCache bool `json:"noBuildCache,omitempty"`
+	// DisableCacheLayerExport will remove the "inline" cache metadata from the image configuration.
+	DisableCacheLayerExport bool `json:"disableCacheExport,omitempty"`
 }
 
 type ImageBuildTransition struct {

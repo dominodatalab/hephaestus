@@ -124,10 +124,10 @@ func (in *ImageBuildSpec) DeepCopyInto(out *ImageBuildSpec) {
 		*out = new(ImageBuildAMQPOverrides)
 		**out = **in
 	}
-	if in.ImageSizeLimit != nil {
-		in, out := &in.ImageSizeLimit, &out.ImageSizeLimit
-		*out = new(int64)
-		**out = **in
+	if in.ImportCacheFrom != nil {
+		in, out := &in.ImportCacheFrom, &out.ImportCacheFrom
+		*out = make([]string, len(*in))
+		copy(*out, *in)
 	}
 }
 

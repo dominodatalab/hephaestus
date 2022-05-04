@@ -19,6 +19,7 @@ import (
 
 const (
 	forgeLogKeyAnnotation        = "logKey"
+	forgeLastBuildAnnotation     = "imagebuilder.dominodatalab.com/last-image"
 	forgeObjectStorageAnnotation = "hephaestus.dominodatalab.com/converted-object"
 )
 
@@ -45,15 +46,6 @@ func (c ConversionShimComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 	}
 
 	/*
-		ensure logKey is present
-	*/
-	logKey := cib.Annotations[forgeLogKeyAnnotation]
-	if strings.TrimSpace(logKey) == "" {
-		err := fmt.Errorf("%q not in annotations %v: %w", forgeLogKeyAnnotation, cib.Annotations, ErrInconvertible)
-		return ctrl.Result{}, err
-	}
-
-	/*
 		pass annotations with original object
 	*/
 	bs, err := json.Marshal(cib)
@@ -66,11 +58,20 @@ func (c ConversionShimComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 	}
 
 	/*
-		check for image size limit
+		ensure logKey is present
 	*/
-	var imageSizeLimit *int64
-	if cib.Spec.ImageSizeLimit > 0 {
-		imageSizeLimit = pointer.Int64(int64(cib.Spec.ImageSizeLimit))
+	logKey := cib.Annotations[forgeLogKeyAnnotation]
+	if strings.TrimSpace(logKey) == "" {
+		err := fmt.Errorf("%q not in annotations %v: %w", forgeLogKeyAnnotation, cib.Annotations, ErrInconvertible)
+		return ctrl.Result{}, err
+	}
+
+	/*
+		compute cache imports
+	*/
+	var cacheImports []string
+	if ref, ok := cib.Annotations[forgeLastBuildAnnotation]; ok {
+		cacheImports = []string{ref}
 	}
 
 	/*
@@ -130,12 +131,12 @@ func (c ConversionShimComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 		Spec: hephv1.ImageBuildSpec{
 			Context:                 cib.Spec.Context,
 			BuildArgs:               cib.Spec.BuildArgs,
-			DisableBuildCache:       cib.Spec.DisableBuildCache,
-			DisableLayerCacheExport: cib.Spec.DisableLayerCacheExport,
+			NoBuildCache:            cib.Spec.DisableBuildCache,
+			DisableCacheLayerExport: cib.Spec.DisableBuildCache,
+			ImportCacheFrom:         cacheImports,
 			Images:                  images,
 			LogKey:                  logKey,
 			RegistryAuth:            auths,
-			ImageSizeLimit:          imageSizeLimit,
 			AMQPOverrides:           amqpOverrides,
 		},
 	}

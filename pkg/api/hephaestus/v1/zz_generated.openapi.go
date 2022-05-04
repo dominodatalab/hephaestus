@@ -176,17 +176,20 @@ func schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref common.ReferenceCallback) c
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "ImageBuildSpec specifies the desired state of an ImageBuild resource.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"context": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "Context is a remote URL used to fetch the build context.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"images": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
+							Description: "Images is a list of images to build and push.",
+							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
@@ -200,7 +203,8 @@ func schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref common.ReferenceCallback) c
 					},
 					"buildArgs": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
+							Description: "BuildArgs are applied to the build at runtime.",
+							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
@@ -214,13 +218,15 @@ func schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref common.ReferenceCallback) c
 					},
 					"logKey": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "LogKey is used to uniquely annotate build logs for post-processing",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"registryAuth": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
+							Description: "RegistryAuth credentials used to pull/push images from/to private registries.",
+							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
@@ -233,25 +239,37 @@ func schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref common.ReferenceCallback) c
 					},
 					"amqpOverrides": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildAMQPOverrides"),
+							Description: "AMQPOverrides to the main controller configuration.",
+							Ref:         ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildAMQPOverrides"),
 						},
 					},
-					"imageSizeLimit": {
+					"importCache": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
+							Description: "ImportCacheFrom one or more canonical image references when building the images.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
 						},
 					},
-					"disableBuildCache": {
+					"noBuildCache": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"boolean"},
-							Format: "",
+							Description: "NoBuildCache will disable the use of the local cache when building the images.",
+							Type:        []string{"boolean"},
+							Format:      "",
 						},
 					},
-					"disableLayerCacheExport": {
+					"disableCacheExport": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"boolean"},
-							Format: "",
+							Description: "DisableCacheLayerExport will remove the \"inline\" cache metadata from the image configuration.",
+							Type:        []string{"boolean"},
+							Format:      "",
 						},
 					},
 				},

@@ -66,11 +66,6 @@ func (in *ImageBuild) validateImageBuild(action string) error {
 		errList = append(errList, errs...)
 	}
 
-	if value := in.Spec.ImageSizeLimit; value != nil && *value <= 0 {
-		log.V(1).Info("ImageSizeLimit is invalid", "value", value)
-		errList = append(errList, field.Invalid(fp.Child("imageSizeLimit"), value, "must be greater than zero"))
-	}
-
 	if strings.TrimSpace(in.Spec.LogKey) == "" {
 		log.Info("WARNING: Blank 'logKey' will preclude post-log processing")
 	}
