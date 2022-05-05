@@ -36,8 +36,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-tools-
 
-      - name: Install tools
-        run: make tools
+      - name: Sanity check
+        run: make check
 
       - name: Build
         run: make build

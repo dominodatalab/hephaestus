@@ -1,16 +1,19 @@
-.DEFAULT_GOAL:=help
 SHELL:=/bin/bash
 
-.PHONY: test tools
+ifndef $(GOPATH)
+	GOPATH=$(shell go env GOPATH)
+	export GOPATH
+endif
 
 ##@ Development
 
-build: ## Build controller
+build: ## Build controller binary
 	go build -v -o bin/hephaestus-controller ./cmd/controller/
 
 docker: ## Build docker image
 	docker build -t ghcr.io/dominodatalab/hephaestus:latest .
 
+.PHONY: test
 test: ## Run test suite
 	go test -v -race ./...
 
@@ -22,6 +25,11 @@ apply: crds ## Apply CRDs to cluster
 
 delete: crds ## Delete CRDs from cluster
 	kubectl delete -f deployments/crds
+
+check: api crds client ## Ensure generated files and dependencies are up-to-date
+	go mod tidy -v
+	git update-index --refresh
+	git diff-index --exit-code --name-status HEAD
 
 ##@ Generators
 
@@ -39,9 +47,11 @@ sdks: crds ## Generate non-GO client libraries
 
 ##@ Misc
 
+.PHONY: tools
 tools: ## Install go tooling
 	@echo Installing tools from tools/tools.go
 	@cd tools && go list -f '{{range .Imports}}{{.}}{{"\n"}}{{end}}' tools.go | xargs -I % go install %
 
+.DEFAULT_GOAL:=help
 help: ## Display this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
