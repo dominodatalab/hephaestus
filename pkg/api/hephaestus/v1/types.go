@@ -14,6 +14,8 @@ const (
 type Phase string
 
 const (
+	// PhaseCreated indicates a new resources that has not been reconciled
+	PhaseCreated Phase = "Created"
 	// PhaseInitializing indicates that an execution sequence is preparing to run.
 	PhaseInitializing Phase = "Initializing"
 	// PhaseRunning indicates that an execution sequence has begun.

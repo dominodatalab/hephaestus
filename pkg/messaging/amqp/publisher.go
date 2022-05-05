@@ -27,6 +27,10 @@ const (
 	QueueNoWait     = false
 )
 
+var queueArgs = amqp.Table{
+	"x-single-active-consumer": true,
+}
+
 type PublishOptions struct {
 	ExchangeName string
 	QueueName    string
@@ -77,7 +81,7 @@ func (p *publisher) Publish(opts PublishOptions) error {
 		Body:         opts.Body,
 	}
 
-	p.log.Info("Publishing message", "contents", message)
+	p.log.V(1).Info("Sending message to server", "exchange", opts.ExchangeName, "queue", opts.QueueName)
 	err := p.manager.Channel().Publish(opts.ExchangeName, opts.QueueName, MandatoryDelivery, ImmediateDelivery, message)
 	if err != nil {
 		return fmt.Errorf("message publishing failed: %w", err)
@@ -133,7 +137,7 @@ func (p *publisher) ensureQueue(exchange, queue string) error {
 			QueueAutoDelete,
 			QueueExclusive,
 			QueueNoWait,
-			nil,
+			queueArgs,
 		)
 
 		if err != nil {
@@ -147,16 +151,18 @@ func (p *publisher) ensureQueue(exchange, queue string) error {
 				QueueAutoDelete,
 				QueueExclusive,
 				QueueNoWait,
-				nil,
+				queueArgs,
 			)
 			if err != nil {
 				return fmt.Errorf("cannot declare queue %q: %w", queue, err)
 			}
 		}
 
-		err = p.manager.Channel().QueueBind(queue, queue, exchange, QueueNoWait, nil)
-		if err != nil {
-			return fmt.Errorf("cannot bind queue %q: %w", queue, err)
+		if exchange != "" {
+			err = p.manager.Channel().QueueBind(queue, queue, exchange, QueueNoWait, nil)
+			if err != nil {
+				return fmt.Errorf("cannot bind queue %q: %w", queue, err)
+			}
 		}
 	}
 

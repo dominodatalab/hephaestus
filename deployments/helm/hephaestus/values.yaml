@@ -160,29 +160,16 @@ logProcessor:
     requests: {}
     limits: {}
 
-  # Configure the ingestion, transformation, and delivery of your logs
+  # Configure the transformation and delivery of your logs using "hephaestus_output" as the name of your input
   config:
-    sources: |-
-      hephaestus_logs:
-        type: file
-        include:
-          - {{ include "hephaestus.logfilePath" . }}
-    transforms: |-
-      remap:
-        type: remap
-        inputs:
-          - hephaestus_logs
-        source: |-
-          incoming = parse_json!(.message)
-          if !exists(incoming.logKey) || is_nullish(incoming.logKey) {
-            abort
-          }
-          . = {"logKey": incoming.logKey, "timestamp": incoming.ts, "message": incoming.msg}
-    sinks: |-
+    # See https://vector.dev/docs/reference/configuration/transforms/
+    transforms: {}
+    # See https://vector.dev/docs/reference/configuration/sinks/
+    sinks:
       stdout:
         type: console
         inputs:
-          - remap
+          - hephaestus_output
         encoding:
           codec: json
 
@@ -206,7 +193,7 @@ buildkit:
   image:
     registry: ""
     repository: moby/buildkit
-    tag: "v0.10.1-rootless"
+    tag: "v0.10.2-rootless"
     pullPolicy: IfNotPresent
     pullSecrets: []
 

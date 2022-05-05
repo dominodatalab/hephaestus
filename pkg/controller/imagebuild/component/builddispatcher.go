@@ -51,43 +51,47 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	log := ctx.Log
 	obj := ctx.Object.(*hephv1.ImageBuild)
 
-	/*
-		determine if we need to reconcile object
-	*/
-	if obj.Status.Phase != "" {
-		log.Info("Resource phase in not blank, ignoring", "phase", obj.Status.Phase)
+	if obj.Status.Phase != hephv1.PhaseCreated {
+		log.Info("Aborting reconcile, status phase in not blank", "phase", obj.Status.Phase)
 		return ctrl.Result{}, nil
 	}
 
-	/*
-		gather information and prepare for build
-	*/
 	start := time.Now()
 	c.phase.SetInitializing(ctx, obj)
 
-	log.Info("Querying for buildkit service")
-	addr, err := c.pool.Get(ctx)
-	if err != nil {
-		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkit service lookup failed: %w", err))
-	}
-	defer func(pool workerpool.Pool, endpoint string) {
-		if err := pool.Release(endpoint); err != nil {
-			log.Error(err, "Failed to release pool endpoint", "endpoint", endpoint)
-		}
-	}(c.pool, addr)
-
-	log.Info("Processing registry credentials")
+	log.Info("Processing and persisting registry credentials")
 	configDir, err := credentials.Persist(ctx, ctx.Config, obj.Spec.RegistryAuth)
 	if err != nil {
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("registry credentials processing failed: %w", err))
 	}
+
 	defer func(path string) {
 		if err := os.RemoveAll(path); err != nil {
 			log.Error(err, "Failed to delete registry credentials")
 		}
 	}(configDir)
 
-	log.Info("Building new buildkit client")
+	log.Info("Leasing buildkit worker")
+	future, err := c.pool.Get(ctx)
+	if err != nil {
+		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkit service lookup failed: %w", err))
+	}
+
+	addr, err := future()
+	if err != nil {
+		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkit service lookup failed: %w", err))
+	}
+
+	defer func(pool workerpool.Pool, endpoint string) {
+		log.Info("Releasing buildkit worker", "endpoint", endpoint)
+		if err := pool.Release(endpoint); err != nil {
+			log.Error(err, "Failed to release pool endpoint", "endpoint", endpoint)
+		}
+
+		log.Info("Buildkit worker released")
+	}(c.pool, addr)
+
+	log.Info("Building new buildkit client", "addr", addr)
 	bk, err := buildkit.
 		ClientBuilder(ctx, addr).
 		WithLogger(ctx.Log.WithName("buildkit").WithValues("addr", addr, "logKey", obj.Spec.LogKey)).
@@ -98,26 +102,24 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, err)
 	}
 
-	/*
-		dispatch remote build
-	*/
 	c.phase.SetRunning(ctx, obj)
 
 	buildOpts := buildkit.BuildOptions{
-		Context:   obj.Spec.Context,
-		Images:    obj.Spec.Images,
-		BuildArgs: obj.Spec.BuildArgs,
+		Context:                  obj.Spec.Context,
+		Images:                   obj.Spec.Images,
+		BuildArgs:                obj.Spec.BuildArgs,
+		NoCache:                  obj.Spec.DisableLocalBuildCache,
+		ImportCache:              obj.Spec.ImportRemoteBuildCache,
+		DisableInlineCacheExport: obj.Spec.DisableCacheLayerExport,
 	}
+
+	log.Info("Dispatching image build", "images", buildOpts.Images)
 	if err = bk.Build(buildOpts); err != nil {
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("build failed: %w", err))
 	}
 
-	/*
-		record final metadata and report success
-	*/
 	obj.Status.BuildTime = time.Since(start).String()
 	c.phase.SetSucceeded(ctx, obj)
 
-	log.Info("Reconciliation complete")
 	return ctrl.Result{}, nil
 }

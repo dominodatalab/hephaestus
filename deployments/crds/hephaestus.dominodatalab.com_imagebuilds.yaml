@@ -44,27 +44,50 @@ spec:
           metadata:
             type: object
           spec:
+            description: ImageBuildSpec specifies the desired state of an ImageBuild
+              resource.
             properties:
+              amqpOverrides:
+                description: AMQPOverrides to the main controller configuration.
+                properties:
+                  exchangeName:
+                    type: string
+                  queueName:
+                    type: string
+                type: object
               buildArgs:
+                description: BuildArgs are applied to the build at runtime.
                 items:
                   type: string
                 type: array
               context:
+                description: Context is a remote URL used to fetch the build context.
                 type: string
               disableBuildCache:
+                description: DisableLocalBuildCache  will disable the use of the local
+                  cache when building the images.
                 type: boolean
-              disableLayerCacheExport:
+              disableCacheExport:
+                description: DisableCacheLayerExport will remove the "inline" cache
+                  metadata from the image configuration.
                 type: boolean
-              imageSizeLimit:
-                format: int64
-                type: integer
               images:
+                description: Images is a list of images to build and push.
+                items:
+                  type: string
+                type: array
+              importRemoteBuildCache:
+                description: ImportRemoteBuildCache from one or more canonical image
+                  references when building the images.
                 items:
                   type: string
                 type: array
               logKey:
+                description: LogKey is used to uniquely annotate build logs for post-processing
                 type: string
               registryAuth:
+                description: RegistryAuth credentials used to pull/push images from/to
+                  private registries.
                 items:
                   properties:
                     basicAuth:
@@ -89,6 +112,12 @@ spec:
                 type: array
             type: object
           status:
+            default:
+              phase: Created
+              transitions:
+              - phase: Created
+                previousPhase: ""
+                processed: false
             properties:
               buildTime:
                 description: BuildTime is the total time spend during the build process.
@@ -181,7 +210,6 @@ spec:
                     processed:
                       type: boolean
                   required:
-                  - occurredAt
                   - phase
                   - previousPhase
                   - processed

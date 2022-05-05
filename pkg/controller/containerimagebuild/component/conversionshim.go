@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/dominodatalab/controller-util/core"
@@ -17,11 +18,12 @@ import (
 )
 
 const (
-	forgeBuildIDAnnotation       = "imagebuilder.dominodatalab.com/build-id"
+	forgeLogKeyAnnotation        = "logKey"
+	forgeLastBuildAnnotation     = "imagebuilder.dominodatalab.com/last-image"
 	forgeObjectStorageAnnotation = "hephaestus.dominodatalab.com/converted-object"
 )
 
-var errInconvertible = errors.New("cannot convert containerimagebuild object")
+var ErrInconvertible = errors.New("cannot convert containerimagebuild object")
 
 type ConversionShimComponent struct{}
 
@@ -44,29 +46,40 @@ func (c ConversionShimComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 	}
 
 	/*
-		ensure logKey is present
-	*/
-	logKey := cib.Annotations[forgeBuildIDAnnotation]
-	if strings.TrimSpace(logKey) == "" {
-		err := fmt.Errorf("log key not in annotation %q: %w", forgeBuildIDAnnotation, errInconvertible)
-		return ctrl.Result{}, err
-	}
-
-	/*
-		capture original object in annotations
+		pass annotations with original object
 	*/
 	bs, err := json.Marshal(cib)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("cannot serialize containerimagebuild %q: %w", cib.Name, err)
 	}
 	annotations := map[string]string{forgeObjectStorageAnnotation: string(bs)}
+	for k, v := range cib.Annotations {
+		annotations[k] = v
+	}
 
 	/*
-		check for image size limit
+		ensure logKey is present
 	*/
-	var imageSizeLimit *int64
-	if cib.Spec.ImageSizeLimit > 0 {
-		imageSizeLimit = pointer.Int64(int64(cib.Spec.ImageSizeLimit))
+	logKey := cib.Annotations[forgeLogKeyAnnotation]
+	if strings.TrimSpace(logKey) == "" {
+		err := fmt.Errorf("%q not in annotations %v: %w", forgeLogKeyAnnotation, cib.Annotations, ErrInconvertible)
+		return ctrl.Result{}, err
+	}
+
+	/*
+		compute cache imports
+	*/
+	var cacheImports []string
+	if ref, ok := cib.Annotations[forgeLastBuildAnnotation]; ok {
+		cacheImports = []string{ref}
+	}
+
+	/*
+		convert push registries into fully-qualified image paths
+	*/
+	var images []string
+	for _, reg := range cib.Spec.PushRegistries {
+		images = append(images, filepath.Join(reg, cib.Spec.ImageName))
 	}
 
 	/*
@@ -92,7 +105,17 @@ func (c ConversionShimComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 			}
 		}
 
-		auths = append(auths)
+		auths = append(auths, auth)
+	}
+
+	/*
+		conditionally override status update queue
+	*/
+	var amqpOverrides *hephv1.ImageBuildAMQPOverrides
+	if queue := cib.Spec.MessageQueueName; queue != "" {
+		amqpOverrides = &hephv1.ImageBuildAMQPOverrides{
+			QueueName: queue,
+		}
 	}
 
 	/*
@@ -106,14 +129,15 @@ func (c ConversionShimComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 			Annotations: annotations,
 		},
 		Spec: hephv1.ImageBuildSpec{
-			Images:                  []string{cib.Spec.ImageName},
 			Context:                 cib.Spec.Context,
 			BuildArgs:               cib.Spec.BuildArgs,
-			DisableBuildCache:       cib.Spec.DisableBuildCache,
-			DisableLayerCacheExport: cib.Spec.DisableLayerCacheExport,
+			DisableLocalBuildCache:  cib.Spec.DisableBuildCache,
+			DisableCacheLayerExport: cib.Spec.DisableBuildCache,
+			ImportRemoteBuildCache:  cacheImports,
+			Images:                  images,
 			LogKey:                  logKey,
 			RegistryAuth:            auths,
-			ImageSizeLimit:          imageSizeLimit,
+			AMQPOverrides:           amqpOverrides,
 		},
 	}
 

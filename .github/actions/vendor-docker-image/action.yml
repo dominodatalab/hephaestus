@@ -1,0 +1,49 @@
+name: Vendor Docker Image
+description: Extracts Docker image details from the local Helm chart and pushes it to Quay
+inputs:
+  query:
+    required: true
+    description: YQ query that points to the image definition inside the values.yaml file
+  modifier:
+    required: false
+    description: Modify "repo/image:tag" with a stream command before tag and push
+  username:
+    required: true
+    description: Quay registry username
+  password:
+    required: true
+    description: Quay registry password
+runs:
+  using: composite
+  steps:
+    - id: image_source
+      name: Extract image details from Helm values
+      uses: mikefarah/yq@v4.25.1
+      with:
+        cmd: yq '${{ inputs.query }} | .repository + ":" + .tag' deployments/helm/hephaestus/values.yaml
+
+    - id: image_fields
+      name: Process image fields
+      shell: bash
+      run: |
+        input="${{ steps.image_source.outputs.result }}"
+        if [[ -n "${{ inputs.modifier }}" ]]; then
+          input="$(echo $input | ${{ inputs.modifier }})"
+        fi
+        output="$(echo $input | awk -F/ '{print $NF}')"
+
+        echo ::set-output name=source::"$input"
+        echo ::set-output name=destination::"$output"
+
+    - name: Login to container registry
+      uses: docker/login-action@v1
+      with:
+        registry: quay.io
+        username: ${{ inputs.username }}
+        password: ${{ inputs.password }}
+
+    - name: Tag and push image
+      uses: akhilerm/tag-push-action@v2.0.0
+      with:
+        src: ${{ steps.image_fields.outputs.source }}
+        dst: quay.io/domino/${{ steps.image_fields.outputs.destination }}

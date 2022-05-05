@@ -2,12 +2,16 @@ package component
 
 import (
 	"encoding/json"
+	"fmt"
 	"path"
 	"strings"
 	"time"
 
 	"github.com/dominodatalab/controller-util/core"
+	"gomodules.xyz/jsonpatch/v2"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
@@ -15,12 +19,17 @@ import (
 	"github.com/dominodatalab/hephaestus/pkg/messaging/amqp"
 )
 
+var publishContentType = "application/json"
+
 type StatusMessage struct {
-	Name          string       `json:"name"`
-	ObjectLink    string       `json:"objectLink"`
-	PreviousPhase hephv1.Phase `json:"previousPhase"`
-	CurrentPhase  hephv1.Phase `json:"currentPhase"`
-	OccurredAt    time.Time    `json:"occurredAt"`
+	Name          string            `json:"name"`
+	Annotations   map[string]string `json:"annotations"`
+	ObjectLink    string            `json:"objectLink"`
+	PreviousPhase hephv1.Phase      `json:"previousPhase"`
+	CurrentPhase  hephv1.Phase      `json:"currentPhase"`
+	OccurredAt    time.Time         `json:"-"`
+
+	// NOTE: think about adding ErrorMessage, ImageURLs and ImageSize
 }
 
 type StatusMessengerComponent struct {
@@ -38,63 +47,102 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	obj := ctx.Object.(*hephv1.ImageBuild)
 
 	if !c.cfg.Enabled {
-		log.V(1).Info("Messaging is not enabled, skipping")
+		log.V(1).Info("Aborting reconcile, messaging is not enabled")
 		return ctrl.Result{}, nil
 	}
 
-	log.Info("Creating AMQP publisher")
+	log.Info("Creating AMQP message publisher")
 	publisher, err := amqp.NewPublisher(ctx.Log, c.cfg.AMQP.URL)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	defer publisher.Close()
 
-	log.Info("Processing status transitions", "count", len(obj.Status.Transitions))
-	for _, tr := range obj.Status.Transitions {
-		l := log.WithValues("from", tr.PreviousPhase, "to", tr.Phase)
+	defer func() {
+		log.V(1).Info("Closing message publisher")
+		if err := publisher.Close(); err != nil {
+			log.Error(err, "Failed to close message publisher")
+		}
 
-		if tr.Processed {
-			l.Info("Transition has been processed, skipping")
+		log.V(1).Info("Message publisher closed")
+	}()
+
+	publishOpts := amqp.PublishOptions{
+		ExchangeName: c.cfg.AMQP.Exchange,
+		QueueName:    c.cfg.AMQP.Queue,
+		ContentType:  publishContentType,
+	}
+
+	if ov := obj.Spec.AMQPOverrides; ov != nil {
+		if ov.ExchangeName != "" {
+			log.Info("Overriding target AMQP Exchange", "name", ov.ExchangeName)
+			publishOpts.ExchangeName = ov.ExchangeName
+		}
+
+		if ov.QueueName != "" {
+			log.Info("Overriding target AMQP Queue", "name", ov.QueueName)
+			publishOpts.QueueName = ov.QueueName
+		}
+	}
+
+	for idx, transition := range obj.Status.Transitions {
+		if transition.Processed {
+			log.V(1).Info("Transition has been processed, skipping", "transition", transition)
 			continue
 		}
 
-		l.Info("Processing transition")
+		log.Info("Processing phase transition", "from", transition.PreviousPhase, "to", transition.Phase)
 
-		l.V(1).Info("Building object link")
+		log.V(1).Info("Building object link")
 		objLink, err := BuildObjectLink(ctx)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 
-		msg := StatusMessage{
-			Name:          obj.Name,
-			ObjectLink:    objLink,
-			PreviousPhase: tr.PreviousPhase,
-			CurrentPhase:  tr.Phase,
-			OccurredAt:    tr.OccurredAt.Time,
+		occurredAt := time.Now()
+		if transition.OccurredAt != nil {
+			occurredAt = transition.OccurredAt.Time
 		}
 
-		l.V(1).Info("Marshalling StatusMessage into JSON")
-		content, err := json.Marshal(msg)
+		message := StatusMessage{
+			Name:          obj.Name,
+			Annotations:   obj.Annotations,
+			ObjectLink:    objLink,
+			PreviousPhase: transition.PreviousPhase,
+			CurrentPhase:  transition.Phase,
+			OccurredAt:    occurredAt,
+		}
+
+		log.V(1).Info("Marshalling StatusMessage into JSON", "message", message)
+		content, err := json.Marshal(message)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 
-		opts := amqp.PublishOptions{
-			ExchangeName: c.cfg.AMQP.Exchange,
-			QueueName:    c.cfg.AMQP.Queue,
-			Body:         content,
-			ContentType:  "application/json",
-		}
+		publishOpts.Body = content
 
-		l.Info("Publishing status")
-		if err = publisher.Publish(opts); err != nil {
+		log.Info("Publishing transition message")
+		if err = publisher.Publish(publishOpts); err != nil {
 			return ctrl.Result{}, err
 		}
 
-		l.Info("Updating status transition")
-		tr.Processed = true
-		if err := ctx.Client.Status().Update(ctx, obj); err != nil {
+		log.Info("Generating JSON patch for status transition")
+		transition.Processed = true
+		ops := []jsonpatch.Operation{
+			{
+				Operation: "replace",
+				Path:      fmt.Sprintf("/status/transitions/%d", idx),
+				Value:     transition,
+			},
+		}
+
+		patch, err := json.Marshal(ops)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("could not generate transition patch: %w", err)
+		}
+		log.V(1).Info("Generated JSON", "patch", string(patch))
+
+		log.Info("Patching processed status transition", "phase", transition.Phase)
+		if err := ctx.Client.Status().Patch(ctx, obj, client.RawPatch(types.JSONPatchType, patch)); err != nil {
 			return ctrl.Result{}, err
 		}
 	}

@@ -14,18 +14,19 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.BasicAuthCredentials": schema_pkg_api_hephaestus_v1_BasicAuthCredentials(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuild":           schema_pkg_api_hephaestus_v1_ImageBuild(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildList":       schema_pkg_api_hephaestus_v1_ImageBuildList(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildSpec":       schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildStatus":     schema_pkg_api_hephaestus_v1_ImageBuildStatus(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildTransition": schema_pkg_api_hephaestus_v1_ImageBuildTransition(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCache":           schema_pkg_api_hephaestus_v1_ImageCache(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCacheList":       schema_pkg_api_hephaestus_v1_ImageCacheList(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCacheSpec":       schema_pkg_api_hephaestus_v1_ImageCacheSpec(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCacheStatus":     schema_pkg_api_hephaestus_v1_ImageCacheStatus(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.RegistryCredentials":  schema_pkg_api_hephaestus_v1_RegistryCredentials(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.SecretCredentials":    schema_pkg_api_hephaestus_v1_SecretCredentials(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.BasicAuthCredentials":    schema_pkg_api_hephaestus_v1_BasicAuthCredentials(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuild":              schema_pkg_api_hephaestus_v1_ImageBuild(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildAMQPOverrides": schema_pkg_api_hephaestus_v1_ImageBuildAMQPOverrides(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildList":          schema_pkg_api_hephaestus_v1_ImageBuildList(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildSpec":          schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildStatus":        schema_pkg_api_hephaestus_v1_ImageBuildStatus(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildTransition":    schema_pkg_api_hephaestus_v1_ImageBuildTransition(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCache":              schema_pkg_api_hephaestus_v1_ImageCache(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCacheList":          schema_pkg_api_hephaestus_v1_ImageCacheList(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCacheSpec":          schema_pkg_api_hephaestus_v1_ImageCacheSpec(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCacheStatus":        schema_pkg_api_hephaestus_v1_ImageCacheStatus(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.RegistryCredentials":     schema_pkg_api_hephaestus_v1_RegistryCredentials(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.SecretCredentials":       schema_pkg_api_hephaestus_v1_SecretCredentials(ref),
 	}
 }
 
@@ -99,6 +100,30 @@ func schema_pkg_api_hephaestus_v1_ImageBuild(ref common.ReferenceCallback) commo
 	}
 }
 
+func schema_pkg_api_hephaestus_v1_ImageBuildAMQPOverrides(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"exchangeName": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"queueName": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func schema_pkg_api_hephaestus_v1_ImageBuildList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -151,17 +176,20 @@ func schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref common.ReferenceCallback) c
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "ImageBuildSpec specifies the desired state of an ImageBuild resource.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"context": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "Context is a remote URL used to fetch the build context.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"images": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
+							Description: "Images is a list of images to build and push.",
+							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
@@ -175,7 +203,8 @@ func schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref common.ReferenceCallback) c
 					},
 					"buildArgs": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
+							Description: "BuildArgs are applied to the build at runtime.",
+							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
@@ -187,33 +216,17 @@ func schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref common.ReferenceCallback) c
 							},
 						},
 					},
-					"cacheTag": {
+					"logKey": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
-						},
-					},
-					"cacheMode": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
-						},
-					},
-					"disableCacheExports": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"boolean"},
-							Format: "",
-						},
-					},
-					"disableCacheImports": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"boolean"},
-							Format: "",
+							Description: "LogKey is used to uniquely annotate build logs for post-processing",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"registryAuth": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
+							Description: "RegistryAuth credentials used to pull/push images from/to private registries.",
+							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
@@ -224,11 +237,46 @@ func schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref common.ReferenceCallback) c
 							},
 						},
 					},
+					"amqpOverrides": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AMQPOverrides to the main controller configuration.",
+							Ref:         ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildAMQPOverrides"),
+						},
+					},
+					"importCache": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ImportCacheFrom one or more canonical image references when building the images.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"noBuildCache": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NoBuildCache will disable the use of the local cache when building the images.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"disableCacheExport": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DisableCacheLayerExport will remove the \"inline\" cache metadata from the image configuration.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.RegistryCredentials"},
+			"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildAMQPOverrides", "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.RegistryCredentials"},
 	}
 }
 
@@ -318,7 +366,7 @@ func schema_pkg_api_hephaestus_v1_ImageBuildTransition(ref common.ReferenceCallb
 						},
 					},
 				},
-				Required: []string{"previousPhase", "phase", "occurredAt", "processed"},
+				Required: []string{"previousPhase", "phase", "processed"},
 			},
 		},
 		Dependencies: []string{

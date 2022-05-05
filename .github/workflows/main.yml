@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  GO_VERSION: 1.18
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -16,7 +19,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
-          go-version: 1.17
+          go-version: ${{ env.GO_VERSION }}
 
       - name: Cache Go modules
         uses: actions/cache@v2
@@ -36,8 +39,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-tools-
 
-      - name: Install tools
-        run: make tools
+      - name: Sanity check
+        run: make check
 
       - name: Build
         run: make build
@@ -76,9 +79,48 @@ jobs:
           username: ${{ secrets.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_PASSWORD }}
 
+  vendor-buildkit:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Push rootless Buildkit image to Quay
+        uses: ./.github/actions/vendor-docker-image
+        with:
+          query: ".buildkit.image"
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_PASSWORD }}
+
+      - name: Push root Buildkit image to Quay
+        uses: ./.github/actions/vendor-docker-image
+        with:
+          query: ".buildkit.image"
+          modifier: "sed 's/-rootless//'"
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_PASSWORD }}
+
+  vendor-vector:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Push Vector image to Quay
+        uses: ./.github/actions/vendor-docker-image
+        with:
+          query: ".logProcessor.image"
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_PASSWORD }}
+
   helm:
     runs-on: ubuntu-latest
-    needs: docker
+    needs:
+      - docker
+      - vendor-buildkit
+      - vendor-vector
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -130,7 +172,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
-          go-version: 1.17
+          go-version: ${{ env.GO_VERSION }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1

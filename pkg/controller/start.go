@@ -97,6 +97,11 @@ func Start(cfg config.Controller) error {
 		return err
 	}
 
+	log.Info("Registering ImageBuildStatus controller")
+	if err = imagebuild.RegisterImageBuildStatus(mgr, cfg); err != nil {
+		return err
+	}
+
 	log.Info("Registering ImageCache controller")
 	if err = imagecache.Register(mgr, cfg); err != nil {
 		return err

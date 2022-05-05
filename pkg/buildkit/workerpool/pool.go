@@ -22,8 +22,10 @@ import (
 
 var ErrNoLeases = errors.New("idle lease not found")
 
+type AddressFuture func() (endpoint string, err error)
+
 type Pool interface {
-	Get(ctx context.Context) (endpoint string, err error)
+	Get(ctx context.Context) (AddressFuture, error)
 	Release(endpoint string) error
 }
 
@@ -34,7 +36,8 @@ type workerLease struct {
 }
 
 type workerPool struct {
-	mu     sync.Mutex
+	lmu    sync.Mutex
+	smu    sync.Mutex
 	leases []*workerLease
 
 	log                logr.Logger
@@ -83,33 +86,37 @@ func New(ctx context.Context, restCfg *rest.Config, cfg config.Buildkit, opts ..
 	return pool, nil
 }
 
-func (p *workerPool) Get(ctx context.Context) (string, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
+func (p *workerPool) Get(ctx context.Context) (AddressFuture, error) {
 	addr, err := p.leaseAddr(ctx)
 
+	var fn AddressFuture
 	switch {
 	case err == nil:
-		return addr, nil
+		fn = func() (string, error) {
+			return addr, nil
+		}
 	case errors.Is(err, ErrNoLeases):
-		if err = p.scaleStatefulSet(ctx, 1); err != nil {
-			return "", err
+		fn = func() (string, error) {
+			if err = p.scaleStatefulSet(ctx, 1); err != nil {
+				return "", err
+			}
+
+			if addr, err = p.leaseAddr(ctx); err != nil {
+				return "", fmt.Errorf("unable to acquire lease after scaling: %w", err)
+			}
+
+			return addr, nil
 		}
 	default:
-		return "", err
+		return nil, err
 	}
 
-	if addr, err = p.leaseAddr(ctx); err != nil {
-		return "", fmt.Errorf("unable to acquire lease after scaling: %w", err)
-	}
-
-	return addr, nil
+	return fn, nil
 }
 
 func (p *workerPool) Release(addr string) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	p.lmu.Lock()
+	defer p.lmu.Unlock()
 
 	for _, lease := range p.leases {
 		if lease.Addr == addr {
@@ -122,6 +129,9 @@ func (p *workerPool) Release(addr string) error {
 }
 
 func (p *workerPool) leaseAddr(ctx context.Context) (string, error) {
+	p.lmu.Lock()
+	defer p.lmu.Unlock()
+
 	if err := p.syncLeases(ctx); err != nil {
 		return "", err
 	}
@@ -218,8 +228,23 @@ func (p *workerPool) getPodCreationTimestamps(ctx context.Context) (map[string]t
 	return podMap, nil
 }
 
+// scaleStatefulSet will scale up/down the buildkit cluster using the provided count.
+//
+// Concurrent lease requests that require a scaling action to provide unleased
+// addresses may cause the cluster to scale up by more than 1 worker. A
+// dedicated mutex ensures that watch conditions are accurate when multiple
+// AddressFuture functions are invoked simultaneously.
 func (p *workerPool) scaleStatefulSet(ctx context.Context, count int32) error {
 	stsAPI := p.clientset.AppsV1().StatefulSets(p.conf.Namespace)
+
+	p.smu.Lock()
+	locked := true
+
+	defer func() {
+		if locked {
+			p.smu.Unlock()
+		}
+	}()
 
 	p.log.V(1).Info("Querying for statefulset", "name", p.conf.StatefulSetName)
 	sts, err := stsAPI.Get(ctx, p.conf.StatefulSetName, metav1.GetOptions{})
@@ -236,6 +261,9 @@ func (p *workerPool) scaleStatefulSet(ctx context.Context, count int32) error {
 		return fmt.Errorf("cannot patch replicas: %w", err)
 	}
 
+	p.smu.Unlock()
+	locked = false
+
 	listOpts := metav1.ListOptions{
 		LabelSelector:  labels.FormatLabels(sts.Labels),
 		TimeoutSeconds: p.watchTimoutSeconds,
@@ -250,7 +278,7 @@ func (p *workerPool) scaleStatefulSet(ctx context.Context, count int32) error {
 
 	for event := range watcher.ResultChan() {
 		target := event.Object.(*appsv1.StatefulSet)
-		if target.Status.ReadyReplicas == replicas {
+		if target.Status.ReadyReplicas >= replicas {
 			p.log.V(1).Info("Stateful replicas ready, stopping watch")
 			break
 		} else {
@@ -281,8 +309,8 @@ func (p *workerPool) monitorWorkers(ctx context.Context) {
 }
 
 func (p *workerPool) reapWorkerPool(ctx context.Context) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	p.lmu.Lock()
+	defer p.lmu.Unlock()
 
 	if err := p.syncLeases(ctx); err != nil {
 		return err

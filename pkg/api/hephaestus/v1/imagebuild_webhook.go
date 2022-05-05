@@ -11,13 +11,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
-var imagebuildlog = logf.Log.WithName("webhooks").WithName("imagebuild")
+var imagebuildlog = logf.Log.WithName("webhook").WithName("imagebuild")
 
 var _ webhook.Defaulter = &ImageBuild{}
 
 func (in *ImageBuild) Default() {
 	log := imagebuildlog.WithName("defaulter").WithValues("imagebuild", client.ObjectKeyFromObject(in))
-	log.Info("Applying default values")
+	log.V(1).Info("Applying default values")
 }
 
 var _ webhook.Validator = &ImageBuild{}
@@ -36,7 +36,7 @@ func (in *ImageBuild) ValidateDelete() error {
 
 func (in *ImageBuild) validateImageBuild(action string) error {
 	log := imagebuildlog.WithName("validator").WithName(action).WithValues("imagebuild", client.ObjectKeyFromObject(in))
-	log.Info("Starting validation")
+	log.V(1).Info("Starting validation")
 
 	var errList field.ErrorList
 	fp := field.NewPath("spec")
@@ -66,14 +66,8 @@ func (in *ImageBuild) validateImageBuild(action string) error {
 		errList = append(errList, errs...)
 	}
 
-	if value := in.Spec.ImageSizeLimit; value != nil && *value <= 0 {
-		log.V(1).Info("ImageSizeLimit is invalid", "value", value)
-		errList = append(errList, field.Invalid(fp.Child("imageSizeLimit"), value, "must be greater than zero"))
-	}
-
-	// issue warning when log key is missing
 	if strings.TrimSpace(in.Spec.LogKey) == "" {
-		log.Info("Blank 'logKey' will preclude post-log processing")
+		log.Info("WARNING: Blank 'logKey' will preclude post-log processing")
 	}
 
 	return invalidIfNotEmpty(ImageBuildKind, in.Name, errList)

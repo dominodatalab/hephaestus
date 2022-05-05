@@ -35,17 +35,20 @@ type channelManager struct {
 }
 
 func NewChannelManager(log logr.Logger, url string) (*channelManager, error) {
-	log.Info("Dialing AMQP server", "url", url)
+	log = log.WithName("amqp.channel-manager")
+
+	log.V(1).Info("Dialing server", "url", url)
 	conn, ch, err := Dial(url)
 	if err != nil {
 		return nil, err
 	}
 
 	manager := &channelManager{
-		log:     log.WithName("amqp.channel-manager"),
-		url:     url,
-		conn:    conn,
-		channel: ch,
+		log:      log,
+		url:      url,
+		conn:     conn,
+		channel:  ch,
+		shutdown: make(chan struct{}),
 	}
 	go manager.handleNotifications()
 
@@ -64,7 +67,9 @@ func (m *channelManager) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	m.log.V(1).Info("Sending shutdown signal")
 	m.shutdown <- struct{}{}
+	m.log.V(1).Info("Shutdown signal sent")
 
 	if !m.channel.IsClosed() {
 		if err := m.channel.Close(); err != nil {
@@ -85,18 +90,24 @@ func (m *channelManager) handleNotifications() {
 	chanCloses := m.channel.NotifyClose(make(chan *amqp.Error, 1))
 	chanCancels := m.channel.NotifyCancel(make(chan string, 1))
 
+	// TODO: this design seems a little silly
+	// 	it turns out that calling ...Passive() will close both the channel and connection
+	//  so both need to be re-established. i think a better design would be to perform a
+	//  series of checks inside reconnect() and (a) re-establish the connection if conn.IsClosed()
+	//  or (b) just the channel when the former is still open.
+
 	select {
 	case err := <-connCloses:
 		m.log.Error(err, "Connection closed, attempting full reconnect")
 		m.reconnectWithRetry(true)
 	case err := <-chanCloses:
 		m.log.Error(err, "Channel closed, attempting to reconnect")
-		m.reconnectWithRetry(false)
+		m.reconnectWithRetry(true) // NOTE: changed to accommodate Passive() funcs behavior
 	case msg := <-chanCancels:
 		m.log.Error(errors.New(msg), "Channel canceled, attempting to reconnect")
 		m.reconnectWithRetry(false)
 	case <-m.shutdown:
-		m.log.Info("Shutting down")
+		m.log.V(1).Info("Shutting down")
 		return
 	}
 
