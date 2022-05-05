@@ -1,13 +1,13 @@
 package v1
 
 import (
+	"encoding/json"
 	"time"
 
+	"gomodules.xyz/jsonpatch/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/dominodatalab/hephaestus/pkg/jsonpatch"
 )
 
 type ImageBuildAMQPOverrides struct {
@@ -29,10 +29,10 @@ type ImageBuildSpec struct {
 	RegistryAuth []RegistryCredentials `json:"registryAuth,omitempty"`
 	// AMQPOverrides to the main controller configuration.
 	AMQPOverrides *ImageBuildAMQPOverrides `json:"amqpOverrides,omitempty"`
-	// ImportCacheFrom one or more canonical image references when building the images.
-	ImportCacheFrom []string `json:"importCache,omitempty"`
-	// NoBuildCache will disable the use of the local cache when building the images.
-	NoBuildCache bool `json:"noBuildCache,omitempty"`
+	// ImportRemoteBuildCache from one or more canonical image references when building the images.
+	ImportRemoteBuildCache []string `json:"importRemoteBuildCache,omitempty"`
+	// DisableLocalBuildCache  will disable the use of the local cache when building the images.
+	DisableLocalBuildCache bool `json:"disableBuildCache,omitempty"`
 	// DisableCacheLayerExport will remove the "inline" cache metadata from the image configuration.
 	DisableCacheLayerExport bool `json:"disableCacheExport,omitempty"`
 }
@@ -93,7 +93,7 @@ func (in *ImageBuild) SetPhase(p Phase) {
 }
 
 func (in *ImageBuild) GetPatch() client.Patch {
-	ops := jsonpatch.Operations{
+	ops := []jsonpatch.Operation{
 		{
 			Operation: "replace",
 			Path:      "/status/phase",
@@ -106,7 +106,7 @@ func (in *ImageBuild) GetPatch() client.Patch {
 		},
 	}
 
-	patch, err := ops.MarshalJSON()
+	patch, err := json.Marshal(ops)
 	if err != nil {
 		panic(err)
 	}

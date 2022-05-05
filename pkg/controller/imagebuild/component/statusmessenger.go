@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dominodatalab/controller-util/core"
+	"gomodules.xyz/jsonpatch/v2"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -15,7 +16,6 @@ import (
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/hephaestus/pkg/config"
-	"github.com/dominodatalab/hephaestus/pkg/jsonpatch"
 	"github.com/dominodatalab/hephaestus/pkg/messaging/amqp"
 )
 
@@ -127,7 +127,7 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 
 		log.Info("Generating JSON patch for status transition")
 		transition.Processed = true
-		operation := jsonpatch.Operations{
+		ops := []jsonpatch.Operation{
 			{
 				Operation: "replace",
 				Path:      fmt.Sprintf("/status/transitions/%d", idx),
@@ -135,7 +135,7 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 			},
 		}
 
-		patch, err := operation.MarshalJSON()
+		patch, err := json.Marshal(ops)
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("could not generate transition patch: %w", err)
 		}

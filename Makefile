@@ -26,7 +26,7 @@ apply: crds ## Apply CRDs to cluster
 delete: crds ## Delete CRDs from cluster
 	kubectl delete -f deployments/crds
 
-check: api crds client ## Ensure generated files and dependencies are up-to-date
+check: compiled ## Ensure generated files and dependencies are up-to-date
 	go mod tidy -v
 	cd tools && go mod tidy -v
 	git update-index --refresh
@@ -42,6 +42,8 @@ crds: tools ## Generate CRDs
 
 client: tools ## Generate Go client API library
 	client-gen --clientset-name "clientset" --input-base "github.com/dominodatalab/hephaestus/pkg/api" --input "hephaestus/v1" --output-package "github.com/dominodatalab/hephaestus/pkg" --go-header-file "$(shell mktemp)"
+
+compiled: api crds client ## Generate all compiled code
 
 sdks: crds ## Generate non-GO client libraries
 	scripts/sdk/generate.sh

@@ -131,9 +131,9 @@ func (c ConversionShimComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 		Spec: hephv1.ImageBuildSpec{
 			Context:                 cib.Spec.Context,
 			BuildArgs:               cib.Spec.BuildArgs,
-			NoBuildCache:            cib.Spec.DisableBuildCache,
+			DisableLocalBuildCache:  cib.Spec.DisableBuildCache,
 			DisableCacheLayerExport: cib.Spec.DisableBuildCache,
-			ImportCacheFrom:         cacheImports,
+			ImportRemoteBuildCache:  cacheImports,
 			Images:                  images,
 			LogKey:                  logKey,
 			RegistryAuth:            auths,

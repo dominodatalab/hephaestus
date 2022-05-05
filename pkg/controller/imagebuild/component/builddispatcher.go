@@ -108,8 +108,8 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		Context:                  obj.Spec.Context,
 		Images:                   obj.Spec.Images,
 		BuildArgs:                obj.Spec.BuildArgs,
-		NoCache:                  obj.Spec.NoBuildCache,
-		ImportCache:              obj.Spec.ImportCacheFrom,
+		NoCache:                  obj.Spec.DisableLocalBuildCache,
+		ImportCache:              obj.Spec.ImportRemoteBuildCache,
 		DisableInlineCacheExport: obj.Spec.DisableCacheLayerExport,
 	}
 
