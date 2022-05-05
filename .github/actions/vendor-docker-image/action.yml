@@ -13,9 +13,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Checkout
-      uses: actions/checkout@v2
-
     - id: image_source
       name: Extract image details from Helm values
       uses: mikefarah/yq@v4.25.1
