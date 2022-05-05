@@ -28,7 +28,7 @@ runs:
       run: |
         result="$(echo ${{ steps.image_source.outputs.result }} | awk -F/ '{print $NF}')"
         if [[ -n "${{ inputs.modifier }}" ]]; then
-          result="$($result | ${{ inputs.modifier }})"
+          result="$(echo $result | ${{ inputs.modifier }})"
         fi
         echo ::set-output name=result::"$result"
 
