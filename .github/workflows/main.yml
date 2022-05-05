@@ -107,11 +107,23 @@ jobs:
           src: ${{ steps.image_source.outputs.result }}
           dst: quay.io/domino/${{ steps.image_fields.outputs.result }}
 
+  docker-vector:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Push Vector image to Quay
+        uses: ./.github/actions/vendor-image
+        with:
+          query: ".logProcessor.image"
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_PASSWORD }}
+
   helm:
     runs-on: ubuntu-latest
     needs:
       - docker-hephaestus
       - docker-buildkit
+      - docker-vector
     steps:
       - name: Checkout
         uses: actions/checkout@v2
