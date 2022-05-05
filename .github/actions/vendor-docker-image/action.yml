@@ -6,7 +6,7 @@ inputs:
     description: YQ query that points to the image definition inside the values.yaml file
   modifier:
     required: false
-    description: Modify destination "repo/image:tag" with a stream command before push
+    description: Modify "repo/image:tag" with a stream command before tag and push
   username:
     required: true
     description: Quay registry username
@@ -26,11 +26,14 @@ runs:
       name: Process image fields
       shell: bash
       run: |
-        result="$(echo ${{ steps.image_source.outputs.result }} | awk -F/ '{print $NF}')"
+        input="${{ steps.image_source.outputs.result }}"
         if [[ -n "${{ inputs.modifier }}" ]]; then
-          result="$(echo $result | ${{ inputs.modifier }})"
+          input="$(echo $input | ${{ inputs.modifier }})"
         fi
-        echo ::set-output name=result::"$result"
+        output="$(echo $input | awk -F/ '{print $NF}')"
+
+        echo ::set-output name=source::"$input"
+        echo ::set-output name=destination::"$output"
 
     - name: Login to container registry
       uses: docker/login-action@v1
@@ -42,5 +45,5 @@ runs:
     - name: Tag and push image
       uses: akhilerm/tag-push-action@v2.0.0
       with:
-        src: ${{ steps.image_source.outputs.result }}
-        dst: quay.io/domino/${{ steps.image_fields.outputs.result }}
+        src: ${{ steps.image_fields.outputs.source }}
+        dst: quay.io/domino/${{ steps.image_fields.outputs.destination }}
