@@ -112,7 +112,7 @@ jobs:
     needs: build
     steps:
       - name: Push Vector image to Quay
-        uses: ./.github/actions/vendor-image
+        uses: ./.github/actions/vendor-docker-image
         with:
           query: ".logProcessor.image"
           username: ${{ secrets.QUAY_USERNAME }}
