@@ -4,6 +4,9 @@ inputs:
   query:
     required: true
     description: YQ query that points to the image definition inside the values.yaml file
+  modifier:
+    required: false
+    description: Modify destination "repo/image:tag" with a stream command before push
   username:
     required: true
     description: Quay registry username
@@ -22,7 +25,12 @@ runs:
     - id: image_fields
       name: Process image fields
       shell: bash
-      run: echo ::set-output name=result::"$(echo ${{ steps.image_source.outputs.result }} | awk -F/ '{print $NF}')"
+      run: |
+        result="$(echo ${{ steps.image_source.outputs.result }} | awk -F/ '{print $NF}')"
+        if [[ -z "${{ inputs.modifier }}" ]]; then
+          result="$($result | ${{ inputs.modifier }})"
+        fi
+        echo ::set-output name=result::"$result"
 
     - name: Login to container registry
       uses: docker/login-action@v1

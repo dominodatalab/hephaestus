@@ -83,10 +83,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Push Buildkit image to Quay
+      - name: Push rootless Buildkit image to Quay
         uses: ./.github/actions/vendor-docker-image
         with:
           query: ".buildkit.image"
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_PASSWORD }}
+
+      - name: Push root Buildkit image to Quay
+        uses: ./.github/actions/vendor-docker-image
+        with:
+          query: ".buildkit.image"
+          modifier: "sed 's/-rootless//'"
           username: ${{ secrets.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_PASSWORD }}
 
