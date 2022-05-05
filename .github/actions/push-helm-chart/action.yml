@@ -15,6 +15,7 @@ inputs:
     description: Private registry password
   password_base64_encoded:
     default: "false"
+    required: true
     description: Indicate if password should be decoded
   artifact:
     required: true
