@@ -135,7 +135,7 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 			},
 		}
 
-		patch, err := operation.MarshallJSON()
+		patch, err := operation.MarshalJSON()
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("could not generate transition patch: %w", err)
 		}

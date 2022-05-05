@@ -265,8 +265,7 @@ func (c *Client) runSolve(so bkclient.SolveOpt) error {
 	eg, ctx := errgroup.WithContext(c.ctx)
 
 	eg.Go(func() error {
-		_, err := c.bk.Solve(ctx, nil, so, ch)
-		if err != nil {
+		if _, err := c.bk.Solve(ctx, nil, so, ch); err != nil {
 			return err
 		}
 

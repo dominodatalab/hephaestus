@@ -8,7 +8,7 @@ import (
 
 type Operations []jsonpatch.JsonPatchOperation
 
-func (o Operations) MarshallJSON() ([]byte, error) {
+func (o Operations) MarshalJSON() ([]byte, error) {
 	var b bytes.Buffer
 
 	b.WriteString("[")

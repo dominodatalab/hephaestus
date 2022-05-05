@@ -19,15 +19,13 @@ type UnprocessedTransitionsPredicate struct{}
 func (p UnprocessedTransitionsPredicate) Update(e event.UpdateEvent) bool {
 	ib := e.ObjectNew.(*hephv1.ImageBuild)
 
-	reconcile := false
 	for _, transition := range ib.Status.Transitions {
 		if !transition.Processed {
-			reconcile = true
-			break
+			return true
 		}
 	}
 
-	return reconcile
+	return false
 }
 func (p UnprocessedTransitionsPredicate) Create(event.CreateEvent) bool   { return false }
 func (p UnprocessedTransitionsPredicate) Delete(event.DeleteEvent) bool   { return false }

@@ -106,7 +106,7 @@ func (in *ImageBuild) GetPatch() client.Patch {
 		},
 	}
 
-	patch, err := ops.MarshallJSON()
+	patch, err := ops.MarshalJSON()
 	if err != nil {
 		panic(err)
 	}
