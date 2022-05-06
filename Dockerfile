@@ -7,7 +7,7 @@ COPY cmd ./cmd
 COPY pkg ./pkg
 COPY deployments/crds ./deployments/crds
 ENV CGO_ENABLED=0 GOOS=linux
-RUN go build -o hephaestus-controller ./cmd/controller
+RUN --mount=type=cache,target=/root/.cache/go-build go build -o hephaestus-controller ./cmd/controller
 
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /

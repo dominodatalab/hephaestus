@@ -1,0 +1,22 @@
+apiVersion: skaffold/v2beta28
+kind: Config
+build:
+  artifacts:
+    - image: ghcr.io/dominodatalab/hephaestus
+deploy:
+  helm:
+    releases:
+      - name: cert-manager
+        remoteChart: jetstack/cert-manager
+        namespace: cert-manager
+        version: v1.8.0
+        setValues:
+          installCRDs: true
+      - name: hephaestus
+        chartPath: deployments/helm/hephaestus
+        skipBuildDependencies: true
+        artifactOverrides:
+          "controller.image": ghcr.io/dominodatalab/hephaestus
+        imageStrategy:
+          helm:
+            explicitRegistry: true
