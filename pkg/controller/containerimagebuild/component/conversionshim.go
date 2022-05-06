@@ -129,10 +129,12 @@ func (c ConversionShimComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 			Annotations: annotations,
 		},
 		Spec: hephv1.ImageBuildSpec{
-			Context:                 cib.Spec.Context,
-			BuildArgs:               cib.Spec.BuildArgs,
-			DisableLocalBuildCache:  cib.Spec.DisableBuildCache,
-			DisableCacheLayerExport: cib.Spec.DisableBuildCache,
+			Context:                cib.Spec.Context,
+			BuildArgs:              cib.Spec.BuildArgs,
+			DisableLocalBuildCache: cib.Spec.DisableBuildCache,
+			// TODO: it can take upwards of 5m to export inline layer cache for huge images
+			// 	we need to possibly support `--target` before using this feature.
+			DisableCacheLayerExport: true,
 			ImportRemoteBuildCache:  cacheImports,
 			Images:                  images,
 			LogKey:                  logKey,
