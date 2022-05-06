@@ -148,7 +148,7 @@ logProcessor:
   image:
     registry: ""
     repository: timberio/vector
-    tag: 0.20.X-distroless-static
+    tag: 0.21.X-distroless-static
     pullPolicy: IfNotPresent
     pullSecrets: []
 
@@ -193,7 +193,7 @@ buildkit:
   image:
     registry: ""
     repository: moby/buildkit
-    tag: "v0.10.2-rootless"
+    tag: v0.10.2-rootless
     pullPolicy: IfNotPresent
     pullSecrets: []
 
