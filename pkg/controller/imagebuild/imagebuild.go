@@ -14,9 +14,13 @@ import (
 )
 
 func Register(mgr ctrl.Manager, cfg config.Controller, pool workerpool.Pool) error {
+	bd, err := component.BuildDispatcher(cfg.Buildkit, pool)
+	if err != nil {
+		return err
+	}
 	return core.NewReconciler(mgr).
 		For(&hephv1.ImageBuild{}).
-		Component("build-dispatcher", component.BuildDispatcher(cfg.Buildkit, pool)).
+		Component("build-dispatcher", bd).
 		WithControllerOptions(controller.Options{MaxConcurrentReconciles: cfg.ImageBuildMaxConcurrency}).
 		WithWebhooks().
 		Complete()

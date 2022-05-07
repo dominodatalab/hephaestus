@@ -14,6 +14,7 @@ import (
 	bkclient "github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/cmd/buildctl/build"
 	"github.com/moby/buildkit/session"
+	"github.com/moby/buildkit/session/secrets/secretsprovider"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
@@ -27,6 +28,7 @@ type clientBuilder struct {
 	dockerAuthConfig string
 	log              logr.Logger
 	bkOpts           []bkclient.ClientOpt
+	secrets          map[string][]byte
 }
 
 func ClientBuilder(ctx context.Context, addr string) *clientBuilder {
@@ -35,6 +37,11 @@ func ClientBuilder(ctx context.Context, addr string) *clientBuilder {
 
 func (b *clientBuilder) WithDockerAuthConfig(configDir string) *clientBuilder {
 	b.dockerAuthConfig = configDir
+	return b
+}
+
+func (b *clientBuilder) WithSecrets(secrets map[string][]byte) *clientBuilder {
+	b.secrets = secrets
 	return b
 }
 
@@ -65,6 +72,7 @@ func (b *clientBuilder) Build() (*Client, error) {
 		ctx:              b.ctx,
 		log:              b.log,
 		dockerAuthConfig: b.dockerAuthConfig,
+		secrets:          b.secrets,
 	}, nil
 }
 
@@ -88,6 +96,7 @@ type Client struct {
 	ctx              context.Context
 	log              logr.Logger
 	dockerAuthConfig string
+	secrets          map[string][]byte
 }
 
 func (c *Client) Build(opts BuildOptions) error {
@@ -145,6 +154,7 @@ func (c *Client) Build(opts BuildOptions) error {
 		},
 		Session: []session.Attachable{
 			NewDockerAuthProvider(c.dockerAuthConfig),
+			secretsprovider.FromMap(c.secrets),
 		},
 		CacheExports: []bkclient.CacheOptionsEntry{
 			{

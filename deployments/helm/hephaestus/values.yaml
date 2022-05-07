@@ -88,6 +88,9 @@ controller:
   # Defaults to "10m"
   poolMaxIdleTime: null
 
+  # Secrets (name: path) to expose into builds that request it
+  secrets: {}
+
   # Resource requests and limits
   resources:
     requests: {}
@@ -126,6 +129,11 @@ controller:
 
   # Manager pods priorityClassName
   priorityClassName: ""
+
+  # Additional volume mounts
+  extraVolumeMounts: []
+  # Additional volumes
+  extraVolumes: []
 
   # Number of manager instances to run. Leader election will be enabled
   # whenever this value is greater than 1; this ensures that only one instance

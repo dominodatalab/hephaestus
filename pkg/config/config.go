@@ -87,6 +87,8 @@ type Buildkit struct {
 	CertPath   string `json:"certPath" yaml:"certPath"`
 	KeyPath    string `json:"keyPath" yaml:"keyPath"`
 
+	Secrets map[string]string `json:"secrets" yaml:"secrets"`
+
 	PoolSyncWaitTime *time.Duration `json:"poolSyncWaitTime" yaml:"poolSyncWaitTime"`
 	PoolMaxIdleTime  *time.Duration `json:"poolMaxIdleTime" yaml:"poolMaxIdleTime"`
 }
