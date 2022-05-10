@@ -1,12 +1,17 @@
 package component
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/dominodatalab/controller-util/core"
+	"github.com/go-logr/logr"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/hephaestus/pkg/buildkit"
@@ -20,12 +25,16 @@ type BuildDispatcherComponent struct {
 	cfg   config.Buildkit
 	pool  workerpool.Pool
 	phase *phase.TransitionHelper
+
+	delete  <-chan client.ObjectKey
+	cancels sync.Map
 }
 
-func BuildDispatcher(cfg config.Buildkit, pool workerpool.Pool) *BuildDispatcherComponent {
+func BuildDispatcher(cfg config.Buildkit, pool workerpool.Pool, ch <-chan client.ObjectKey) *BuildDispatcherComponent {
 	return &BuildDispatcherComponent{
-		cfg:  cfg,
-		pool: pool,
+		cfg:    cfg,
+		pool:   pool,
+		delete: ch,
 	}
 }
 
@@ -44,12 +53,21 @@ func (c *BuildDispatcherComponent) Initialize(ctx *core.Context, _ *ctrl.Builder
 		ReadyCondition: c.GetReadyCondition(),
 	}
 
+	go c.processCancellations(ctx.Log)
+
 	return nil
 }
 
 func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, error) {
 	log := ctx.Log
 	obj := ctx.Object.(*hephv1.ImageBuild)
+
+	buildCtx, cancel := context.WithCancel(ctx)
+	c.cancels.Store(obj.ObjectKey(), cancel)
+	defer func() {
+		cancel()
+		c.cancels.Delete(obj.ObjectKey())
+	}()
 
 	if obj.Status.Phase != hephv1.PhaseCreated {
 		log.Info("Aborting reconcile, status phase in not blank", "phase", obj.Status.Phase)
@@ -93,11 +111,11 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 
 	log.Info("Building new buildkit client", "addr", addr)
 	bk, err := buildkit.
-		ClientBuilder(ctx, addr).
+		ClientBuilder(addr).
 		WithLogger(ctx.Log.WithName("buildkit").WithValues("addr", addr, "logKey", obj.Spec.LogKey)).
 		WithMTLSAuth(c.cfg.CACertPath, c.cfg.CertPath, c.cfg.KeyPath).
 		WithDockerAuthConfig(configDir).
-		Build()
+		Build(context.Background())
 	if err != nil {
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, err)
 	}
@@ -114,7 +132,14 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	}
 
 	log.Info("Dispatching image build", "images", buildOpts.Images)
-	if err = bk.Build(buildOpts); err != nil {
+	if err = bk.Build(buildCtx, buildOpts); err != nil {
+		// buildkit uses pkg/errors for wrapping and the underlying error is a grpcerror with a status that contains the
+		// context cancellation message, not the error value. the easiest way to assert that the context was cancelled.
+		if strings.HasSuffix(err.Error(), context.Canceled.Error()) {
+			log.Info("Build cancelled")
+			return ctrl.Result{}, nil
+		}
+
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("build failed: %w", err))
 	}
 
@@ -122,4 +147,20 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	c.phase.SetSucceeded(ctx, obj)
 
 	return ctrl.Result{}, nil
+}
+
+func (c *BuildDispatcherComponent) processCancellations(log logr.Logger) {
+	for objKey := range c.delete {
+		log := log.WithValues("imagebuild", objKey)
+
+		log.Info("Intercepted delete message")
+		if v, ok := c.cancels.LoadAndDelete(objKey); ok {
+			log.Info("Found cancellation")
+			v.(context.CancelFunc)()
+			log.Info("Context cancelled")
+
+			continue
+		}
+		log.Info("Ignoring message, cancellation not found")
+	}
 }

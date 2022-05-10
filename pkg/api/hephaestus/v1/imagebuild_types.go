@@ -71,6 +71,10 @@ type ImageBuild struct {
 	Status ImageBuildStatus `json:"status,omitempty"`
 }
 
+func (in *ImageBuild) ObjectKey() client.ObjectKey {
+	return client.ObjectKey{Name: in.Name, Namespace: in.Namespace}
+}
+
 func (in *ImageBuild) GetConditions() *[]metav1.Condition {
 	return &in.Status.Conditions
 }
