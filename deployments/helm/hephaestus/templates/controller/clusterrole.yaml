@@ -25,6 +25,7 @@ rules:
       - imagebuilds
     verbs:
       - create
+      - delete
 
   - apiGroups:
       - hephaestus.dominodatalab.com

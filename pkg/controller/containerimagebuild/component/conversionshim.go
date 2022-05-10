@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/dominodatalab/controller-util/core"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -149,4 +150,27 @@ func (c ConversionShimComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (c ConversionShimComponent) Finalize(ctx *core.Context) (ctrl.Result, bool, error) {
+	log := ctx.Log
+	cib := ctx.Object.(*forgev1alpha1.ContainerImageBuild)
+	ib := &hephv1.ImageBuild{}
+
+	log.Info("Querying for ImageBuild with corresponding namespace/name")
+	if err := ctx.Client.Get(ctx, client.ObjectKey{Name: cib.Name, Namespace: cib.Namespace}, ib); err != nil {
+		if apierrors.IsNotFound(err) {
+			log.Info("Aborting reconcile, ImageBuild does not exist")
+			return ctrl.Result{}, true, nil
+		}
+
+		return ctrl.Result{}, false, err
+	}
+
+	log.Info("Deleting ImageBuild")
+	if err := ctx.Client.Delete(ctx, ib); err != nil {
+		return ctrl.Result{}, false, fmt.Errorf("failed to delete associated imagebuild: %w", err)
+	}
+
+	return ctrl.Result{}, true, nil
 }
