@@ -22,7 +22,7 @@ require (
 	github.com/docker/cli v20.10.13+incompatible
 	github.com/docker/distribution v2.8.0+incompatible
 	github.com/docker/docker v20.10.7+incompatible // master (v21.xx-dev), see replace()
-	github.com/dominodatalab/controller-util v0.0.0-20220506190502-be6562838a47
+	github.com/dominodatalab/controller-util v0.0.0-20220510150042-cae470321eb0
 	github.com/go-logr/logr v1.2.2
 	github.com/go-logr/zapr v1.2.0
 	github.com/gofrs/flock v0.7.3
