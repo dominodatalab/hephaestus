@@ -160,7 +160,7 @@ func (c ConversionShimComponent) Finalize(ctx *core.Context) (ctrl.Result, bool,
 	log.Info("Querying for ImageBuild with corresponding namespace/name")
 	if err := ctx.Client.Get(ctx, client.ObjectKey{Name: cib.Name, Namespace: cib.Namespace}, ib); err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Info("Aborting reconcilie, ImageBuild does not exist")
+			log.Info("Aborting reconcile, ImageBuild does not exist")
 			return ctrl.Result{}, true, nil
 		}
 
