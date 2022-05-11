@@ -117,7 +117,7 @@ spec:
               transitions:
               - phase: Created
                 previousPhase: ""
-                processed: false
+                processed: true
             properties:
               buildTime:
                 description: BuildTime is the total time spend during the build process.

@@ -67,7 +67,7 @@ type ImageBuild struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec ImageBuildSpec `json:"spec,omitempty"`
-	// +kubebuilder:default={phase: "Created", transitions: {{previousPhase: "", phase: "Created", processed: false}}}
+	// +kubebuilder:default={phase: "Created", transitions: {{previousPhase: "", phase: "Created", processed: true}}}
 	Status ImageBuildStatus `json:"status,omitempty"`
 }
 
