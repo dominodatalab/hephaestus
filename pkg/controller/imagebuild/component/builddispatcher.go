@@ -17,28 +17,16 @@ import (
 )
 
 type BuildDispatcherComponent struct {
-	cfg     config.Buildkit
-	secrets map[string][]byte
-	pool    workerpool.Pool
-	phase   *phase.TransitionHelper
+	cfg   config.Buildkit
+	pool  workerpool.Pool
+	phase *phase.TransitionHelper
 }
 
-func BuildDispatcher(cfg config.Buildkit, pool workerpool.Pool) (*BuildDispatcherComponent, error) {
-	secrets := make(map[string][]byte)
-	for name, path := range cfg.Secrets {
-		contents, err := os.ReadFile(path)
-		if err != nil {
-			return nil, err
-		}
-
-		secrets[name] = contents
-	}
-
+func BuildDispatcher(cfg config.Buildkit, pool workerpool.Pool) *BuildDispatcherComponent {
 	return &BuildDispatcherComponent{
-		cfg:     cfg,
-		secrets: secrets,
-		pool:    pool,
-	}, nil
+		cfg:  cfg,
+		pool: pool,
+	}
 }
 
 func (c *BuildDispatcherComponent) GetReadyCondition() string {
@@ -109,7 +97,6 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		WithLogger(ctx.Log.WithName("buildkit").WithValues("addr", addr, "logKey", obj.Spec.LogKey)).
 		WithMTLSAuth(c.cfg.CACertPath, c.cfg.CertPath, c.cfg.KeyPath).
 		WithDockerAuthConfig(configDir).
-		WithSecrets(c.secrets).
 		Build()
 	if err != nil {
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, err)
@@ -124,6 +111,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		NoCache:                  obj.Spec.DisableLocalBuildCache,
 		ImportCache:              obj.Spec.ImportRemoteBuildCache,
 		DisableInlineCacheExport: obj.Spec.DisableCacheLayerExport,
+		Secrets:                  c.cfg.Secrets,
 	}
 
 	log.Info("Dispatching image build", "images", buildOpts.Images)

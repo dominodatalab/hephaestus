@@ -28,7 +28,6 @@ type clientBuilder struct {
 	dockerAuthConfig string
 	log              logr.Logger
 	bkOpts           []bkclient.ClientOpt
-	secrets          map[string][]byte
 }
 
 func ClientBuilder(ctx context.Context, addr string) *clientBuilder {
@@ -37,11 +36,6 @@ func ClientBuilder(ctx context.Context, addr string) *clientBuilder {
 
 func (b *clientBuilder) WithDockerAuthConfig(configDir string) *clientBuilder {
 	b.dockerAuthConfig = configDir
-	return b
-}
-
-func (b *clientBuilder) WithSecrets(secrets map[string][]byte) *clientBuilder {
-	b.secrets = secrets
 	return b
 }
 
@@ -72,7 +66,6 @@ func (b *clientBuilder) Build() (*Client, error) {
 		ctx:              b.ctx,
 		log:              b.log,
 		dockerAuthConfig: b.dockerAuthConfig,
-		secrets:          b.secrets,
 	}, nil
 }
 
@@ -84,6 +77,7 @@ type BuildOptions struct {
 	NoCache                  bool
 	ImportCache              []string
 	DisableInlineCacheExport bool
+	Secrets                  map[string]string
 }
 
 type Buildkit interface {
@@ -96,7 +90,6 @@ type Client struct {
 	ctx              context.Context
 	log              logr.Logger
 	dockerAuthConfig string
-	secrets          map[string][]byte
 }
 
 func (c *Client) Build(opts BuildOptions) error {
@@ -144,6 +137,16 @@ func (c *Client) Build(opts BuildOptions) error {
 		l.Info("Dockerfile contents:\n" + string(bs))
 	}
 
+	secrets := make(map[string][]byte)
+	for name, path := range opts.Secrets {
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		secrets[name] = contents
+	}
+
 	// build solve options
 	solveOpt := bkclient.SolveOpt{
 		Frontend:      "dockerfile.v0",
@@ -154,7 +157,7 @@ func (c *Client) Build(opts BuildOptions) error {
 		},
 		Session: []session.Attachable{
 			NewDockerAuthProvider(c.dockerAuthConfig),
-			secretsprovider.FromMap(c.secrets),
+			secretsprovider.FromMap(secrets),
 		},
 		CacheExports: []bkclient.CacheOptionsEntry{
 			{
