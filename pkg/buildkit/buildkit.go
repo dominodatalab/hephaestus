@@ -78,7 +78,7 @@ type BuildOptions struct {
 
 type Buildkit interface {
 	Build(ctx context.Context, opts BuildOptions) error
-	Cache(image string) error
+	Cache(ctx context.Context, image string) error
 }
 
 type Client struct {
@@ -199,8 +199,8 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
 	return c.runSolve(ctx, solveOpt)
 }
 
-func (c *Client) Cache(image string) error {
-	return c.solveWith(context.TODO(), func(buildDir string, solveOpt *bkclient.SolveOpt) error {
+func (c *Client) Cache(ctx context.Context, image string) error {
+	return c.solveWith(ctx, func(buildDir string, solveOpt *bkclient.SolveOpt) error {
 		dockerfile := filepath.Join(buildDir, "Dockerfile")
 		contents := []byte(fmt.Sprintf("FROM %s\nRUN echo extract\n", image))
 		if err := os.WriteFile(dockerfile, contents, 0644); err != nil {
@@ -267,7 +267,10 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 			c = cn
 		}
 
-		_, err := progressui.DisplaySolveStatus(context.TODO(), "", c, lw, ch)
+		// this operation should return cleanly when solve returns (either by itself or when cancelled) so there's no
+		// need to cancel it explicitly. see https://github.com/moby/buildkit/pull/1721 for details.
+		_, err := progressui.DisplaySolveStatus(context.Background(), "", c, lw, ch)
+
 		return err
 	})
 

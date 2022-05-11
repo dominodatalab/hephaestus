@@ -37,10 +37,3 @@ func (c *DeleteBroadcastComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 
 	return ctrl.Result{}, nil
 }
-
-// ctx, cancel := context.WithCancel(coreCtx)
-// c.cancels.Store(obj.ObjectKey(), cancel)
-// defer func() {
-// 	cancel()
-// 	c.cancels.Delete(obj.ObjectKey())
-// }()
