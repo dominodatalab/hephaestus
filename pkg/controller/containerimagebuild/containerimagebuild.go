@@ -23,8 +23,16 @@ func Register(mgr ctrl.Manager) error {
 	cibExists, err := crd.Exists(context.Background(), metav1.GroupVersion{
 		Group: forgev1alpha1.SchemeGroupVersion.Group, Version: forgev1alpha1.SchemeGroupVersion.Version,
 	})
-	if !cibExists || err != nil {
+	if err != nil {
 		return err
+	}
+
+	if !cibExists {
+		ctrl.Log.WithName("controller").WithName("containerimagebuild").Info(
+			"Not registering ContainerImageBuild controller, API group does not exist",
+			"groupVersion", forgev1alpha1.SchemeGroupVersion.String(),
+		)
+		return nil
 	}
 
 	return core.NewReconciler(mgr).

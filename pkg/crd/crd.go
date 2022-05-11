@@ -89,7 +89,7 @@ func Exists(ctx context.Context, gv metav1.GroupVersion) (bool, error) {
 		return false, err
 	}
 
-	return false, nil
+	return true, nil
 }
 
 // operate will read all available CRDS and apply state changes to the cluster using the processor func.
