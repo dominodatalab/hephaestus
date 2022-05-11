@@ -22,15 +22,14 @@ import (
 )
 
 type clientBuilder struct {
-	ctx              context.Context
 	addr             string
 	dockerAuthConfig string
 	log              logr.Logger
 	bkOpts           []bkclient.ClientOpt
 }
 
-func ClientBuilder(ctx context.Context, addr string) *clientBuilder {
-	return &clientBuilder{ctx: ctx, addr: addr, log: logr.Discard()}
+func ClientBuilder(addr string) *clientBuilder {
+	return &clientBuilder{addr: addr, log: logr.Discard()}
 }
 
 func (b *clientBuilder) WithDockerAuthConfig(configDir string) *clientBuilder {
@@ -54,15 +53,14 @@ func (b *clientBuilder) WithLogger(log logr.Logger) *clientBuilder {
 	return b
 }
 
-func (b *clientBuilder) Build() (*Client, error) {
-	bk, err := bkclient.New(b.ctx, b.addr, append(b.bkOpts, bkclient.WithFailFast())...)
+func (b *clientBuilder) Build(ctx context.Context) (*Client, error) {
+	bk, err := bkclient.New(ctx, b.addr, append(b.bkOpts, bkclient.WithFailFast())...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create buildkit client: %w", err)
 	}
 
 	return &Client{
 		bk:               bk,
-		ctx:              b.ctx,
 		log:              b.log,
 		dockerAuthConfig: b.dockerAuthConfig,
 	}, nil
@@ -79,18 +77,17 @@ type BuildOptions struct {
 }
 
 type Buildkit interface {
-	Build(opts BuildOptions) error
-	Cache(image string) error
+	Build(ctx context.Context, opts BuildOptions) error
+	Cache(ctx context.Context, image string) error
 }
 
 type Client struct {
 	bk               *bkclient.Client
-	ctx              context.Context
 	log              logr.Logger
 	dockerAuthConfig string
 }
 
-func (c *Client) Build(opts BuildOptions) error {
+func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
 	// setup build directory
 	buildDir, err := os.MkdirTemp("", "hephaestus-build-")
 	if err != nil {
@@ -111,7 +108,7 @@ func (c *Client) Build(opts BuildOptions) error {
 		contentsDir = opts.ContextDir
 	} else {
 		c.log.Info("Fetching remote context", "url", opts.Context)
-		extract, err := archive.FetchAndExtract(c.log, c.ctx, opts.Context, buildDir, 5*time.Minute)
+		extract, err := archive.FetchAndExtract(c.log, ctx, opts.Context, buildDir, 5*time.Minute)
 		if err != nil {
 			return fmt.Errorf("cannot fetch remote context: %w", err)
 		}
@@ -199,11 +196,11 @@ func (c *Client) Build(opts BuildOptions) error {
 	}
 
 	// build/push images
-	return c.runSolve(solveOpt)
+	return c.runSolve(ctx, solveOpt)
 }
 
-func (c *Client) Cache(image string) error {
-	return c.solveWith(func(buildDir string, solveOpt *bkclient.SolveOpt) error {
+func (c *Client) Cache(ctx context.Context, image string) error {
+	return c.solveWith(ctx, func(buildDir string, solveOpt *bkclient.SolveOpt) error {
 		dockerfile := filepath.Join(buildDir, "Dockerfile")
 		contents := []byte(fmt.Sprintf("FROM %s\nRUN echo extract\n", image))
 		if err := os.WriteFile(dockerfile, contents, 0644); err != nil {
@@ -233,7 +230,7 @@ func (c *Client) Prune() error {
 	return nil
 }
 
-func (c *Client) solveWith(modify func(buildDir string, solveOpt *bkclient.SolveOpt) error) error {
+func (c *Client) solveWith(ctx context.Context, modify func(buildDir string, solveOpt *bkclient.SolveOpt) error) error {
 	buildDir, err := os.MkdirTemp("", "hephaestus-build-")
 	if err != nil {
 		return fmt.Errorf("failed to create build dir: %w", err)
@@ -256,13 +253,26 @@ func (c *Client) solveWith(modify func(buildDir string, solveOpt *bkclient.Solve
 		return err
 	}
 
-	return c.runSolve(solveOpt)
+	return c.runSolve(ctx, solveOpt)
 }
 
-func (c *Client) runSolve(so bkclient.SolveOpt) error {
+func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 	lw := &LogWriter{Logger: c.log}
 	ch := make(chan *bkclient.SolveStatus)
-	eg, ctx := errgroup.WithContext(c.ctx)
+	eg, ctx := errgroup.WithContext(ctx)
+
+	eg.Go(func() error {
+		var c console.Console
+		if cn, err := console.ConsoleFromFile(os.Stderr); err != nil {
+			c = cn
+		}
+
+		// this operation should return cleanly when solve returns (either by itself or when cancelled) so there's no
+		// need to cancel it explicitly. see https://github.com/moby/buildkit/pull/1721 for details.
+		_, err := progressui.DisplaySolveStatus(context.Background(), "", c, lw, ch)
+
+		return err
+	})
 
 	eg.Go(func() error {
 		if _, err := c.bk.Solve(ctx, nil, so, ch); err != nil {
@@ -271,16 +281,6 @@ func (c *Client) runSolve(so bkclient.SolveOpt) error {
 
 		c.log.Info("Solve complete")
 		return nil
-	})
-
-	eg.Go(func() error {
-		var c console.Console
-		if cn, err := console.ConsoleFromFile(os.Stderr); err != nil {
-			c = cn
-		}
-
-		_, err := progressui.DisplaySolveStatus(ctx, "", c, lw, ch)
-		return err
 	})
 
 	if err := eg.Wait(); err != nil {

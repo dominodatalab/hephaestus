@@ -27,7 +27,7 @@ require (
 	github.com/go-logr/zapr v1.2.0
 	github.com/gofrs/flock v0.7.3
 	github.com/h2non/filetype v1.1.1
-	github.com/moby/buildkit v0.10.2
+	github.com/moby/buildkit v0.10.3
 	github.com/pkg/errors v0.9.1
 	github.com/rabbitmq/amqp091-go v1.3.4
 	github.com/spf13/cobra v1.2.1

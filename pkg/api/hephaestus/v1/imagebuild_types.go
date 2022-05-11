@@ -67,8 +67,12 @@ type ImageBuild struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec ImageBuildSpec `json:"spec,omitempty"`
-	// +kubebuilder:default={phase: "Created", transitions: {{previousPhase: "", phase: "Created", processed: false}}}
+	// +kubebuilder:default={phase: "Created", transitions: {{previousPhase: "", phase: "Created", processed: true}}}
 	Status ImageBuildStatus `json:"status,omitempty"`
+}
+
+func (in *ImageBuild) ObjectKey() client.ObjectKey {
+	return client.ObjectKey{Name: in.Name, Namespace: in.Namespace}
 }
 
 func (in *ImageBuild) GetConditions() *[]metav1.Condition {
