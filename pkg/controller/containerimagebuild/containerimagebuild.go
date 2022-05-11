@@ -20,14 +20,14 @@ import (
 //
 // This controller should be removed once forge is fully obsolete.
 func Register(mgr ctrl.Manager) error {
-	cibExists, err := crd.Exists(context.Background(), metav1.GroupVersion{
+	forgev1alpha1Exists, err := crd.Exists(context.Background(), metav1.GroupVersion{
 		Group: forgev1alpha1.SchemeGroupVersion.Group, Version: forgev1alpha1.SchemeGroupVersion.Version,
 	})
 	if err != nil {
 		return err
 	}
 
-	if !cibExists {
+	if !forgev1alpha1Exists {
 		ctrl.Log.WithName("controller").WithName("containerimagebuild").Info(
 			"Not registering ContainerImageBuild controller, API group does not exist",
 			"groupVersion", forgev1alpha1.SchemeGroupVersion.String(),
