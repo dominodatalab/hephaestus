@@ -2,12 +2,14 @@ package controller
 
 import (
 	"context"
+	"os"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	forgev1alpha1 "github.com/dominodatalab/hephaestus/pkg/api/forge/v1alpha1"
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
@@ -48,6 +50,13 @@ func Start(cfg config.Controller) error {
 		HealthProbeBindAddress: cfg.Manager.HealthProbeAddr,
 		LeaderElection:         cfg.Manager.EnableLeaderElection,
 		LeaderElectionID:       "hephaestus-controller-lock",
+	}
+
+	if certDir := os.Getenv("WEBHOOK_SERVER_CERT_DIR"); certDir != "" {
+		log.Info("Overriding webhook server certificate directory", "value", certDir)
+		opts.WebhookServer = &webhook.Server{
+			CertDir: certDir,
+		}
 	}
 
 	if len(cfg.Manager.WatchNamespaces) > 0 {

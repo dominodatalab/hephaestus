@@ -40,7 +40,7 @@ func (b *clientBuilder) WithDockerAuthConfig(configDir string) *clientBuilder {
 func (b *clientBuilder) WithMTLSAuth(caPath, certPath, keyPath string) *clientBuilder {
 	u, err := url.Parse(b.addr)
 	if err != nil {
-		b.log.Error(err, "Cannot parse hostname, kipping mTLS auth", "addr", b.addr)
+		b.log.Error(err, "Cannot parse hostname, skipping mTLS auth", "addr", b.addr)
 	} else {
 		b.bkOpts = append(b.bkOpts, bkclient.WithCredentials(u.Hostname(), caPath, certPath, keyPath))
 	}
