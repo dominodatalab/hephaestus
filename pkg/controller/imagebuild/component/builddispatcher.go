@@ -110,12 +110,15 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	}(c.pool, addr)
 
 	log.Info("Building new buildkit client", "addr", addr)
-	bk, err := buildkit.
+	bldr := buildkit.
 		ClientBuilder(addr).
 		WithLogger(ctx.Log.WithName("buildkit").WithValues("addr", addr, "logKey", obj.Spec.LogKey)).
-		WithMTLSAuth(c.cfg.CACertPath, c.cfg.CertPath, c.cfg.KeyPath).
-		WithDockerAuthConfig(configDir).
-		Build(context.Background())
+		WithDockerAuthConfig(configDir)
+	if mtls := c.cfg.MTLS; mtls != nil {
+		bldr.WithMTLSAuth(mtls.CACertPath, mtls.CertPath, mtls.KeyPath)
+	}
+
+	bk, err := bldr.Build(context.Background())
 	if err != nil {
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, err)
 	}
