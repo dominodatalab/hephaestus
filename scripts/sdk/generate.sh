@@ -24,6 +24,7 @@ API_PACKAGE_PATH=pkg/api/hephaestus/v1
 OPENAPI_GEN_PATH=$PROJECT_NAME/$API_PACKAGE_PATH
 KUBERNETES_SWAGGER_FILE=/tmp/dist.swagger.json
 SWAGGER_FILE=api/openapi-spec/swagger.json
+REPORT_FILE=api/api-rules/violation_exceptions.list
 
 OPENAPI_GENERATOR_CLI_VERSION=v5.2.1
 
@@ -92,7 +93,7 @@ openapi-gen \
   --input-dirs $OPENAPI_GEN_PATH \
   --output-package $OPENAPI_GEN_PATH \
   --output-file-base zz_generated.openapi \
-  --report-filename $API_PACKAGE_PATH/zz_generated.violation_exceptions.list
+  --report-filename $REPORT_FILE
 
 generate_kubernetes_swagger
 

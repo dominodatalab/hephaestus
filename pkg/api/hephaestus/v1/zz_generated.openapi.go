@@ -243,9 +243,9 @@ func schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref common.ReferenceCallback) c
 							Ref:         ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildAMQPOverrides"),
 						},
 					},
-					"importCache": {
+					"importRemoteBuildCache": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ImportCacheFrom one or more canonical image references when building the images.",
+							Description: "ImportRemoteBuildCache from one or more canonical image references when building the images.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -258,9 +258,9 @@ func schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref common.ReferenceCallback) c
 							},
 						},
 					},
-					"noBuildCache": {
+					"disableBuildCache": {
 						SchemaProps: spec.SchemaProps{
-							Description: "NoBuildCache will disable the use of the local cache when building the images.",
+							Description: "DisableLocalBuildCache  will disable the use of the local cache when building the images.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
