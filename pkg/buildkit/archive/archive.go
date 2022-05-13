@@ -71,14 +71,7 @@ func FetchAndExtract(log logr.Logger, ctx context.Context, url, wd string, timeo
 
 	archive := filepath.Join(wd, "archive")
 
-	err := wait.ExponentialBackoff(defaultBackoff, func() (bool, error) {
-		// TODO in client-go v0.21.0 ExponentialBackoffWithContext can handle this for us
-		select {
-		case <-ctx.Done():
-			return false, ctx.Err()
-		default:
-		}
-
+	err := wait.ExponentialBackoffWithContext(ctx, defaultBackoff, func() (bool, error) {
 		return downloadFile(log, http.DefaultClient, url, archive)
 	})
 	if err != nil {
