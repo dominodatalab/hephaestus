@@ -129,6 +129,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		NoCache:                  obj.Spec.DisableLocalBuildCache,
 		ImportCache:              obj.Spec.ImportRemoteBuildCache,
 		DisableInlineCacheExport: obj.Spec.DisableCacheLayerExport,
+		Secrets:                  c.cfg.Secrets,
 	}
 
 	log.Info("Dispatching image build", "images", buildOpts.Images)

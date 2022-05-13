@@ -14,6 +14,7 @@ import (
 	bkclient "github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/cmd/buildctl/build"
 	"github.com/moby/buildkit/session"
+	"github.com/moby/buildkit/session/secrets/secretsprovider"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
@@ -40,7 +41,7 @@ func (b *clientBuilder) WithDockerAuthConfig(configDir string) *clientBuilder {
 func (b *clientBuilder) WithMTLSAuth(caPath, certPath, keyPath string) *clientBuilder {
 	u, err := url.Parse(b.addr)
 	if err != nil {
-		b.log.Error(err, "Cannot parse hostname, kipping mTLS auth", "addr", b.addr)
+		b.log.Error(err, "Cannot parse hostname, skipping mTLS auth", "addr", b.addr)
 	} else {
 		b.bkOpts = append(b.bkOpts, bkclient.WithCredentials(u.Hostname(), caPath, certPath, keyPath))
 	}
@@ -74,6 +75,7 @@ type BuildOptions struct {
 	NoCache                  bool
 	ImportCache              []string
 	DisableInlineCacheExport bool
+	Secrets                  map[string]string
 }
 
 type Buildkit interface {
@@ -132,6 +134,18 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
 		l.Info("Dockerfile contents:\n" + string(bs))
 	}
 
+	// Do not cache these as the file contents can change
+	// over time (e.g. when mounted from a configmap)
+	secrets := make(map[string][]byte)
+	for name, path := range opts.Secrets {
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		secrets[name] = contents
+	}
+
 	// build solve options
 	solveOpt := bkclient.SolveOpt{
 		Frontend:      "dockerfile.v0",
@@ -142,6 +156,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
 		},
 		Session: []session.Attachable{
 			NewDockerAuthProvider(c.dockerAuthConfig),
+			secretsprovider.FromMap(secrets),
 		},
 		CacheExports: []bkclient.CacheOptionsEntry{
 			{
