@@ -132,6 +132,7 @@ controller:
 
   # Additional volume mounts
   extraVolumeMounts: []
+
   # Additional volumes
   extraVolumes: []
 
@@ -180,6 +181,10 @@ logProcessor:
           - hephaestus_output
         encoding:
           codec: json
+
+  # Additional volume mounts into log processor container. Volumes are listed
+  # in controller.extraVolumes since the two containers live in the same pod.
+  extraVolumeMounts: []
 
 # Buildkit cluster configuration
 buildkit:
