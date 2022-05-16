@@ -103,6 +103,9 @@ spec:
               mountPath: {{ include "hephaestus.logfileDir" . | quote }}
             - name: log-vol
               mountPath: /var/lib/vector
+            {{- with .Values.logProcessor.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
         {{- end }}
       volumes:
         - name: config-vol
