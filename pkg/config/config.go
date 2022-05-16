@@ -89,6 +89,8 @@ type Buildkit struct {
 	ServiceName     string            `json:"serviceName" yaml:"serviceName"`
 	StatefulSetName string            `json:"statefulSetName" yaml:"statefulSetName"`
 
+	Secrets map[string]string `json:"secrets" yaml:"secrets"`
+
 	PoolSyncWaitTime *time.Duration `json:"poolSyncWaitTime" yaml:"poolSyncWaitTime"`
 	PoolMaxIdleTime  *time.Duration `json:"poolMaxIdleTime" yaml:"poolMaxIdleTime"`
 

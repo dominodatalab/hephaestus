@@ -79,6 +79,9 @@ spec:
             - name: log-vol
               mountPath: {{ include "hephaestus.logfileDir" . | quote }}
             {{- end }}
+            {{- with .Values.controller.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
         {{- if .Values.logProcessor.enabled }}
         - name: log-processor
           securityContext:
@@ -116,6 +119,9 @@ spec:
         {{- if .Values.logProcessor.enabled }}
         - name: log-vol
           emptyDir: {}
+        {{- end }}
+        {{- with .Values.controller.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
         {{- end }}
       {{- with .Values.controller.nodeSelector }}
       nodeSelector:
