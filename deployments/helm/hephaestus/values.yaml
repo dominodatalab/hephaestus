@@ -20,6 +20,10 @@ enableNetworkPolicies: true
 # This flag will have no effect in k8s >= 1.25.
 enablePodSecurityPolicies: false
 
+# Namespace where cert-manager is deployed. CA certificate secret needs to live in the cluster resource namespace.
+# https://cert-manager.io/docs/faq/cluster-resource/
+certManagerNamespace: cert-manager
+
 # Istio configuration
 istio:
   # Enable support for environments with Istio installed
@@ -201,6 +205,9 @@ buildkit:
   # Add a ConfigMap containing custom CAs if you need to push images to one or
   # more registries that use self-signed certificates
   customCABundle: ""
+
+  # Deploy buildkit workload into a namespace different from the release
+  namespace: ""
 
   # Buildkit image
   image:
