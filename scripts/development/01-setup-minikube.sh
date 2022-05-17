@@ -13,8 +13,7 @@ minikube start \
   --memory=16g \
   --disk-size=100g \
   --driver=hyperkit \
-  --wait=true \
-  --kubernetes-version=1.21.12
+  --wait=true
 
 minikube addons enable kong
 minikube addons enable ingress-dns
