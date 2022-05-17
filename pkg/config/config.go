@@ -76,6 +76,12 @@ type Manager struct {
 	EnableLeaderElection bool     `json:"enableLeaderElection" yaml:"enableLeaderElection"`
 }
 
+type BuildkitMTLS struct {
+	CACertPath string `json:"caCertPath" yaml:"caCertPath"`
+	CertPath   string `json:"certPath" yaml:"certPath"`
+	KeyPath    string `json:"keyPath" yaml:"keyPath"`
+}
+
 type Buildkit struct {
 	Namespace       string            `json:"namespace" yaml:"namespace"`
 	PodLabels       map[string]string `json:"podLabels" yaml:"podLabels"`
@@ -83,12 +89,12 @@ type Buildkit struct {
 	ServiceName     string            `json:"serviceName" yaml:"serviceName"`
 	StatefulSetName string            `json:"statefulSetName" yaml:"statefulSetName"`
 
-	CACertPath string `json:"caCertPath" yaml:"caCertPath"`
-	CertPath   string `json:"certPath" yaml:"certPath"`
-	KeyPath    string `json:"keyPath" yaml:"keyPath"`
+	Secrets map[string]string `json:"secrets" yaml:"secrets"`
 
 	PoolSyncWaitTime *time.Duration `json:"poolSyncWaitTime" yaml:"poolSyncWaitTime"`
 	PoolMaxIdleTime  *time.Duration `json:"poolMaxIdleTime" yaml:"poolMaxIdleTime"`
+
+	MTLS *BuildkitMTLS `json:"mtls,omitempty" yaml:"mtls,omitempty"`
 }
 
 type Messaging struct {

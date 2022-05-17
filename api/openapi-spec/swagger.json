@@ -1855,6 +1855,10 @@
           "description": "Context is a remote URL used to fetch the build context.",
           "type": "string"
         },
+        "disableBuildCache": {
+          "description": "DisableLocalBuildCache  will disable the use of the local cache when building the images.",
+          "type": "boolean"
+        },
         "disableCacheExport": {
           "description": "DisableCacheLayerExport will remove the \"inline\" cache metadata from the image configuration.",
           "type": "boolean"
@@ -1867,8 +1871,8 @@
             "default": ""
           }
         },
-        "importCache": {
-          "description": "ImportCacheFrom one or more canonical image references when building the images.",
+        "importRemoteBuildCache": {
+          "description": "ImportRemoteBuildCache from one or more canonical image references when building the images.",
           "type": "array",
           "items": {
             "type": "string",
@@ -1878,10 +1882,6 @@
         "logKey": {
           "description": "LogKey is used to uniquely annotate build logs for post-processing",
           "type": "string"
-        },
-        "noBuildCache": {
-          "description": "NoBuildCache will disable the use of the local cache when building the images.",
-          "type": "boolean"
         },
         "registryAuth": {
           "description": "RegistryAuth credentials used to pull/push images from/to private registries.",

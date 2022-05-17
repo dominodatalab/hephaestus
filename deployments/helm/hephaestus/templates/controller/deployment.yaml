@@ -67,15 +67,20 @@ spec:
               readOnly: true
               mountPath: /etc/hephaestus/config.yaml
               subPath: config.yaml
-            - name: mtls-vol
-              readOnly: true
-              mountPath: /etc/hephaestus/x509
             - name: webhook-vol
               readOnly: true
               mountPath: /tmp/k8s-webhook-server/serving-certs
+            {{- if .Values.buildkit.mtls.enabled }}
+            - name: mtls-vol
+              readOnly: true
+              mountPath: /etc/hephaestus/x509
+            {{- end }}
             {{- if .Values.logProcessor.enabled }}
             - name: log-vol
               mountPath: {{ include "hephaestus.logfileDir" . | quote }}
+            {{- end }}
+            {{- with .Values.controller.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
             {{- end }}
         {{- if .Values.logProcessor.enabled }}
         - name: log-processor
@@ -98,20 +103,28 @@ spec:
               mountPath: {{ include "hephaestus.logfileDir" . | quote }}
             - name: log-vol
               mountPath: /var/lib/vector
+            {{- with .Values.logProcessor.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
         {{- end }}
       volumes:
         - name: config-vol
           secret:
             secretName: {{ include "hephaestus.configSecretName" . }}
-        - name: mtls-vol
-          secret:
-            secretName: {{ include "hephaestus.buildkit.clientSecret" . }}
         - name: webhook-vol
           secret:
             secretName: {{ include "hephaestus.webhook.secret" . }}
+        {{- if .Values.buildkit.mtls.enabled }}
+        - name: mtls-vol
+          secret:
+            secretName: {{ include "hephaestus.buildkit.clientSecret" . }}
+        {{- end }}
         {{- if .Values.logProcessor.enabled }}
         - name: log-vol
           emptyDir: {}
+        {{- end }}
+        {{- with .Values.controller.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
         {{- end }}
       {{- with .Values.controller.nodeSelector }}
       nodeSelector:

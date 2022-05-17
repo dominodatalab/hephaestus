@@ -1,7 +1,11 @@
 package containerimagebuild
 
 import (
+	"context"
+
 	"github.com/dominodatalab/controller-util/core"
+	"github.com/dominodatalab/hephaestus/pkg/crd"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	forgev1alpha1 "github.com/dominodatalab/hephaestus/pkg/api/forge/v1alpha1"
@@ -16,6 +20,21 @@ import (
 //
 // This controller should be removed once forge is fully obsolete.
 func Register(mgr ctrl.Manager) error {
+	forgev1alpha1Exists, err := crd.Exists(context.Background(), metav1.GroupVersion{
+		Group: forgev1alpha1.SchemeGroupVersion.Group, Version: forgev1alpha1.SchemeGroupVersion.Version,
+	})
+	if err != nil {
+		return err
+	}
+
+	if !forgev1alpha1Exists {
+		ctrl.Log.WithName("controller").WithName("containerimagebuild").Info(
+			"Not registering ContainerImageBuild controller, API group does not exist",
+			"groupVersion", forgev1alpha1.SchemeGroupVersion.String(),
+		)
+		return nil
+	}
+
 	return core.NewReconciler(mgr).
 		For(&forgev1alpha1.ContainerImageBuild{}).
 		Component("conversion-shim", component.ConversionShim()).

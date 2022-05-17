@@ -53,6 +53,7 @@ spec:
     name: {{ include "hephaestus.certmanager.caIssuer" . }}
   secretName: {{ include "hephaestus.webhook.secret" . }}
 
+{{- if .Values.buildkit.mtls.enabled }}
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
@@ -86,3 +87,4 @@ spec:
     kind: Issuer
     name: {{ include "hephaestus.certmanager.caIssuer" . }}
   secretName: {{ include "hephaestus.buildkit.serverSecret" . }}
+{{- end }}

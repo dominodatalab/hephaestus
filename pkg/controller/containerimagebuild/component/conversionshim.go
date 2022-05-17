@@ -37,6 +37,14 @@ func (c ConversionShimComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 	cib := ctx.Object.(*forgev1alpha1.ContainerImageBuild)
 
 	/*
+		ignore processed resources
+	*/
+	if cib.Status.State != "" {
+		log.Info("Aborting reconcile, state is not blank", "state", cib.Status.State)
+		return ctrl.Result{}, nil
+	}
+
+	/*
 		check if named imagebuild already exists
 	*/
 	log.Info("Querying for ImageBuild with corresponding namespace/name")
