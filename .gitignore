@@ -7,5 +7,5 @@ bin/
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
-# Generated config file
-hephaestus.yaml
+# Generated files for local development
+local-development/

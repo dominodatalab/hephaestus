@@ -1,0 +1,32 @@
+repositories:
+  - name: jetstack
+    url: https://charts.jetstack.io
+  - name: bitnami
+    url: https://charts.bitnami.com/bitnami
+releases:
+  - name: cert-manager
+    namespace: cert-manager
+    chart: jetstack/cert-manager
+    version: v1.7.1
+    values:
+      - installCRDs: true
+        extraArgs:
+          - --enable-certificate-owner-ref
+    wait: true
+    waitForJobs: true
+  - name: hephaestus
+    namespace: default
+    chart: ../../deployments/helm/hephaestus
+    needs:
+      - cert-manager/cert-manager
+    values:
+      - installCRDs: false
+        buildkit:
+          debug: true
+          mtls:
+            enabled: false
+        controller:
+          replicaCount: 0
+        logProcessor:
+          enabled: false
+    wait: true
