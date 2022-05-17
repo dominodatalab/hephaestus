@@ -3,6 +3,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: {{ include "hephaestus.buildkit.fullname" . }}
+  namespace: {{ include "hephaestus.buildkit.namespace" . }}
   labels:
     {{- include "hephaestus.buildkit.labels.standard" . | nindent 4 }}
 spec:
@@ -19,4 +20,9 @@ spec:
         - podSelector:
             matchLabels:
               {{- include "hephaestus.controller.labels.matchLabels" . | nindent 14 }}
+          {{- if ne (include "hephaestus.buildkit.namespace" .) .Release.Namespace }}
+          namespaceSelector:
+            matchLabels:
+              {{- .Values.buildkit.releaseNamespaceLabels | default (lookup "v1" "Namespace" "" .Release.Namespace).metadata.labels | toYaml | nindent 14 }}
+          {{- end }}
 {{- end }}
