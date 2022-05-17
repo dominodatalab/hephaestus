@@ -206,8 +206,13 @@ buildkit:
   # more registries that use self-signed certificates
   customCABundle: ""
 
-  # Deploy buildkit workload into a namespace different from the release
+  # Deploy buildkit workload into a different namespace from the release
   namespace: ""
+
+  # The buildkit network policy will select against all the labels on the
+  # release namespace to allow ingress traffic from the controller by default.
+  # Use this field to limit the selector labels
+  releaseNamespaceLabels: {}
 
   # Buildkit image
   image:

@@ -23,6 +23,6 @@ spec:
           {{- if ne (include "hephaestus.buildkit.namespace" .) .Release.Namespace }}
           namespaceSelector:
             matchLabels:
-              {{- toYaml (lookup "v1" "Namespace" "" .Release.Namespace).metadata.labels | nindent 14 }}
+              {{- .Values.buildkit.releaseNamespaceLabels | default (lookup "v1" "Namespace" "" .Release.Namespace).metadata.labels | toYaml | nindent 14 }}
           {{- end }}
 {{- end }}
