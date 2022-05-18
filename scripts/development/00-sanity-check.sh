@@ -4,7 +4,7 @@
 
 set -e
 
-commands=("helmfile" "helm" "kubectl" "minikube" "ngrok")
+commands=("helmfile" "helm" "kubectl" "minikube" "ngrok" "yq")
 for cmd in "${commands[@]}"; do
   if ! command -v "$cmd" &> /dev/null; then
     echo "'$cmd' command not found, please install"
