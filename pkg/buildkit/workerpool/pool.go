@@ -310,11 +310,13 @@ func (p *workerPool) monitorWorkers(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			p.log.V(1).Info("Reaping worker pool")
+			p.log.Info("Reaping worker pool")
 
 			if err := p.reapWorkerPool(ctx); err != nil {
 				p.log.Error(err, "Failed to reap worker pool")
 			}
+
+			p.log.Info("Reaping complete")
 		case <-ctx.Done():
 			p.log.V(1).Info("Shutting down worker pool monitor")
 			return
@@ -335,7 +337,7 @@ func (p *workerPool) reapWorkerPool(ctx context.Context) error {
 		lease := p.leases[i]
 
 		if lease.Idle && time.Since(lease.Age) > p.maxIdleTime {
-			p.log.V(1).Info("Scheduling builder for removal", "addr", lease.Addr, "age", lease.Age)
+			p.log.Info("Scheduling removal of worker", "addr", lease.Addr, "age", lease.Age)
 			count--
 		} else {
 			break
@@ -343,7 +345,7 @@ func (p *workerPool) reapWorkerPool(ctx context.Context) error {
 	}
 
 	if count < 0 {
-		p.log.V(1).Info("Scaling down cluster")
+		p.log.Info("Scaling down cluster", "count", count)
 		if err := p.scaleStatefulSet(ctx, count); err != nil {
 			return err
 		}
