@@ -42,6 +42,10 @@ spec:
           args:
             - start
             - --config=/etc/hephaestus/config.yaml
+          {{- with .Values.controller.extraEnvVars }}
+          env:
+            {{- include "common.tplvalues.render" (dict "value" . "context" $) | nindent 12 }}
+          {{- end }}
           ports:
             - name: health
               containerPort: {{ .Values.controller.healthProbePort }}

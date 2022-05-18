@@ -140,6 +140,9 @@ controller:
   # Additional volumes
   extraVolumes: []
 
+  # Extra environment variables provided to the controller container
+  extraEnvVars: []
+
   # Number of manager instances to run. Leader election will be enabled
   # whenever this value is greater than 1; this ensures that only one instance
   # is active at a time.
