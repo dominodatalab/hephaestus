@@ -18,6 +18,9 @@ spec:
     metadata:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/buildkit/configmap.yaml") . | sha256sum }}
+        {{- if .Values.buildkit.rootless }}
+        container.apparmor.security.beta.kubernetes.io/buildkitd: unconfined
+        {{- end }}
         {{- with .Values.buildkit.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

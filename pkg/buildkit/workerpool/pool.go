@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +23,10 @@ import (
 	"github.com/dominodatalab/hephaestus/pkg/config"
 )
 
+// Matches upstream K8s regex for fetching the ordinal from a statefulset
+// https://github.com/kubernetes/kubernetes/blob/v1.22.9/pkg/controller/statefulset/stateful_set_utils.go#L55
+var statefulPodRegex = regexp.MustCompile("(.*)-([0-9]+)$")
+
 var ErrNoLeases = errors.New("idle lease not found")
 
 type AddressFuture func() (endpoint string, err error)
@@ -30,9 +37,10 @@ type Pool interface {
 }
 
 type workerLease struct {
-	Addr string    `json:"addr"`
-	Idle bool      `json:"idle"`
-	Age  time.Time `json:"age"`
+	Addr    string    `json:"addr"`
+	Idle    bool      `json:"idle"`
+	Age     time.Time `json:"age"`
+	Ordinal int       `json:"ordinal"`
 }
 
 type workerPool struct {
@@ -199,14 +207,20 @@ func (p *workerPool) loadEndpointsIntoLeases(ctx context.Context) ([]*workerLeas
 
 		for _, addr := range subset.Addresses {
 			dns := strings.Join([]string{addr.Hostname, ep.Name, ep.Namespace}, ".")
+			ordinal := getOrdinal(addr.TargetRef.Name)
 			lease := &workerLease{
-				Addr: fmt.Sprintf("tcp://%s:%d", dns, p.conf.DaemonPort),
-				Age:  podAgeMap[addr.TargetRef.Name],
+				Ordinal: ordinal,
+				Addr:    fmt.Sprintf("tcp://%s:%d", dns, p.conf.DaemonPort),
+				Age:     podAgeMap[addr.TargetRef.Name],
 			}
 
 			leases = append(leases, lease)
 		}
 	}
+
+	sort.Slice(leases, func(i, j int) bool {
+		return leases[i].Ordinal < leases[j].Ordinal
+	})
 
 	p.log.V(1).Info("Generated raw lease data", "leases", leases)
 	return leases, nil
@@ -336,4 +350,16 @@ func (p *workerPool) reapWorkerPool(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func getOrdinal(name string) int {
+	ordinal := -1
+	subMatches := statefulPodRegex.FindStringSubmatch(name)
+	if len(subMatches) < 3 {
+		return ordinal
+	}
+	if i, err := strconv.ParseInt(subMatches[2], 10, 32); err == nil {
+		ordinal = int(i)
+	}
+	return ordinal
 }

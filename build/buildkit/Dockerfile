@@ -8,6 +8,6 @@ RUN apk update && \
     rm -rf /var/cache/apk
 RUN addgroup -S -g $ISTIO_GID istio && \
     addgroup user istio && \
-    echo user:150000:150000 | tee /etc/subuid | tee /etc/subgid && \
+    echo user:100000:150000 | tee /etc/subuid | tee /etc/subgid && \
     echo user:$ISTIO_GID:1 >> /etc/subgid
 USER 1000:1000

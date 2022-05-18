@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	forgeLogKeyAnnotation        = "logKey"
-	forgeLastBuildAnnotation     = "imagebuilder.dominodatalab.com/last-image"
+	forgeLogKeyAnnotation = "logKey"
+	// forgeLastBuildAnnotation     = "imagebuilder.dominodatalab.com/last-image"
 	forgeObjectStorageAnnotation = "hephaestus.dominodatalab.com/converted-object"
 )
 
@@ -78,10 +78,10 @@ func (c ConversionShimComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 	/*
 		compute cache imports
 	*/
-	var cacheImports []string
-	if ref, ok := cib.Annotations[forgeLastBuildAnnotation]; ok {
-		cacheImports = []string{ref}
-	}
+	// var cacheImports []string
+	// if ref, ok := cib.Annotations[forgeLastBuildAnnotation]; ok {
+	// 	cacheImports = []string{ref}
+	// }
 
 	/*
 		convert push registries into fully-qualified image paths
@@ -144,11 +144,12 @@ func (c ConversionShimComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 			// TODO: it can take upwards of 5m to export inline layer cache for huge images
 			// 	we need to possibly support `--target` before using this feature.
 			DisableCacheLayerExport: true,
-			ImportRemoteBuildCache:  cacheImports,
-			Images:                  images,
-			LogKey:                  logKey,
-			RegistryAuth:            auths,
-			AMQPOverrides:           amqpOverrides,
+			// This means we should not try and import inline cache from images where no cache was pushed
+			ImportRemoteBuildCache: nil,
+			Images:                 images,
+			LogKey:                 logKey,
+			RegistryAuth:           auths,
+			AMQPOverrides:          amqpOverrides,
 		},
 	}
 
