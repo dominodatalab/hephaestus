@@ -6,7 +6,10 @@ set -e
 
 dev_dir=local-development
 mkdir -p $dev_dir
-kubectl get secrets hephaestus-config -ojsonpath='{.data.config\.yaml}' | base64 -d > $dev_dir/hephaestus.yaml
+
+config_file=$dev_dir/hephaestus.yaml
+kubectl get secrets hephaestus-config -ojsonpath='{.data.config\.yaml}' | base64 -d > $config_file
+yq -i ".messaging.amqp.url |= sub(\"rabbitmq.default\", \"$(minikube ip)\")" $config_file
 
 cert_dir=$dev_dir/webhook-certs
 mkdir -p $cert_dir
