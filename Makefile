@@ -7,6 +7,7 @@ endif
 
 ##@ Development
 
+.PHONY: build
 build: ## Build controller binary
 	go build -v -o bin/hephaestus-controller ./cmd/controller/
 
