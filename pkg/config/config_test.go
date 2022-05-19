@@ -10,10 +10,6 @@ func TestLoadFromFile(t *testing.T) {
 	t.Skip("please write me")
 }
 
-func TestGenerateDefaults(t *testing.T) {
-	t.Skip("please write me")
-}
-
 func TestControllerValidate(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
 		config := genConfig()
@@ -52,6 +48,14 @@ func TestControllerValidate(t *testing.T) {
 			assert.Error(t, config.Validate())
 		}
 	})
+
+	t.Run("bad_image_build_max_concurrency", func(t *testing.T) {
+		config := genConfig()
+		for _, n := range []int{0, -5} {
+			config.ImageBuildMaxConcurrency = n
+			assert.Error(t, config.Validate())
+		}
+	})
 }
 
 func genConfig() Controller {
@@ -68,5 +72,6 @@ func genConfig() Controller {
 			Namespace:  "test-ns",
 			DaemonPort: 1234,
 		},
+		ImageBuildMaxConcurrency: 1,
 	}
 }
