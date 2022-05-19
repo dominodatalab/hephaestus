@@ -23,6 +23,9 @@ type Controller struct {
 func (c Controller) Validate() error {
 	var errs []string
 
+	if c.ImageBuildMaxConcurrency < 1 {
+		errs = append(errs, "imageBuildMaxConcurrency must be greater than or equal to 1")
+	}
 	if c.Manager.HealthProbeAddr == "" {
 		errs = append(errs, "manager.healthProbeAddr cannot be blank")
 	}
@@ -113,38 +116,6 @@ type KafkaMessaging struct {
 	Servers   []string `json:"servers" yaml:"servers"`
 	Topic     string   `json:"topic" yaml:"topic"`
 	Partition string   `json:"partition" yaml:"partition"`
-}
-
-func GenerateDefaults() Controller {
-	return Controller{
-		Manager: Manager{
-			HealthProbeAddr:      ":8081",
-			MetricsAddr:          ":8080",
-			WebhookPort:          9443,
-			WatchNamespaces:      nil,
-			EnableLeaderElection: false,
-		},
-		Buildkit: Buildkit{
-			PodLabels: map[string]string{
-				"app": "buildkit",
-			},
-			ServiceName:     "buildkit",
-			StatefulSetName: "buildkit",
-			Namespace:       "default",
-			DaemonPort:      1234,
-		},
-		Logging: Logging{
-			StacktraceLevel: "warn",
-			Container: ContainerLogging{
-				Encoder:  "console",
-				LogLevel: "info",
-			},
-			Logfile: LogfileLogging{
-				LogLevel: "info",
-			},
-		},
-		ImageBuildMaxConcurrency: 5,
-	}
 }
 
 func LoadFromFile(filename string) (Controller, error) {

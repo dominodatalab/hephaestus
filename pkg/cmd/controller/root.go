@@ -2,11 +2,8 @@ package controller
 
 import (
 	"context"
-	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
 
 	"github.com/dominodatalab/hephaestus/pkg/config"
 	"github.com/dominodatalab/hephaestus/pkg/controller"
@@ -22,36 +19,12 @@ func NewCommand() *cobra.Command {
 	}
 	cmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "hephaestus.yaml", "configuration file")
 	cmd.AddCommand(
-		newInitCommand(),
 		newStartCommand(),
 		newCRDApplyCommand(),
 		newCRDDeleteCommand(),
 	)
 
 	return cmd
-}
-
-func newInitCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "init",
-		Short: "Generate config skeleton",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg := config.GenerateDefaults()
-			fmt.Println(cfg)
-
-			bs, err := yaml.Marshal(cfg)
-			if err != nil {
-				return err
-			}
-
-			cfgFile, err := cmd.Flags().GetString("config")
-			if err != nil {
-				return err
-			}
-
-			return os.WriteFile(cfgFile, bs, 0644)
-		},
-	}
 }
 
 func newStartCommand() *cobra.Command {
@@ -66,6 +39,10 @@ func newStartCommand() *cobra.Command {
 
 			cfg, err := config.LoadFromFile(cfgFile)
 			if err != nil {
+				return err
+			}
+
+			if err = cfg.Validate(); err != nil {
 				return err
 			}
 
