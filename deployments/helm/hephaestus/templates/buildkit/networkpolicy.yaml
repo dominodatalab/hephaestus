@@ -23,6 +23,15 @@ spec:
           {{- if ne (include "hephaestus.buildkit.namespace" .) .Release.Namespace }}
           namespaceSelector:
             matchLabels:
-              {{- .Values.buildkit.releaseNamespaceLabels | default (lookup "v1" "Namespace" "" .Release.Namespace).metadata.labels | toYaml | nindent 14 }}
+              {{- /*
+                https://github.com/databus23/helm-diff/issues/263 prevents us from doing a "lookup" here and defaulting
+                to the release namespace labels. once that is resolved we can remove the following garbage and replace
+                it with "{{- .Values.buildkit.releaseNamespaceLabels | default (lookup "v1" "Namespace" "" .Release.Namespace).metadata.labels | toYaml | nindent 14 }}"
+              */}}
+              {{- if empty .Values.buildkit.releaseNamespaceLabels }}
+              {{- fail ".Values.buildkit.releaseNamespaceLabels cannot be empty when deploying buildkit into a separate namespace!" }}
+              {{- else }}
+              {{- .Values.buildkit.releaseNamespaceLabels | toYaml | nindent 14 }}
+              {{- end }}
           {{- end }}
 {{- end }}
