@@ -108,6 +108,11 @@ func (in *ImageBuild) GetPatch() client.Patch {
 			Path:      "/status/transitions/-",
 			Value:     in.Status.unappliedTransition,
 		},
+		{
+			Operation: "add",
+			Path:      "/status/buildTime",
+			Value:     in.Status.BuildTime,
+		},
 	}
 
 	patch, err := json.Marshal(ops)
