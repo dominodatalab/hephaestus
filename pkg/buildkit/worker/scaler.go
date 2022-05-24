@@ -57,7 +57,7 @@ func (s *statefulSetScaler) Scale(ctx context.Context, count int32) error {
 		TimeoutSeconds: s.watchTimeoutSeconds,
 	}
 
-	s.log.V(1).Info("Starting statefulset watch", "opts", listOpts)
+	s.log.Info("Starting statefulset watch", "opts", listOpts)
 	watcher, err := s.client.Watch(ctx, listOpts)
 	if err != nil {
 		return fmt.Errorf("cannot watch statefulset: %w", err)
@@ -67,10 +67,10 @@ func (s *statefulSetScaler) Scale(ctx context.Context, count int32) error {
 	for event := range watcher.ResultChan() {
 		target := event.Object.(*appsv1.StatefulSet)
 		if target.Status.ReadyReplicas >= replicas {
-			s.log.V(1).Info("Stateful replicas ready, stopping watch")
+			s.log.Info("Stateful replicas ready, stopping watch")
 			break
 		} else {
-			s.log.V(1).Info("Stateful replicas not ready, still watching", "expected", replicas, "actual", target.Status.ReadyReplicas)
+			s.log.Info("Stateful replicas not ready, still watching", "expected", replicas, "actual", target.Status.ReadyReplicas)
 		}
 	}
 
@@ -81,7 +81,7 @@ func (s *statefulSetScaler) patchReplicas(ctx context.Context, count int32) (*ap
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.log.V(1).Info("Querying for statefulset", "name", s.name)
+	s.log.Info("Querying for statefulset", "name", s.name)
 	sts, err := s.client.Get(ctx, s.name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("cannot get statefulset: %w", err)
@@ -89,7 +89,7 @@ func (s *statefulSetScaler) patchReplicas(ctx context.Context, count int32) (*ap
 
 	current := pointer.Int32Deref(sts.Spec.Replicas, 0)
 	desired := current + count
-	s.log.V(1).Info("Replica count", "current", current, "desired", desired)
+	s.log.Info("Replica count", "current", current, "desired", desired)
 
 	sac, err := appsv1ac.ExtractStatefulSet(sts, fieldManagerName)
 	if err != nil {
