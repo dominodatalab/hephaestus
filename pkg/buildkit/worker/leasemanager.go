@@ -317,7 +317,7 @@ func (m *podLeaseManager) terminateUnleasedPods(ctx context.Context) error {
 
 		ts, ok := pod.Annotations[expiryTimeAnnotation]
 		if !ok {
-			m.log.Info("Eligible for termination, missing expiry time")
+			log.Info("Eligible for termination, missing expiry time")
 			removals = append(removals, pod.Name)
 
 			continue
@@ -329,7 +329,7 @@ func (m *podLeaseManager) terminateUnleasedPods(ctx context.Context) error {
 		}
 
 		if time.Now().After(expiry) {
-			m.log.Info("Eligible for termination, ttl has expired", "expiry", expiry)
+			log.Info("Eligible for termination, ttl has expired", "expiry", expiry)
 			removals = append(removals, pod.Name)
 		}
 	}
