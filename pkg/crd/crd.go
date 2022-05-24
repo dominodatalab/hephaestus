@@ -11,12 +11,11 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	ctrlzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/yaml"
 
 	"github.com/dominodatalab/hephaestus/deployments/crds"
+	"github.com/dominodatalab/hephaestus/pkg/kubernetes"
 )
 
 // crdProcessor uses a CRD client to process the provided resource definition.
@@ -69,8 +68,8 @@ func Delete(ctx context.Context, istioEnabled bool) error {
 }
 
 // Exists will check for the existence of a specific groupversion.
-func Exists(ctx context.Context, gv metav1.GroupVersion) (bool, error) {
-	config, err := kubernetesRestConfig()
+func Exists(gv metav1.GroupVersion) (bool, error) {
+	config, err := kubernetes.RestConfig()
 	if err != nil {
 		return false, err
 	}
@@ -138,7 +137,7 @@ func operate(ctx context.Context, processor crdProcessor, istio bool) error {
 func crdClient() (apixv1client.CustomResourceDefinitionInterface, error) {
 	log.Info("Initializing Kubernetes V1 CRD client")
 
-	config, err := kubernetesRestConfig()
+	config, err := kubernetes.RestConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -149,20 +148,4 @@ func crdClient() (apixv1client.CustomResourceDefinitionInterface, error) {
 	}
 
 	return client.CustomResourceDefinitions(), nil
-}
-
-// kubernetesRestConfig returns the canonical kubernetes REST config.
-//
-// Out-of-cluster loading is attempted first, followed by in-cluster when that fails.
-func kubernetesRestConfig() (*rest.Config, error) {
-	kubeconfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		clientcmd.NewDefaultClientConfigLoadingRules(),
-		&clientcmd.ConfigOverrides{},
-	)
-
-	if cfg, err := kubeconfig.ClientConfig(); err == nil {
-		return cfg, nil
-	}
-
-	return rest.InClusterConfig()
 }

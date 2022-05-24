@@ -1,15 +1,13 @@
 package containerimagebuild
 
 import (
-	"context"
-
 	"github.com/dominodatalab/controller-util/core"
-	"github.com/dominodatalab/hephaestus/pkg/crd"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	forgev1alpha1 "github.com/dominodatalab/hephaestus/pkg/api/forge/v1alpha1"
 	"github.com/dominodatalab/hephaestus/pkg/controller/containerimagebuild/component"
+	"github.com/dominodatalab/hephaestus/pkg/crd"
 )
 
 // Register the container image build controller.
@@ -20,7 +18,7 @@ import (
 //
 // This controller should be removed once forge is fully obsolete.
 func Register(mgr ctrl.Manager) error {
-	forgev1alpha1Exists, err := crd.Exists(context.Background(), metav1.GroupVersion{
+	forgev1alpha1Exists, err := crd.Exists(metav1.GroupVersion{
 		Group: forgev1alpha1.SchemeGroupVersion.Group, Version: forgev1alpha1.SchemeGroupVersion.Version,
 	})
 	if err != nil {
