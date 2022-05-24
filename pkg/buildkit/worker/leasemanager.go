@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -205,8 +206,8 @@ func (m *podLeaseManager) getUnleasedOrScale(ctx context.Context) (*corev1.Pod, 
 	if err = m.scaler.Scale(ctx, 1); err != nil {
 		return nil, err
 	}
+	m.log.Info("Scale cluster complete")
 
-	m.log.Info("No unleased pods found, scaling workload")
 	if pod, err = m.getUnleasedPod(ctx); err != nil {
 		return nil, fmt.Errorf("unable to acquire lease after scaling: %w", err)
 	}
@@ -239,34 +240,43 @@ func (m *podLeaseManager) buildURL(ctx context.Context, podName string) (string,
 		return "", err
 	}
 
-	var host string
+	hostname, err := m.extractHostname(endpoints, podName)
+	if err != nil {
+		return "", err
+	}
 
-addressScan:
+	u, err := url.ParseRequestURI(fmt.Sprintf("tcp://%s:%d", hostname, m.servicePort))
+	if err != nil {
+		return "", fmt.Errorf("failed to parse endpoint url: %w", err)
+	}
+
+	return u.String(), nil
+}
+
+func (m *podLeaseManager) extractHostname(endpoints *corev1.Endpoints, name string) (string, error) {
+	var hostname string
+
+scan:
 	for _, subset := range endpoints.Subsets {
 		for _, address := range subset.Addresses {
-			if address.TargetRef.Name == podName {
+			if address.TargetRef.Name == name {
 				for _, port := range subset.Ports {
 					if port.Port == m.servicePort {
-						host = strings.Join([]string{address.Hostname, endpoints.Name, endpoints.Namespace}, ".")
-						m.log.Info("Found eligible endpoint address", "host", host)
+						hostname = strings.Join([]string{address.Hostname, endpoints.Name, endpoints.Namespace}, ".")
+						m.log.Info("Found eligible endpoint address", "hostname", hostname)
 
-						break addressScan
+						break scan
 					}
 				}
 			}
 		}
 	}
 
-	if host == "" {
-		return "", fmt.Errorf("endpoints %q does not expose pod %s on port %d", endpoints.Name, podName, 1234)
+	if hostname == "" {
+		return "", fmt.Errorf("endpoints %q does not expose pod %s on port %d", endpoints.Name, name, m.servicePort)
 	}
 
-	u, err := url.ParseRequestURI(fmt.Sprintf("tcp://%s:%d", host, m.servicePort))
-	if err != nil {
-		return "", fmt.Errorf("failed to parse endpoint url: %w", err)
-	}
-
-	return u.String(), nil
+	return hostname, nil
 }
 
 func (m *podLeaseManager) monitorPods(ctx context.Context) {
@@ -299,9 +309,12 @@ func (m *podLeaseManager) terminateUnleasedPods(ctx context.Context) error {
 		return err
 	}
 
+	sort.Slice(list.Items, func(i, j int) bool {
+		return list.Items[i].Name > list.Items[j].Name
+	})
+
 	var removals []string
-	for idx := len(list.Items) - 1; idx >= 0; idx-- {
-		pod := list.Items[idx]
+	for _, pod := range list.Items {
 		log := m.log.WithValues("podName", pod.Name)
 
 		if id, ok := pod.Annotations[managerIDAnnotation]; ok && id != m.uuid {
@@ -333,8 +346,8 @@ func (m *podLeaseManager) terminateUnleasedPods(ctx context.Context) error {
 			removals = append(removals, pod.Name)
 		}
 	}
-	count := -int32(len(removals))
 
+	count := -int32(len(removals))
 	if count == 0 {
 		m.log.Info("No pods eligible for termination")
 		return nil

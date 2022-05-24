@@ -67,10 +67,10 @@ func (s *statefulSetScaler) Scale(ctx context.Context, count int32) error {
 	for event := range watcher.ResultChan() {
 		target := event.Object.(*appsv1.StatefulSet)
 		if target.Status.ReadyReplicas >= replicas {
-			s.log.Info("Stateful replicas ready, stopping watch")
+			s.log.Info("Statefulset replicas ready, stopping watch")
 			break
 		} else {
-			s.log.Info("Stateful replicas not ready, still watching", "expected", replicas, "actual", target.Status.ReadyReplicas)
+			s.log.Info("Statefulset replicas not ready, still watching", "expected", replicas, "actual", target.Status.ReadyReplicas)
 		}
 	}
 
