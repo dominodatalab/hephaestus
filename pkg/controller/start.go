@@ -14,12 +14,13 @@ import (
 
 	forgev1alpha1 "github.com/dominodatalab/hephaestus/pkg/api/forge/v1alpha1"
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
-	"github.com/dominodatalab/hephaestus/pkg/buildkit/workerpool"
+	"github.com/dominodatalab/hephaestus/pkg/buildkit/worker"
 	"github.com/dominodatalab/hephaestus/pkg/config"
 	"github.com/dominodatalab/hephaestus/pkg/controller/containerimagebuild"
 	"github.com/dominodatalab/hephaestus/pkg/controller/imagebuild"
 	"github.com/dominodatalab/hephaestus/pkg/controller/imagecache"
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials"
+	"github.com/dominodatalab/hephaestus/pkg/kubernetes"
 	"github.com/dominodatalab/hephaestus/pkg/logger"
 	// +kubebuilder:scaffold:imports
 )
@@ -115,29 +116,33 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 	return mgr, nil
 }
 
-func createWorkerPool(ctx context.Context, log logr.Logger, mgr ctrl.Manager, cfg config.Buildkit) (workerpool.Pool, error) {
+func createWorkerPool(ctx context.Context, log logr.Logger, mgr ctrl.Manager, cfg config.Buildkit) (worker.Pool, error) {
 	log.Info("Initializing buildkit worker pool")
-	poolOpts := []workerpool.PoolOption{
-		workerpool.Logger(ctrl.Log.WithName("buildkit.workerpool")),
+	poolOpts := []worker.PoolOption{
+		worker.Logger(ctrl.Log.WithName("buildkit.worker-pool")),
 	}
 
 	if mit := cfg.PoolMaxIdleTime; mit != nil {
-		poolOpts = append(poolOpts, workerpool.MaxIdleTime(*mit))
+		poolOpts = append(poolOpts, worker.MaxIdleTime(*mit))
 	}
 
 	if swt := cfg.PoolSyncWaitTime; swt != nil {
-		poolOpts = append(poolOpts, workerpool.SyncWaitTime(*swt))
+		poolOpts = append(poolOpts, worker.SyncWaitTime(*swt))
 	}
 
-	pool, err := workerpool.New(ctx, mgr.GetConfig(), cfg, poolOpts...)
+	if wt := cfg.PoolWatchTimeout; wt != nil {
+		poolOpts = append(poolOpts, worker.WatchTimeoutSeconds(*wt))
+	}
+
+	clientset, err := kubernetes.Clientset(mgr.GetConfig())
 	if err != nil {
 		return nil, err
 	}
 
-	return pool, nil
+	return worker.NewPool(ctx, clientset, cfg, poolOpts...), nil
 }
 
-func registerControllers(log logr.Logger, mgr ctrl.Manager, pool workerpool.Pool, cfg config.Controller) error {
+func registerControllers(log logr.Logger, mgr ctrl.Manager, pool worker.Pool, cfg config.Controller) error {
 	log.Info("Registering ContainerImageBuild controller")
 	if err := containerimagebuild.Register(mgr); err != nil {
 		return err
