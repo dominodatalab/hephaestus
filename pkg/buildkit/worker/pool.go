@@ -30,10 +30,9 @@ func NewPool(ctx context.Context, clientset kubernetes.Interface, conf config.Bu
 	for _, fn := range opts {
 		o = fn(o)
 	}
-	log := o.log.WithName("worker-pool")
 
 	scaler := NewStatefulSetScaler(ScalerOpt{
-		Log:                 log.WithName("statefulset-scaler"),
+		Log:                 o.log.WithName("statefulset-scaler"),
 		Name:                conf.StatefulSetName,
 		Namespace:           conf.Namespace,
 		Clientset:           clientset,
@@ -41,20 +40,22 @@ func NewPool(ctx context.Context, clientset kubernetes.Interface, conf config.Bu
 	})
 
 	leaseManager := NewPodLeaseManager(ctx, LeaseManagerOpt{
-		Log:            log.WithName("lease-manager"),
+		Log:            o.log.WithName("lease-manager"),
 		Clienset:       clientset,
 		Namespace:      conf.Namespace,
 		PodLabels:      conf.PodLabels,
 		ServiceName:    conf.ServiceName,
 		ServicePort:    conf.DaemonPort,
 		WorkloadScaler: scaler,
+		PodSyncTime:    o.syncWaitTime,
+		PodMaxIdleTime: o.maxIdleTime,
 	})
 
 	ctx, cancel := context.WithCancel(ctx)
 	wp := &workerPool{
 		ctx:      ctx,
 		cancel:   cancel,
-		log:      log,
+		log:      o.log,
 		plm:      leaseManager,
 		incoming: make(chan LeaseRequest),
 		outgoing: NewRequestQueue(),

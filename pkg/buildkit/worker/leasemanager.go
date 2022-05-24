@@ -158,7 +158,7 @@ func (m *podLeaseManager) Release(ctx context.Context, addr string) error {
 	}
 
 	pac.WithAnnotations(map[string]string{
-		expiryTimeAnnotation: time.Now().Format(time.RFC3339),
+		expiryTimeAnnotation: time.Now().Add(m.podMaxIdleTime).Format(time.RFC3339),
 	})
 	delete(pac.Annotations, leasedAnnotation)
 	delete(pac.Annotations, managerIDAnnotation)
@@ -280,11 +280,11 @@ func (m *podLeaseManager) monitorPods(ctx context.Context) {
 			m.log.Info("Shutting down worker pod monitor")
 			return
 		case <-ticker.C:
-			m.log.Info("Checking worker pool")
+			m.log.Info("Checking worker pool for expired leases")
 			if err := m.terminateUnleasedPods(ctx); err != nil {
 				m.log.Error(err, "Failed to clean worker pool")
 			}
-			m.log.Info("Worker pool check complete")
+			m.log.Info("Worker pool lease check complete")
 		}
 	}
 }
@@ -328,7 +328,7 @@ func (m *podLeaseManager) terminateUnleasedPods(ctx context.Context) error {
 			return fmt.Errorf("failed to parse pod expiry time: %w", err)
 		}
 
-		if time.Since(expiry) > m.podMaxIdleTime {
+		if time.Now().After(expiry) {
 			m.log.Info("Eligible for termination, ttl has expired", "expiry", expiry)
 			removals = append(removals, pod.Name)
 		}
