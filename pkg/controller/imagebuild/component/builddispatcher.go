@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -137,10 +136,11 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 
 	log.Info("Dispatching image build", "images", buildOpts.Images)
 	if err = bk.Build(buildCtx, buildOpts); err != nil {
-		// buildkit uses pkg/errors for wrapping and the underlying error is a grpcerror with a status that contains the
-		// context cancellation message, not the error value. the easiest way to assert that the context was cancelled.
-		if strings.HasSuffix(err.Error(), context.Canceled.Error()) {
-			log.Info("Build cancelled")
+		// if the underlying buildkit pod is terminated via resource delete, then buildCtx will be closed and there will
+		// be an error on it. otherwise, some external event (e.g. pod terminated) cancelled the build, so we should
+		// mark the build as failed.
+		if buildCtx.Err() != nil {
+			log.Info("Build cancelled via resource delete")
 			return ctrl.Result{}, nil
 		}
 
