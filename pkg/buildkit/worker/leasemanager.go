@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -39,7 +41,10 @@ type LeaseManagerOpt struct {
 	PodMaxIdleTime time.Duration
 }
 
-var errNoUnleasedPods = errors.New("no unleased pods found")
+var (
+	errNoUnleasedPods = errors.New("no unleased pods found")
+	statefulPodRegex  = regexp.MustCompile(`^.*-(\d+)$`)
+)
 
 const (
 	fieldManagerName     = "hephaestus-pod-lease-manager"
@@ -310,7 +315,7 @@ func (m *podLeaseManager) terminateUnleasedPods(ctx context.Context) error {
 	}
 
 	sort.Slice(list.Items, func(i, j int) bool {
-		return list.Items[i].Name > list.Items[j].Name
+		return getOrdinal(list.Items[i].Name) > getOrdinal(list.Items[j].Name)
 	})
 
 	var removals []string
@@ -355,4 +360,16 @@ func (m *podLeaseManager) terminateUnleasedPods(ctx context.Context) error {
 
 	m.log.Info("Attempting to terminate pods via scale", "names", removals)
 	return m.scaler.Scale(ctx, count)
+}
+
+func getOrdinal(name string) int {
+	ordinal := -1
+	sm := statefulPodRegex.FindStringSubmatch(name)
+	if len(sm) < 2 {
+		return ordinal
+	}
+	if i, err := strconv.ParseInt(sm[1], 10, 32); err == nil {
+		ordinal = int(i)
+	}
+	return ordinal
 }
