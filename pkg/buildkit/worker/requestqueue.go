@@ -3,45 +3,53 @@ package worker
 import (
 	"container/list"
 	"sync"
+
+	corev1 "k8s.io/api/core/v1"
 )
 
 type RequestQueue interface {
-	Enqueue(chan LeaseRequest)
-	Dequeue() chan LeaseRequest
+	Enqueue(chan PodRequestResult)
+	Dequeue() chan PodRequestResult
 	Len() int
 }
 
-type LeaseRequest struct {
-	addr string
-	err  error
+type PodRequestResult struct {
+	pod *corev1.Pod
+	err error
 }
 
-type channelQueue struct {
+type requestQueue struct {
 	mu  sync.Mutex
 	dll *list.List
 }
 
-func NewRequestQueue() RequestQueue {
-	return &channelQueue{dll: list.New()}
+func NewRequestQueue() *requestQueue {
+	return &requestQueue{dll: list.New()}
 }
 
-func (q *channelQueue) Enqueue(ch chan LeaseRequest) {
+func (q *requestQueue) Enqueue(ch chan PodRequestResult) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	q.dll.PushBack(ch)
 }
 
-func (q *channelQueue) Dequeue() chan LeaseRequest {
+func (q *requestQueue) Dequeue() chan PodRequestResult {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	e := q.dll.Front()
-	q.dll.Remove(e)
+	if e == nil {
+		return nil
+	}
 
-	return e.Value.(chan LeaseRequest)
+	q.dll.Remove(e)
+	return e.Value.(chan PodRequestResult)
 }
 
-func (q *channelQueue) Len() int {
+func (q *requestQueue) Len() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
 	return q.dll.Len()
 }
