@@ -136,7 +136,7 @@ func (p *workerPool) Get(ctx context.Context) (string, error) {
 		}
 
 		p.results <- PodRequestResult{pod, err}
-		p.log.V(1).Info("OOB lease get results sent")
+		p.log.V(1).Info("OOB lease get results sent", "pod", pod, "err", err)
 	}()
 
 	result := <-ch
@@ -318,9 +318,10 @@ func (p *workerPool) processRequests() {
 	for {
 		select {
 		case <-p.ctx.Done():
+			p.log.Info("Shutting down pool requests/results routing")
 			close(p.results)
-			for p.requests.Len() > 1 {
-				close(p.requests.Dequeue())
+			for request := p.requests.Dequeue(); request != nil; {
+				close(request)
 			}
 
 			return
