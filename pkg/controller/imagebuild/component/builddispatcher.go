@@ -74,7 +74,6 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		return ctrl.Result{}, nil
 	}
 
-	start := time.Now()
 	c.phase.SetInitializing(ctx, obj)
 
 	log.Info("Processing and persisting registry credentials")
@@ -131,6 +130,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	}
 
 	log.Info("Dispatching image build", "images", buildOpts.Images)
+	start := time.Now()
 	if err = bk.Build(buildCtx, buildOpts); err != nil {
 		// buildkit uses pkg/errors for wrapping and the underlying error is a grpcerror with a status that contains the
 		// context cancellation message, not the error value. the easiest way to assert that the context was cancelled.
