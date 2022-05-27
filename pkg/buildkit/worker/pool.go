@@ -58,10 +58,8 @@ type workerPool struct {
 	requests RequestQueue
 
 	// worker loop routine
-	poolSyncTime   time.Duration
-	podMaxIdleTime time.Duration
-
-	ru              sync.Mutex
+	poolSyncTime    time.Duration
+	podMaxIdleTime  time.Duration
 	notifyReconcile chan struct{}
 
 	// leasing
@@ -114,11 +112,6 @@ func NewPool(ctx context.Context, clientset kubernetes.Interface, conf config.Bu
 	go func() {
 		ticker := time.NewTicker(wp.poolSyncTime)
 		defer ticker.Stop()
-		defer func() {
-			wp.ru.Lock()
-			defer wp.ru.Unlock()
-			close(wp.notifyReconcile)
-		}()
 
 		for {
 			if err := wp.updateWorkers(wp.ctx); err != nil {
@@ -149,11 +142,7 @@ func (p *workerPool) Get(ctx context.Context) (string, error) {
 	ch := make(chan PodRequestResult, 1)
 
 	p.requests.Enqueue(ch)
-	defer func() {
-		if p.requests.Remove(ch) {
-			close(ch)
-		}
-	}()
+	defer p.requests.Remove(ch)
 
 	p.triggerReconcile()
 
@@ -400,19 +389,12 @@ func (p *workerPool) updateWorkers(ctx context.Context) error {
 		},
 		metav1.UpdateOptions{FieldManager: fieldManagerName},
 	)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 // trigger a pool reconciliation
 // if there's already a notification pending, continue
 func (p *workerPool) triggerReconcile() {
-	p.ru.Lock()
-	defer p.ru.Unlock()
-
 	p.log.Info("Attempting to notify reconciliation")
 
 	select {
