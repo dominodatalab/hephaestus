@@ -8,7 +8,7 @@ import (
 
 var defaultOpts = options{
 	log:                 logr.Discard(),
-	syncWaitTime:        1 * time.Minute,
+	syncWaitTime:        30 * time.Second,
 	maxIdleTime:         10 * time.Minute,
 	watchTimeoutSeconds: 60,
 }

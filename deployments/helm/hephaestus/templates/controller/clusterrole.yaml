@@ -49,6 +49,14 @@ rules:
       - ""
     resources:
       - pods
+    verbs:
+      - get
+      - patch
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
       - services
     verbs:
       - list
@@ -70,11 +78,9 @@ rules:
   - apiGroups:
       - apps
     resources:
-      - statefulsets
+      - statefulsets/scale
     verbs:
-      - get
-      - watch
-      - patch
+      - update
   {{- if or (include "hephaestus.pspRequired" .) (include "hephaestus.istioWithoutCNI" .) }}
   - apiGroups:
       - policy
