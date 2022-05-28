@@ -133,7 +133,7 @@ spec:
     - metadata:
         name: cache
         labels:
-          {{- include "hephaestus.buildkit.labels.standard" . | nindent 10 }}
+          {{- include "hephaestus.buildkit.labels.matchLabels" . | nindent 10 }}
       spec:
         storageClassName: {{ .Values.buildkit.persistence.storageClass }}
         accessModes:
