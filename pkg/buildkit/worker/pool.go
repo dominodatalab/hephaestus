@@ -331,32 +331,31 @@ func (p *workerPool) updateWorkers(ctx context.Context) error {
 					req <- PodRequestResult{&pod, nil}
 				}
 
-				// We know the rest of the pods cannot be scaled down because this is now leased
-				// Or, the leasing has failed and let's just pick it back up again on the next loop
-				// This means we only service one pending build request per loop.
-				break
+				continue
 			}
 		}
 
-		ts, ok := pod.Annotations[expiryTimeAnnotation]
-		if !ok && time.Since(pod.CreationTimestamp.Time) > p.podMaxIdleTime {
-			log.Info("Eligible for termination, missing expiry time and pod age older than max idle time")
-			removals = append(removals, pod.Name)
-
-			continue
-		}
-
-		if ok {
-			expiry, err := time.Parse(time.RFC3339, ts)
-			if err != nil {
-				log.Info("Cannot parse expiry time, assuming expired", "expiry", expiry)
+		if len(leased) == 0 {
+			ts, ok := pod.Annotations[expiryTimeAnnotation]
+			if !ok && time.Since(pod.CreationTimestamp.Time) > p.podMaxIdleTime {
+				log.Info("Eligible for termination, missing expiry time and pod age older than max idle time")
 				removals = append(removals, pod.Name)
-			} else if time.Now().After(expiry) {
-				log.Info("Eligible for termination, ttl has expired", "expiry", expiry)
-				removals = append(removals, pod.Name)
+
+				continue
 			}
 
-			continue
+			if ok {
+				expiry, err := time.Parse(time.RFC3339, ts)
+				if err != nil {
+					log.Info("Cannot parse expiry time, assuming expired", "expiry", expiry)
+					removals = append(removals, pod.Name)
+				} else if time.Now().After(expiry) {
+					log.Info("Eligible for termination, ttl has expired", "expiry", expiry)
+					removals = append(removals, pod.Name)
+				}
+
+				continue
+			}
 		}
 
 		pending = append(pending, pod.Name)
