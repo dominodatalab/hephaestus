@@ -300,6 +300,13 @@ func schema_pkg_api_hephaestus_v1_ImageBuildStatus(ref common.ReferenceCallback)
 							Format:      "",
 						},
 					},
+					"builderAddr": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BuilderAddr is the routable address to the buildkit pod used during the image build process.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"conditions": {
 						SchemaProps: spec.SchemaProps{
 							Type: []string{"array"},

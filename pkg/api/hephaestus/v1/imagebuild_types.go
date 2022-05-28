@@ -48,7 +48,10 @@ type ImageBuildStatus struct {
 	// AllocationTime is the total time spent allocating a build pod.
 	AllocationTime string `json:"allocationTime,omitempty"`
 	// BuildTime is the total time spent during the image build process.
-	BuildTime   string                 `json:"buildTime,omitempty"`
+	BuildTime string `json:"buildTime,omitempty"`
+	// BuilderAddr is the routable address to the buildkit pod used during the image build process.
+	BuilderAddr string `json:"builderAddr,omitempty"`
+
 	Conditions  []metav1.Condition     `json:"conditions,omitempty"`
 	Transitions []ImageBuildTransition `json:"transitions,omitempty"`
 	Phase       Phase                  `json:"phase,omitempty"`
@@ -61,9 +64,10 @@ type ImageBuildStatus struct {
 // +kubebuilder:resource:scope=Namespaced,shortName=ib
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Status",type=string,JSONPath=".status.phase"
-// +kubebuilder:printcolumn:name="Pod Allocation Time",type=string,JSONPath=".status.allocationTime"
+// +kubebuilder:printcolumn:name="Allocation Time",type=string,JSONPath=".status.allocationTime"
 // +kubebuilder:printcolumn:name="Build Time",type=string,JSONPath=".status.buildTime"
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:printcolumn:name="Builder Address",type=string,JSONPath=".status.builderAddr",priority=10
 
 type ImageBuild struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -125,6 +129,13 @@ func (in *ImageBuild) GetPatch() client.Patch {
 			Operation: "add",
 			Path:      "/status/buildTime",
 			Value:     in.Status.BuildTime,
+		})
+	}
+	if in.Status.BuilderAddr != "" {
+		ops = append(ops, jsonpatch.Operation{
+			Operation: "add",
+			Path:      "/status/builderAddr",
+			Value:     in.Status.BuilderAddr,
 		})
 	}
 

@@ -96,6 +96,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkit service lookup failed: %w", err))
 	}
 
+	obj.Status.BuilderAddr = addr
 	obj.Status.AllocationTime = time.Since(allocStart).Truncate(time.Millisecond).String()
 
 	defer func(pool worker.Pool, endpoint string) {

@@ -22,7 +22,7 @@ spec:
       name: Status
       type: string
     - jsonPath: .status.allocationTime
-      name: Pod Allocation Time
+      name: Allocation Time
       type: string
     - jsonPath: .status.buildTime
       name: Build Time
@@ -30,6 +30,10 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    - jsonPath: .status.builderAddr
+      name: Builder Address
+      priority: 10
+      type: string
     name: v1
     schema:
       openAPIV3Schema:
@@ -129,6 +133,10 @@ spec:
               buildTime:
                 description: BuildTime is the total time spent during the image build
                   process.
+                type: string
+              builderAddr:
+                description: BuilderAddr is the routable address to the buildkit pod
+                  used during the image build process.
                 type: string
               conditions:
                 items:

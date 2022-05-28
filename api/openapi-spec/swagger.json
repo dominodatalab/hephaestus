@@ -1904,6 +1904,10 @@
           "description": "BuildTime is the total time spent during the image build process.",
           "type": "string"
         },
+        "builderAddr": {
+          "description": "BuilderAddr is the routable address to the buildkit pod used during the image build process.",
+          "type": "string"
+        },
         "conditions": {
           "type": "array",
           "items": {
