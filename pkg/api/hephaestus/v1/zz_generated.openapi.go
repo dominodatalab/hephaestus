@@ -286,9 +286,16 @@ func schema_pkg_api_hephaestus_v1_ImageBuildStatus(ref common.ReferenceCallback)
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
+					"allocationTime": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AllocationTime is the total time spent allocating a build pod.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"buildTime": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BuildTime is the total time spend during the build process.",
+							Description: "BuildTime is the total time spent during the image build process.",
 							Type:        []string{"string"},
 							Format:      "",
 						},

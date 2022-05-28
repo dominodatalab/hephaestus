@@ -21,6 +21,9 @@ spec:
     - jsonPath: .status.phase
       name: Status
       type: string
+    - jsonPath: .status.allocationTime
+      name: Pod Allocation Time
+      type: string
     - jsonPath: .status.buildTime
       name: Build Time
       type: string
@@ -119,8 +122,13 @@ spec:
                 previousPhase: ""
                 processed: true
             properties:
+              allocationTime:
+                description: AllocationTime is the total time spent allocating a build
+                  pod.
+                type: string
               buildTime:
-                description: BuildTime is the total time spend during the build process.
+                description: BuildTime is the total time spent during the image build
+                  process.
                 type: string
               conditions:
                 items:

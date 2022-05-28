@@ -45,7 +45,9 @@ type ImageBuildTransition struct {
 }
 
 type ImageBuildStatus struct {
-	// BuildTime is the total time spend during the build process.
+	// AllocationTime is the total time spent allocating a build pod.
+	AllocationTime string `json:"allocationTime,omitempty"`
+	// BuildTime is the total time spent during the image build process.
 	BuildTime   string                 `json:"buildTime,omitempty"`
 	Conditions  []metav1.Condition     `json:"conditions,omitempty"`
 	Transitions []ImageBuildTransition `json:"transitions,omitempty"`
@@ -59,6 +61,7 @@ type ImageBuildStatus struct {
 // +kubebuilder:resource:scope=Namespaced,shortName=ib
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Status",type=string,JSONPath=".status.phase"
+// +kubebuilder:printcolumn:name="Pod Allocation Time",type=string,JSONPath=".status.allocationTime"
 // +kubebuilder:printcolumn:name="Build Time",type=string,JSONPath=".status.buildTime"
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
 
@@ -110,6 +113,13 @@ func (in *ImageBuild) GetPatch() client.Patch {
 		},
 	}
 
+	if in.Status.AllocationTime != "" {
+		ops = append(ops, jsonpatch.Operation{
+			Operation: "add",
+			Path:      "/status/allocationTime",
+			Value:     in.Status.AllocationTime,
+		})
+	}
 	if in.Status.BuildTime != "" {
 		ops = append(ops, jsonpatch.Operation{
 			Operation: "add",

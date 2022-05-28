@@ -88,11 +88,15 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		}
 	}(configDir)
 
+	allocStart := time.Now()
+
 	log.Info("Leasing buildkit worker")
 	addr, err := c.pool.Get(ctx)
 	if err != nil {
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkit service lookup failed: %w", err))
 	}
+
+	obj.Status.AllocationTime = time.Since(allocStart).Truncate(time.Millisecond).String()
 
 	defer func(pool worker.Pool, endpoint string) {
 		log.Info("Releasing buildkit worker", "endpoint", endpoint)
@@ -142,7 +146,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("build failed: %w", err))
 	}
 
-	obj.Status.BuildTime = time.Since(start).String()
+	obj.Status.BuildTime = time.Since(start).Truncate(time.Millisecond).String()
 	c.phase.SetSucceeded(ctx, obj)
 
 	return ctrl.Result{}, nil
