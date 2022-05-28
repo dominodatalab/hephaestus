@@ -13,14 +13,15 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	"k8s.io/client-go/kubernetes"
+	appsv1typed "k8s.io/client-go/kubernetes/typed/apps/v1"
 	corev1typed "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"github.com/dominodatalab/hephaestus/pkg/config"
@@ -33,8 +34,10 @@ type Pool interface {
 }
 
 var (
-	errNoUnleasedPods = errors.New("no unleased pods found")
-	statefulPodRegex  = regexp.MustCompile(`^.*-(\d+)$`)
+	ErrNoUnleasedPods = errors.New("no unleased pods found")
+
+	newUUID          = uuid.NewUUID
+	statefulPodRegex = regexp.MustCompile(`^.*-(\d+)$`)
 )
 
 const (
@@ -51,13 +54,13 @@ type workerPool struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	// incoming/outgoing lease requests/results
+	// incoming lease requests
 	requests RequestQueue
-	results  chan PodRequestResult
 
-	// gc routine
-	poolSyncTime   time.Duration
-	podMaxIdleTime time.Duration
+	// worker loop routine
+	poolSyncTime    time.Duration
+	podMaxIdleTime  time.Duration
+	notifyReconcile chan struct{}
 
 	// leasing
 	mu              sync.Mutex
@@ -66,11 +69,14 @@ type workerPool struct {
 	podClient       corev1typed.PodInterface
 	endpointsClient corev1typed.EndpointsInterface
 	podListOptions  metav1.ListOptions
-	scaler          Scaler
 
 	// endpoints discovery
 	serviceName string
 	servicePort int32
+
+	// statefulset mgmt
+	statefulSetName   string
+	statefulSetClient appsv1typed.StatefulSetInterface
 }
 
 func NewPool(ctx context.Context, clientset kubernetes.Interface, conf config.Buildkit, opts ...PoolOption) Pool {
@@ -79,72 +85,83 @@ func NewPool(ctx context.Context, clientset kubernetes.Interface, conf config.Bu
 		o = fn(o)
 	}
 
-	scaler := NewStatefulSetScaler(ScalerOpt{
-		Name:                conf.StatefulSetName,
-		Namespace:           conf.Namespace,
-		Clientset:           clientset,
-		WatchTimeoutSeconds: o.watchTimeoutSeconds,
-		Log:                 o.log.WithName("statefulset-scaler"),
-	})
-
-	fs := fields.SelectorFromSet(map[string]string{"status.phase": "Running"})
 	ls := labels.SelectorFromSet(conf.PodLabels)
-	podListOptions := metav1.ListOptions{
-		LabelSelector: ls.String(),
-		FieldSelector: fs.String(),
-	}
+	podListOptions := metav1.ListOptions{LabelSelector: ls.String()}
 
 	ctx, cancel := context.WithCancel(ctx)
 	wp := &workerPool{
-		ctx:             ctx,
-		cancel:          cancel,
-		log:             o.log,
-		poolSyncTime:    o.syncWaitTime,
-		podMaxIdleTime:  o.maxIdleTime,
-		uuid:            string(uuid.NewUUID()),
-		requests:        NewRequestQueue(),
-		results:         make(chan PodRequestResult),
-		podClient:       clientset.CoreV1().Pods(conf.Namespace),
-		endpointsClient: clientset.CoreV1().Endpoints(conf.Namespace),
-		podListOptions:  podListOptions,
-		serviceName:     conf.ServiceName,
-		servicePort:     conf.DaemonPort,
-		namespace:       conf.Namespace,
-		scaler:          scaler,
+		ctx:               ctx,
+		cancel:            cancel,
+		log:               o.log,
+		poolSyncTime:      o.syncWaitTime,
+		podMaxIdleTime:    o.maxIdleTime,
+		uuid:              string(newUUID()),
+		requests:          NewRequestQueue(),
+		notifyReconcile:   make(chan struct{}, 1),
+		podClient:         clientset.CoreV1().Pods(conf.Namespace),
+		endpointsClient:   clientset.CoreV1().Endpoints(conf.Namespace),
+		podListOptions:    podListOptions,
+		serviceName:       conf.ServiceName,
+		servicePort:       conf.DaemonPort,
+		statefulSetName:   conf.StatefulSetName,
+		statefulSetClient: clientset.AppsV1().StatefulSets(conf.Namespace),
+		namespace:         conf.Namespace,
 	}
 
-	go wp.processRequests()
-	go wp.monitorPool()
+	wp.log.Info("Starting worker pod monitor", "syncTime", wp.poolSyncTime.String())
+	go func() {
+		ticker := time.NewTicker(wp.poolSyncTime)
+		defer ticker.Stop()
+
+		for {
+			if err := wp.updateWorkers(wp.ctx); err != nil {
+				wp.log.Error(err, "Failed to update worker pool")
+			}
+
+			select {
+			// break out of the select when triggered by notification or tick, this will trigger an update
+			case <-wp.notifyReconcile:
+				wp.log.Info("Reconciling pool, notify triggered")
+			case <-ticker.C:
+				wp.log.Info("Reconciling pool, sync triggered")
+			case <-wp.ctx.Done():
+				wp.log.Info("Shutting down worker pod monitor")
+				for wp.requests.Len() > 0 {
+					close(wp.requests.Dequeue())
+				}
+
+				return
+			}
+		}
+	}()
 
 	return wp
 }
 
 func (p *workerPool) Get(ctx context.Context) (string, error) {
 	ch := make(chan PodRequestResult, 1)
-	defer close(ch)
 
 	p.requests.Enqueue(ch)
+	defer p.requests.Remove(ch)
 
-	oob, cancel := context.WithCancel(ctx)
-	defer cancel()
+	p.triggerReconcile()
 
-	go func() {
-		pod, err := p.get(oob)
-		if oob.Err() != nil {
-			p.log.V(1).Info("OOB lease get cancelled, exiting")
-			return
+	select {
+	case result := <-ch:
+		if result.err != nil {
+			return "", result.err
 		}
 
-		p.results <- PodRequestResult{pod, err}
-		p.log.V(1).Info("OOB lease get results sent", "pod", pod, "err", err)
-	}()
-
-	result := <-ch
-	if result.err != nil {
-		return "", result.err
+		// when the channel is closed, we receive nil
+		if result.pod != nil {
+			return p.buildEndpointURL(ctx, result.pod.Name)
+		}
+	case <-ctx.Done():
+		// context has been cancelled
+		return "", ctx.Err()
 	}
 
-	return p.buildEndpointURL(ctx, result.pod.Name)
+	return "", ErrNoUnleasedPods
 }
 
 func (p *workerPool) Release(ctx context.Context, addr string) error {
@@ -180,14 +197,11 @@ func (p *workerPool) Release(ctx context.Context, addr string) error {
 	delete(pac.Annotations, managerIDAnnotation)
 
 	p.log.Info("Applying pod metadata changes", "annotations", pac.Annotations)
-	if pod, err = p.podClient.Apply(ctx, pac, metav1.ApplyOptions{FieldManager: fieldManagerName}); err != nil {
+	if _, err = p.podClient.Apply(ctx, pac, metav1.ApplyOptions{FieldManager: fieldManagerName}); err != nil {
 		return fmt.Errorf("cannot update pod metadata: %w", err)
 	}
 
-	if request := p.requests.Dequeue(); request != nil {
-		request <- PodRequestResult{pod, nil}
-	}
-
+	p.triggerReconcile()
 	return nil
 }
 
@@ -196,59 +210,11 @@ func (p *workerPool) Close() {
 	p.cancel()
 }
 
-// coordinates lease and scaling actions
-func (p *workerPool) get(ctx context.Context) (*corev1.Pod, error) {
-	pod, err := p.leasePod(ctx)
-	if err == nil {
-		return pod, nil
-	}
-	if !errors.Is(err, errNoUnleasedPods) {
-		return nil, err
-	}
-
-	p.log.Info("Scaling cluster, no unleased pods found")
-	if err = p.scaler.Scale(ctx, 1); err != nil {
-		return nil, err
-	}
-	p.log.Info("Scale cluster complete")
-
-	pod, err = p.leasePod(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to acquire lease after scaling: %w", err)
-	}
-
-	return pod, nil
-}
-
-// finds unleased pod and applies lease metadata
-func (p *workerPool) leasePod(ctx context.Context) (*corev1.Pod, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	p.log.Info("Querying for pods", "namespace", p.namespace, "opts", p.podListOptions)
-	podList, err := p.podClient.List(ctx, p.podListOptions)
-	if err != nil {
-		return nil, err
-	}
-
-	var pod *corev1.Pod
-	for _, item := range podList.Items {
-		if _, ok := item.Annotations[leasedAnnotation]; !ok {
-			p.log.Info("Found unleased pod", "name", item.Name, "namespace", item.Namespace)
-
-			pod = &item
-			break
-		}
-	}
-
-	if pod == nil {
-		p.log.Info("No unleased pods found")
-		return nil, errNoUnleasedPods
-	}
-
+// applies lease metadata to given pod
+func (p *workerPool) leasePod(ctx context.Context, pod *corev1.Pod) error {
 	pac, err := corev1ac.ExtractPod(pod, fieldManagerName)
 	if err != nil {
-		return nil, fmt.Errorf("cannot extract pod config: %w", err)
+		return fmt.Errorf("cannot extract pod config: %w", err)
 	}
 
 	pac.WithAnnotations(map[string]string{
@@ -258,11 +224,11 @@ func (p *workerPool) leasePod(ctx context.Context) (*corev1.Pod, error) {
 	delete(pac.Annotations, expiryTimeAnnotation)
 
 	p.log.Info("Applying pod metadata changes", "annotations", pac.Annotations)
-	if pod, err = p.podClient.Apply(ctx, pac, metav1.ApplyOptions{FieldManager: fieldManagerName}); err != nil {
-		return nil, fmt.Errorf("cannot update pod metadata: %w", err)
+	if _, err = p.podClient.Apply(ctx, pac, metav1.ApplyOptions{FieldManager: fieldManagerName}); err != nil {
+		return fmt.Errorf("cannot update pod metadata: %w", err)
 	}
 
-	return pod, nil
+	return nil
 }
 
 // builds routable url for buildkit pod with protocol and port
@@ -313,69 +279,7 @@ scan:
 	return hostname, nil
 }
 
-// async unleased pod request routing
-func (p *workerPool) processRequests() {
-	for {
-		select {
-		case <-p.ctx.Done():
-			p.log.Info("Shutting down pool requests/results routing")
-			close(p.results)
-			for request := p.requests.Dequeue(); request != nil; {
-				close(request)
-			}
-
-			return
-		case result := <-p.results:
-			request := p.requests.Dequeue()
-			request <- result
-		}
-	}
-}
-
-// async pool reaping routine
-func (p *workerPool) monitorPool() {
-	p.log.Info("Starting worker pod monitor", "syncTime", p.poolSyncTime.String())
-
-	ticker := time.NewTicker(p.poolSyncTime)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-p.ctx.Done():
-			p.log.Info("Shutting down worker pod monitor")
-			return
-		case <-ticker.C:
-			p.log.Info("Checking worker pool for expired leases")
-			if err := p.terminateUnleasedPods(p.ctx); err != nil {
-				p.log.Error(err, "Failed to clean worker pool")
-			}
-			p.log.Info("Worker pool lease check complete")
-		}
-	}
-}
-
-// pool garbage collection logic
-//
-// leasing is performed using metadata annotations by manipulating the following values:
-//
-// annotation	 | add lease	| remove lease
-// "leased"		 | ADD			| REMOVE
-// "manager-id"	 | ADD			| REMOVE
-// "expiry-time" | REMOVE		| ADD
-//
-// termination order:
-//
-// statefulset pods (pod-0, pod-1, ..., pod-N) must be scaled up/down in order. this means that we cannot scale down
-// unleased pod-N until all higher ordinal pods (pod-M where M > N) are unleased. hence, we check pods in reverse
-// ordinal order and stop the scale down whenever we encounter a pod that is NOT eligible for termination.
-//
-// termination rules:
-//
-// 1. if a pod is unleased, has no expiry time, and is older than the max idle time, then it will be terminated.
-// 2. if a pod is leased and its expiry time has passed, then it will be terminated.
-// 3. if the controller is restarted while pods are leased, then they will have "manager-id" that matches the uuid of
-//	  the previous instance and these leased pods will be terminated.
-func (p *workerPool) terminateUnleasedPods(ctx context.Context) error {
+func (p *workerPool) updateWorkers(ctx context.Context) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -389,8 +293,14 @@ func (p *workerPool) terminateUnleasedPods(ctx context.Context) error {
 		return getOrdinal(podList.Items[i].Name) > getOrdinal(podList.Items[j].Name)
 	})
 
+	var allPods []string
+	var leased []string
+	var pending []string
 	var removals []string
+
 	for _, pod := range podList.Items {
+		allPods = append(allPods, pod.Name)
+
 		log := p.log.WithValues("podName", pod.Name)
 
 		if id, ok := pod.Annotations[managerIDAnnotation]; ok && id != p.uuid {
@@ -400,37 +310,98 @@ func (p *workerPool) terminateUnleasedPods(ctx context.Context) error {
 			continue
 		}
 
-		if _, leased := pod.Annotations[leasedAnnotation]; leased {
-			break
-		}
+		if _, hasLease := pod.Annotations[leasedAnnotation]; hasLease {
+			leased = append(leased, pod.Name)
 
-		ts, ok := pod.Annotations[expiryTimeAnnotation]
-		if !ok && time.Since(pod.CreationTimestamp.Time) > p.podMaxIdleTime {
-			log.Info("Eligible for termination, missing expiry time")
-			removals = append(removals, pod.Name)
-
+			log.Info("Ineligible for termination, pod is leased")
 			continue
 		}
 
-		expiry, err := time.Parse(time.RFC3339, ts)
-		if err != nil {
-			return fmt.Errorf("failed to parse pod expiry time: %w", err)
+		if pod.Status.Phase == corev1.PodRunning {
+			if req := p.requests.Dequeue(); req != nil {
+				log.Info("Found pending request, attempt to lease pod")
+
+				if err := p.leasePod(ctx, &pod); err != nil {
+					log.Error(err, "Failed to lease pod, requeueing request")
+					p.requests.Enqueue(req)
+				} else {
+					leased = append(leased, pod.Name)
+
+					log.Info("Pod leased, passing to request")
+					req <- PodRequestResult{&pod, nil}
+				}
+
+				continue
+			}
 		}
 
-		if time.Now().After(expiry) {
-			log.Info("Eligible for termination, ttl has expired", "expiry", expiry)
-			removals = append(removals, pod.Name)
+		if len(leased) == 0 {
+			ts, ok := pod.Annotations[expiryTimeAnnotation]
+			if !ok && time.Since(pod.CreationTimestamp.Time) > p.podMaxIdleTime {
+				log.Info("Eligible for termination, missing expiry time and pod age older than max idle time")
+				removals = append(removals, pod.Name)
+
+				continue
+			}
+
+			if ok {
+				expiry, err := time.Parse(time.RFC3339, ts)
+				if err != nil {
+					log.Info("Cannot parse expiry time, assuming expired", "expiry", expiry)
+					removals = append(removals, pod.Name)
+				} else if time.Now().After(expiry) {
+					log.Info("Eligible for termination, ttl has expired", "expiry", expiry)
+					removals = append(removals, pod.Name)
+				}
+
+				continue
+			}
 		}
+
+		pending = append(pending, pod.Name)
 	}
 
-	count := -int32(len(removals))
-	if count == 0 {
-		p.log.Info("No pods eligible for termination")
-		return nil
-	}
+	podCount := len(allPods)
+	pendingCount := len(pending)
+	removalCount := len(removals)
+	requestCount := p.requests.Len()
+	replicas := int32((podCount - removalCount) + (requestCount - pendingCount))
 
-	p.log.Info("Attempting to terminate pods via scale", "names", removals)
-	return p.scaler.Scale(ctx, count)
+	p.log.Info("Pod evaluation complete",
+		"allPods", allPods,
+		"leasedPods", leased,
+		"pendingPods", pending,
+		"removalPods", removals,
+		"podRequests", requestCount,
+	)
+
+	p.log.Info("Setting statefulset scale", "replicas", replicas)
+	_, err = p.statefulSetClient.UpdateScale(
+		ctx,
+		p.statefulSetName,
+		&autoscalingv1.Scale{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      p.statefulSetName,
+				Namespace: p.namespace,
+			},
+			Spec: autoscalingv1.ScaleSpec{Replicas: replicas},
+		},
+		metav1.UpdateOptions{FieldManager: fieldManagerName},
+	)
+	return err
+}
+
+// trigger a pool reconciliation
+// if there's already a notification pending, continue
+func (p *workerPool) triggerReconcile() {
+	p.log.Info("Attempting to notify reconciliation")
+
+	select {
+	case p.notifyReconcile <- struct{}{}:
+		p.log.Info("Notification sent")
+	default:
+		p.log.Info("Aborting notify, notification already present")
+	}
 }
 
 // plucks the ordinal suffix off of a statefulset pod name

@@ -85,7 +85,7 @@ controller:
   watchNamespaces: []
 
   # Duration after which buildkit cluster is inspected for idle pods
-  # Defaults to "1m"
+  # Defaults to "30s"
   poolSyncWaitTime: null
 
   # Duration after which idle buildkit pods will be terminated

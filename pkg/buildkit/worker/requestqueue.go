@@ -11,6 +11,7 @@ type RequestQueue interface {
 	Enqueue(chan PodRequestResult)
 	Dequeue() chan PodRequestResult
 	Len() int
+	Remove(chan PodRequestResult) bool
 }
 
 type PodRequestResult struct {
@@ -32,6 +33,20 @@ func (q *requestQueue) Enqueue(ch chan PodRequestResult) {
 	defer q.mu.Unlock()
 
 	q.dll.PushBack(ch)
+}
+
+func (q *requestQueue) Remove(ch chan PodRequestResult) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	for el := q.dll.Front(); el != nil; el = el.Next() {
+		if el.Value == ch {
+			q.dll.Remove(el)
+			return true
+		}
+	}
+
+	return false
 }
 
 func (q *requestQueue) Dequeue() chan PodRequestResult {
