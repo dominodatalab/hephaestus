@@ -93,9 +93,9 @@ func NewPool(ctx context.Context, clientset kubernetes.Interface, conf config.Bu
 	wp := &workerPool{
 		ctx:               ctx,
 		cancel:            cancel,
-		log:               o.log,
-		poolSyncTime:      o.syncWaitTime,
-		podMaxIdleTime:    o.maxIdleTime,
+		log:               o.Log,
+		poolSyncTime:      o.SyncWaitTime,
+		podMaxIdleTime:    o.MaxIdleTime,
 		uuid:              string(newUUID()),
 		requests:          NewRequestQueue(),
 		notifyReconcile:   make(chan struct{}, 1),

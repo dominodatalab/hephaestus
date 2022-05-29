@@ -6,46 +6,46 @@ import (
 	"github.com/go-logr/logr"
 )
 
-var defaultOpts = options{
-	log:                 logr.Discard(),
-	syncWaitTime:        30 * time.Second,
-	maxIdleTime:         10 * time.Minute,
-	watchTimeoutSeconds: 60,
+var defaultOpts = Options{
+	Log:                 logr.Discard(),
+	SyncWaitTime:        30 * time.Second,
+	MaxIdleTime:         10 * time.Minute,
+	WatchTimeoutSeconds: 60,
 }
 
-type options struct {
-	log                 logr.Logger
-	maxIdleTime         time.Duration
-	syncWaitTime        time.Duration
-	watchTimeoutSeconds int64
+type Options struct {
+	Log                 logr.Logger
+	MaxIdleTime         time.Duration
+	SyncWaitTime        time.Duration
+	WatchTimeoutSeconds int64
 }
 
-type PoolOption func(o options) options
+type PoolOption func(o Options) Options
 
 func SyncWaitTime(d time.Duration) PoolOption {
-	return func(o options) options {
-		o.syncWaitTime = d
+	return func(o Options) Options {
+		o.SyncWaitTime = d
 		return o
 	}
 }
 
 func MaxIdleTime(d time.Duration) PoolOption {
-	return func(o options) options {
-		o.maxIdleTime = d
+	return func(o Options) Options {
+		o.MaxIdleTime = d
 		return o
 	}
 }
 
 func WatchTimeoutSeconds(s int64) PoolOption {
-	return func(o options) options {
-		o.watchTimeoutSeconds = s
+	return func(o Options) Options {
+		o.WatchTimeoutSeconds = s
 		return o
 	}
 }
 
 func Logger(log logr.Logger) PoolOption {
-	return func(o options) options {
-		o.log = log
+	return func(o Options) Options {
+		o.Log = log
 		return o
 	}
 }
