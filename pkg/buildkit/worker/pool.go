@@ -179,8 +179,8 @@ func (p *workerPool) Release(ctx context.Context, addr string) error {
 
 	p.log.Info("Parsing lease addr", "addr", addr)
 	u, err := url.ParseRequestURI(addr)
-	if err != nil {
-		return fmt.Errorf("failed to parse lease addr: %w", err)
+	if err != nil || u.Host == "" {
+		return errors.New("invalid address: must be an absolute URI including scheme")
 	}
 
 	podName := strings.Split(u.Host, ".")[0]
@@ -304,99 +304,84 @@ func (p *workerPool) updateWorkers(ctx context.Context) error {
 		return getOrdinal(podList.Items[i].Name) < getOrdinal(podList.Items[j].Name)
 	})
 
-	// ensure reverse list is sorted descending
-	reversed := podList.DeepCopy()
-	sort.Slice(reversed.Items, func(i, j int) bool {
-		return getOrdinal(reversed.Items[i].Name) > getOrdinal(reversed.Items[j].Name)
-	})
-
 	var allPods []string
 	var leased []string
 	var pending []string
 	var removals []string
 
-	// remove pods from main list based on certain conditions
-	reversedLen := len(reversed.Items)
-	for idx, pod := range reversed.Items {
+	// mark pods for removal based on state and lease pods when requests exist
+	for _, pod := range podList.Items {
 		log := p.log.WithValues("podName", pod.Name)
 		allPods = append(allPods, pod.Name)
 
-		var ignore bool
 		if id, ok := pod.Annotations[managerIDAnnotation]; ok && id != p.uuid { // mark unmanaged pods
 			log.Info("Eligible for termination, manager id mismatch", "expected", p.uuid, "actual", id)
 
-			ignore = true
 			removals = append(removals, pod.Name)
 		} else if _, hasLease := pod.Annotations[leasedAnnotation]; hasLease { // mark leased pods
 			log.Info("Ineligible for termination, pod is leased")
 
-			ignore = true
 			leased = append(leased, pod.Name)
 		} else if pod.Status.Phase == corev1.PodPending { // mark pending pods
-			ignore = true
 			pending = append(pending, pod.Name)
-		}
+		} else {
+			if req := p.requests.Dequeue(); req != nil {
+				log.Info("Found pending request, attempt to lease pod")
 
-		/*
-			EXAMPLE CROSS-IDX REFERENCE
+				if pod, err := p.leasePod(ctx, &pod); err != nil {
+					log.Error(err, "Failed to lease pod, requeueing request")
+					p.requests.Enqueue(req)
+				} else {
+					leased = append(leased, pod.Name)
 
-			FORWARD LIST:
-			0: buildkit-0
-			1: buildkit-1
-			2: buildkit-2
+					log.Info("Pod leased, passing to request")
+					req <- PodRequestResult{pod, nil}
+				}
 
-			REVERSE LIST: (listLen - 1 - reverse idx = forward idx)
-			0: buildkit-2 (3 - 1 - 0 = :2)
-			1: buildkit-1 (3 - 1 - 1 = :1)
-			2: buildkit-0 (3 - 1 - 2 = :0)
-		*/
-		if ignore {
-			forwardIdx := reversedLen - idx - 1
-			podList.Items = append(podList.Items[:forwardIdx], podList.Items[forwardIdx+1:]...)
+				continue
+			}
+
+			if ts, ok := pod.Annotations[expiryTimeAnnotation]; ok {
+				expiry, err := time.Parse(time.RFC3339, ts)
+
+				if err != nil {
+					log.Info("Cannot parse expiry time, assuming expired", "expiry", expiry)
+					removals = append(removals, pod.Name)
+				} else if time.Now().After(expiry) {
+					log.Info("Eligible for termination, ttl has expired", "expiry", expiry)
+					removals = append(removals, pod.Name)
+				}
+			} else if time.Since(pod.CreationTimestamp.Time) > p.podMaxIdleTime {
+				log.Info("Eligible for termination, missing expiry time and pod age older than max idle time")
+				removals = append(removals, pod.Name)
+			}
 		}
 	}
 
-	// lease and/or expire eligible pods
-	for _, pod := range podList.Items {
-		log := p.log.WithValues("podName", pod.Name)
+	// collect names of pods that might be terminated
+	subtractionMap := make(map[string]bool)
+	for _, name := range removals {
+		subtractionMap[name] = true
+	}
+	for _, name := range pending {
+		subtractionMap[name] = true
+	}
 
-		if req := p.requests.Dequeue(); req != nil {
-			log.Info("Found pending request, attempt to lease pod")
+	// calculate which pods can be removed based reverse-ordinal position
+	var subtractions int
+	for idx := range allPods {
+		reverseIdx := len(allPods) - 1 - idx
 
-			if pod, err := p.leasePod(ctx, &pod); err != nil {
-				log.Error(err, "Failed to lease pod, requeueing request")
-				p.requests.Enqueue(req)
-			} else {
-				leased = append(leased, pod.Name)
-
-				log.Info("Pod leased, passing to request")
-				req <- PodRequestResult{pod, nil}
-			}
-
-			continue
-		}
-
-		if ts, ok := pod.Annotations[expiryTimeAnnotation]; ok {
-			expiry, err := time.Parse(time.RFC3339, ts)
-
-			if err != nil {
-				log.Info("Cannot parse expiry time, assuming expired", "expiry", expiry)
-				removals = append(removals, pod.Name)
-			} else if time.Now().After(expiry) {
-				log.Info("Eligible for termination, ttl has expired", "expiry", expiry)
-				removals = append(removals, pod.Name)
-			}
-		} else if time.Since(pod.CreationTimestamp.Time) > p.podMaxIdleTime {
-			log.Info("Eligible for termination, missing expiry time and pod age older than max idle time")
-			removals = append(removals, pod.Name)
+		if subtractionMap[allPods[reverseIdx]] {
+			subtractions++
+		} else {
+			break
 		}
 	}
 
 	podCount := len(allPods)
-	pendingCount := len(pending)
-	removalCount := len(removals)
 	requestCount := p.requests.Len()
-	replicas := int32((podCount - removalCount) + (requestCount - pendingCount))
+	replicas := int32(podCount + requestCount - subtractions)
 
 	p.log.Info("Pod evaluation complete",
 		"allPods", allPods,
