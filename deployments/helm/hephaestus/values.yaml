@@ -85,12 +85,16 @@ controller:
   watchNamespaces: []
 
   # Duration after which buildkit cluster is inspected for idle pods
-  # Defaults to "1m"
+  # Defaults to "30s"
   poolSyncWaitTime: null
 
   # Duration after which idle buildkit pods will be terminated
   # Defaults to "10m"
   poolMaxIdleTime: null
+
+  # Duration after which buildkit statefulset scale watch will be terminated
+  # Defaults to "60s"
+  poolWatchTimeout: null
 
   # Secrets (name: path) to expose into builds that request it
   secrets: {}

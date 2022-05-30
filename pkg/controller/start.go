@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 
+	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -13,12 +14,13 @@ import (
 
 	forgev1alpha1 "github.com/dominodatalab/hephaestus/pkg/api/forge/v1alpha1"
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
-	"github.com/dominodatalab/hephaestus/pkg/buildkit/workerpool"
+	"github.com/dominodatalab/hephaestus/pkg/buildkit/worker"
 	"github.com/dominodatalab/hephaestus/pkg/config"
 	"github.com/dominodatalab/hephaestus/pkg/controller/containerimagebuild"
 	"github.com/dominodatalab/hephaestus/pkg/controller/imagebuild"
 	"github.com/dominodatalab/hephaestus/pkg/controller/imagecache"
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials"
+	"github.com/dominodatalab/hephaestus/pkg/kubernetes"
 	"github.com/dominodatalab/hephaestus/pkg/logger"
 	// +kubebuilder:scaffold:imports
 )
@@ -35,89 +37,20 @@ func Start(cfg config.Controller) error {
 	log := ctrl.Log.WithName("setup")
 	log.V(1).Info("Using provided configuration", "config", cfg)
 
-	log.Info("Adding API types to runtime scheme")
-	scheme := runtime.NewScheme()
-	_ = clientgoscheme.AddToScheme(scheme)
-	_ = hephv1.AddToScheme(scheme)
-	_ = forgev1alpha1.AddToScheme(scheme)
-
-	// +kubebuilder:scaffold:scheme
-
-	opts := ctrl.Options{
-		Scheme:                 scheme,
-		Port:                   cfg.Manager.WebhookPort,
-		MetricsBindAddress:     cfg.Manager.MetricsAddr,
-		HealthProbeBindAddress: cfg.Manager.HealthProbeAddr,
-		LeaderElection:         cfg.Manager.EnableLeaderElection,
-		LeaderElectionID:       "hephaestus-controller-lock",
-	}
-
-	if certDir := os.Getenv("WEBHOOK_SERVER_CERT_DIR"); certDir != "" {
-		log.Info("Overriding webhook server certificate directory", "value", certDir)
-		opts.WebhookServer = &webhook.Server{
-			CertDir: certDir,
-		}
-	}
-
-	if len(cfg.Manager.WatchNamespaces) > 0 {
-		log.Info("Limiting reconciliation watch", "namespaces", cfg.Manager.WatchNamespaces)
-		opts.NewCache = cache.MultiNamespacedCacheBuilder(cfg.Manager.WatchNamespaces)
-	} else {
-		log.Info("Watching all namespaces")
-	}
-
-	log.Info("Creating new controller manager")
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), opts)
+	mgr, err := createManager(log, cfg.Manager)
 	if err != nil {
-		return err
-	}
-	if err = mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		return err
-	}
-	if err = mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		return err
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	log.Info("Initializing buildkit worker pool")
-	poolOpts := []workerpool.PoolOption{
-		workerpool.Logger(ctrl.Log.WithName("buildkit.workerpool")),
-	}
-	if mit := cfg.Buildkit.PoolMaxIdleTime; mit != nil {
-		poolOpts = append(poolOpts, workerpool.MaxIdleTime(*mit))
-	}
-	if swt := cfg.Buildkit.PoolSyncWaitTime; swt != nil {
-		poolOpts = append(poolOpts, workerpool.SyncWaitTime(*swt))
-	}
-	pool, err := workerpool.New(ctx, mgr.GetConfig(), cfg.Buildkit, poolOpts...)
+	pool, err := createWorkerPool(ctx, log, mgr, cfg.Buildkit)
 	if err != nil {
 		return err
 	}
 
-	log.Info("Registering ContainerImageBuild controller")
-	if err = containerimagebuild.Register(mgr); err != nil {
-		return err
-	}
-
-	log.Info("Registering ImageBuild controller")
-	if err = imagebuild.Register(mgr, cfg, pool); err != nil {
-		return err
-	}
-
-	log.Info("Registering ImageBuildStatus controller")
-	if err = imagebuild.RegisterImageBuildStatus(mgr, cfg); err != nil {
-		return err
-	}
-
-	log.Info("Registering ImageBuildDelete controller")
-	if err = imagebuild.RegisterImageBuildDelete(mgr); err != nil {
-		return err
-	}
-
-	log.Info("Registering ImageCache controller")
-	if err = imagecache.Register(mgr, cfg); err != nil {
+	if err = registerControllers(log, mgr, pool, cfg); err != nil {
 		return err
 	}
 
@@ -130,6 +63,108 @@ func Start(cfg config.Controller) error {
 
 	log.Info("Starting controller manager")
 	if err = mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
+	log.Info("Adding API types to runtime scheme")
+	scheme := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(scheme)
+	_ = hephv1.AddToScheme(scheme)
+	_ = forgev1alpha1.AddToScheme(scheme)
+
+	// +kubebuilder:scaffold:scheme
+
+	opts := ctrl.Options{
+		Scheme:                 scheme,
+		Port:                   cfg.WebhookPort,
+		MetricsBindAddress:     cfg.MetricsAddr,
+		HealthProbeBindAddress: cfg.HealthProbeAddr,
+		LeaderElection:         cfg.EnableLeaderElection,
+		LeaderElectionID:       "hephaestus-controller-lock",
+	}
+
+	if certDir := os.Getenv("WEBHOOK_SERVER_CERT_DIR"); certDir != "" {
+		log.Info("Overriding webhook server certificate directory", "value", certDir)
+		opts.WebhookServer = &webhook.Server{
+			CertDir: certDir,
+		}
+	}
+
+	if len(cfg.WatchNamespaces) > 0 {
+		log.Info("Limiting reconciliation watch", "namespaces", cfg.WatchNamespaces)
+		opts.NewCache = cache.MultiNamespacedCacheBuilder(cfg.WatchNamespaces)
+	} else {
+		log.Info("Watching all namespaces")
+	}
+
+	log.Info("Creating new controller manager")
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), opts)
+	if err != nil {
+		return nil, err
+	}
+	if err = mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		return nil, err
+	}
+	if err = mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		return nil, err
+	}
+
+	return mgr, nil
+}
+
+func createWorkerPool(ctx context.Context, log logr.Logger, mgr ctrl.Manager, cfg config.Buildkit) (worker.Pool, error) {
+	log.Info("Initializing buildkit worker pool")
+	poolOpts := []worker.PoolOption{
+		worker.Logger(ctrl.Log.WithName("buildkit.worker-pool")),
+	}
+
+	if mit := cfg.PoolMaxIdleTime; mit != nil {
+		poolOpts = append(poolOpts, worker.MaxIdleTime(*mit))
+	}
+
+	if swt := cfg.PoolSyncWaitTime; swt != nil {
+		poolOpts = append(poolOpts, worker.SyncWaitTime(*swt))
+	}
+
+	if wt := cfg.PoolWatchTimeout; wt != nil {
+		poolOpts = append(poolOpts, worker.WatchTimeoutSeconds(*wt))
+	}
+
+	clientset, err := kubernetes.Clientset(mgr.GetConfig())
+	if err != nil {
+		return nil, err
+	}
+
+	return worker.NewPool(ctx, clientset, cfg, poolOpts...), nil
+}
+
+func registerControllers(log logr.Logger, mgr ctrl.Manager, pool worker.Pool, cfg config.Controller) error {
+	log.Info("Registering ContainerImageBuild controller")
+	if err := containerimagebuild.Register(mgr); err != nil {
+		return err
+	}
+
+	log.Info("Registering ImageBuild controller")
+	if err := imagebuild.Register(mgr, cfg, pool); err != nil {
+		return err
+	}
+
+	log.Info("Registering ImageBuildStatus controller")
+	if err := imagebuild.RegisterImageBuildStatus(mgr, cfg); err != nil {
+		return err
+	}
+
+	log.Info("Registering ImageBuildDelete controller")
+	if err := imagebuild.RegisterImageBuildDelete(mgr); err != nil {
+		return err
+	}
+
+	log.Info("Registering ImageCache controller")
+	if err := imagecache.Register(mgr, cfg); err != nil {
 		return err
 	}
 

@@ -14,7 +14,7 @@ import (
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/hephaestus/pkg/buildkit"
-	"github.com/dominodatalab/hephaestus/pkg/buildkit/workerpool"
+	"github.com/dominodatalab/hephaestus/pkg/buildkit/worker"
 	"github.com/dominodatalab/hephaestus/pkg/config"
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials"
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/phase"
@@ -22,14 +22,14 @@ import (
 
 type BuildDispatcherComponent struct {
 	cfg   config.Buildkit
-	pool  workerpool.Pool
+	pool  worker.Pool
 	phase *phase.TransitionHelper
 
 	delete  <-chan client.ObjectKey
 	cancels sync.Map
 }
 
-func BuildDispatcher(cfg config.Buildkit, pool workerpool.Pool, ch <-chan client.ObjectKey) *BuildDispatcherComponent {
+func BuildDispatcher(cfg config.Buildkit, pool worker.Pool, ch <-chan client.ObjectKey) *BuildDispatcherComponent {
 	return &BuildDispatcherComponent{
 		cfg:    cfg,
 		pool:   pool,
@@ -73,7 +73,6 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		return ctrl.Result{}, nil
 	}
 
-	start := time.Now()
 	c.phase.SetInitializing(ctx, obj)
 
 	log.Info("Processing and persisting registry credentials")
@@ -88,20 +87,20 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		}
 	}(configDir)
 
+	allocStart := time.Now()
+
 	log.Info("Leasing buildkit worker")
-	future, err := c.pool.Get(ctx)
+	addr, err := c.pool.Get(ctx)
 	if err != nil {
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkit service lookup failed: %w", err))
 	}
 
-	addr, err := future()
-	if err != nil {
-		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkit service lookup failed: %w", err))
-	}
+	obj.Status.BuilderAddr = addr
+	obj.Status.AllocationTime = time.Since(allocStart).Truncate(time.Millisecond).String()
 
-	defer func(pool workerpool.Pool, endpoint string) {
+	defer func(pool worker.Pool, endpoint string) {
 		log.Info("Releasing buildkit worker", "endpoint", endpoint)
-		if err := pool.Release(endpoint); err != nil {
+		if err := pool.Release(ctx, endpoint); err != nil {
 			log.Error(err, "Failed to release pool endpoint", "endpoint", endpoint)
 		}
 
@@ -135,6 +134,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	}
 
 	log.Info("Dispatching image build", "images", buildOpts.Images)
+	start := time.Now()
 	if err = bk.Build(buildCtx, buildOpts); err != nil {
 		// if the underlying buildkit pod is terminated via resource delete, then buildCtx will be closed and there will
 		// be an error on it. otherwise, some external event (e.g. pod terminated) cancelled the build, so we should
@@ -147,7 +147,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("build failed: %w", err))
 	}
 
-	obj.Status.BuildTime = time.Since(start).String()
+	obj.Status.BuildTime = time.Since(start).Truncate(time.Millisecond).String()
 	c.phase.SetSucceeded(ctx, obj)
 
 	return ctrl.Result{}, nil

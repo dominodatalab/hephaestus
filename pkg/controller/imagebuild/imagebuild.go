@@ -8,7 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
-	"github.com/dominodatalab/hephaestus/pkg/buildkit/workerpool"
+	"github.com/dominodatalab/hephaestus/pkg/buildkit/worker"
 	"github.com/dominodatalab/hephaestus/pkg/config"
 	"github.com/dominodatalab/hephaestus/pkg/controller/imagebuild/component"
 	"github.com/dominodatalab/hephaestus/pkg/controller/imagebuild/predicate"
@@ -16,7 +16,7 @@ import (
 
 var ch = make(chan client.ObjectKey)
 
-func Register(mgr ctrl.Manager, cfg config.Controller, pool workerpool.Pool) error {
+func Register(mgr ctrl.Manager, cfg config.Controller, pool worker.Pool) error {
 	return core.NewReconciler(mgr).
 		For(&hephv1.ImageBuild{}).
 		Component("build-dispatcher", component.BuildDispatcher(cfg.Buildkit, pool, ch)).
