@@ -162,7 +162,7 @@ func TestPoolGet(t *testing.T) {
 		if e != nil {
 			t.Errorf("Received error attempting to create test setup: %s", e.Error())
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(3 * time.Second):
 		t.Error("Could not acquire a buildkit endpoint within 3s")
 	}
 }
@@ -221,15 +221,12 @@ func TestPoolGetFailedScaleUp(t *testing.T) {
 				t.Errorf("Did not received correct lease: %s expected, %s actual", expected, leaseAddr)
 			}
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(3 * time.Second):
 		t.Error("Could not acquire a buildkit endpoint within 3s")
 	}
 }
 
-func TestPoolGetCancel(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
+func TestPoolGetAndClose(t *testing.T) {
 	fakeClient := fake.NewSimpleClientset(validSts)
 	fakeClient.PrependReactor("patch", "*", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 		return true, validPod, nil
@@ -238,28 +235,56 @@ func TestPoolGetCancel(t *testing.T) {
 		return true, nil, nil
 	})
 
-	wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond))
+	wp := NewPool(context.Background(), fakeClient, testConfig, SyncWaitTime(250*time.Millisecond))
 
-	leaseChannel := make(chan result)
-
+	done := make(chan struct{})
 	go func() {
 		addr, err := wp.Get(context.Background())
-		leaseChannel <- result{addr, err}
+		assert.Empty(t, addr, "acquired lease even though pool was closed")
+		assert.Equal(t, ErrNoUnleasedPods, err, "expected no unleased pods error")
+
+		done <- struct{}{}
 	}()
+	time.Sleep(1 * time.Millisecond)
 
 	wp.Close()
 
 	select {
-	case res := <-leaseChannel:
-		if res.res.(string) != "" || res.err == nil {
-			t.Errorf("Acquired lease even though pool was closed: %v", res)
-		}
+	case <-done:
+	case <-time.After(3 * time.Second):
+		assert.Fail(t, "worker pool was not closed within 3s")
+	}
+}
 
-		if res.err != ErrNoUnleasedPods {
-			t.Errorf("Expected no unleased pods error, received: %v", res.err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Error("Worker pool was not closed within 3s")
+func TestPoolGetAndCancel(t *testing.T) {
+	fakeClient := fake.NewSimpleClientset(validSts)
+	fakeClient.PrependReactor("patch", "*", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+		return true, validPod, nil
+	})
+	fakeClient.PrependReactor("update", "statefulsets", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+		return true, nil, nil
+	})
+
+	wp := NewPool(context.Background(), fakeClient, testConfig, SyncWaitTime(250*time.Millisecond))
+	defer wp.Close()
+
+	done := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		addr, err := wp.Get(ctx)
+		assert.Empty(t, addr, "acquired lease even though pool was closed")
+		assert.Equal(t, context.Canceled, err)
+
+		done <- struct{}{}
+	}()
+	time.Sleep(1 * time.Millisecond)
+
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		assert.Fail(t, "worker pool was not closed within 3s")
 	}
 }
 
@@ -618,8 +643,8 @@ func TestPoolPodReconciliation(t *testing.T) {
 				if tc.expected != actual {
 					t.Errorf("expected statefulset update with %d replicas, got %d", tc.expected, actual)
 				}
-			case <-time.After(5 * time.Second):
-				t.Error("worker pool update not received within 5s")
+			case <-time.After(3 * time.Second):
+				t.Error("worker pool update not received within 3s")
 			}
 		})
 	}
