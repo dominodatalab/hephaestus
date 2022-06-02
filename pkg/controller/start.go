@@ -2,9 +2,16 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/go-logr/zapr"
+	"github.com/newrelic/go-agent/v3/integrations/nrzap"
+	"github.com/newrelic/go-agent/v3/newrelic"
+	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -28,14 +35,22 @@ import (
 // Start creates a new controller manager, registers controllers, and starts
 // their control loops for resource reconciliation.
 func Start(cfg config.Controller) error {
-	l, err := logger.New(cfg.Logging)
+	zapLogger, err := logger.NewZap(cfg.Logging)
 	if err != nil {
 		return err
 	}
-	ctrl.SetLogger(l)
+
+	ctrl.SetLogger(zapr.NewLogger(zapLogger))
 
 	log := ctrl.Log.WithName("setup")
 	log.V(1).Info("Using provided configuration", "config", cfg)
+
+	log.Info("Configuring new relic")
+	nr, err := configureNewRelic(zapLogger, cfg.NewRelic)
+	if err != nil {
+		return err
+	}
+	defer nr.Shutdown(5 * time.Second)
 
 	mgr, err := createManager(log, cfg.Manager)
 	if err != nil {
@@ -50,7 +65,7 @@ func Start(cfg config.Controller) error {
 		return err
 	}
 
-	if err = registerControllers(log, mgr, pool, cfg); err != nil {
+	if err = registerControllers(log, mgr, pool, nr, cfg); err != nil {
 		return err
 	}
 
@@ -67,6 +82,23 @@ func Start(cfg config.Controller) error {
 	}
 
 	return nil
+}
+
+func configureNewRelic(log *zap.Logger, cfg config.NewRelic) (*newrelic.Application, error) {
+	if len(cfg.Labels) != 0 {
+		var labels []string
+		for k, v := range cfg.Labels {
+			labels = append(labels, fmt.Sprintf("%s:%s", k, v))
+		}
+		_ = os.Setenv("NEW_RELIC_LABELS", strings.Join(labels, ","))
+	}
+
+	return newrelic.NewApplication(
+		newrelic.ConfigEnabled(cfg.Enabled),
+		newrelic.ConfigAppName(cfg.AppName),
+		newrelic.ConfigLicense(cfg.LicenseKey),
+		nrzap.ConfigLogger(log),
+	)
 }
 
 func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
@@ -142,14 +174,14 @@ func createWorkerPool(ctx context.Context, log logr.Logger, mgr ctrl.Manager, cf
 	return worker.NewPool(ctx, clientset, cfg, poolOpts...), nil
 }
 
-func registerControllers(log logr.Logger, mgr ctrl.Manager, pool worker.Pool, cfg config.Controller) error {
+func registerControllers(log logr.Logger, mgr ctrl.Manager, pool worker.Pool, nr *newrelic.Application, cfg config.Controller) error {
 	log.Info("Registering ContainerImageBuild controller")
 	if err := containerimagebuild.Register(mgr); err != nil {
 		return err
 	}
 
 	log.Info("Registering ImageBuild controller")
-	if err := imagebuild.Register(mgr, cfg, pool); err != nil {
+	if err := imagebuild.Register(mgr, cfg, pool, nr); err != nil {
 		return err
 	}
 

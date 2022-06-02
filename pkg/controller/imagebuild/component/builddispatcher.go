@@ -9,6 +9,7 @@ import (
 
 	"github.com/dominodatalab/controller-util/core"
 	"github.com/go-logr/logr"
+	"github.com/newrelic/go-agent/v3/newrelic"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -21,19 +22,21 @@ import (
 )
 
 type BuildDispatcherComponent struct {
-	cfg   config.Buildkit
-	pool  worker.Pool
-	phase *phase.TransitionHelper
+	cfg      config.Buildkit
+	pool     worker.Pool
+	phase    *phase.TransitionHelper
+	newRelic *newrelic.Application
 
 	delete  <-chan client.ObjectKey
 	cancels sync.Map
 }
 
-func BuildDispatcher(cfg config.Buildkit, pool worker.Pool, ch <-chan client.ObjectKey) *BuildDispatcherComponent {
+func BuildDispatcher(cfg config.Buildkit, pool worker.Pool, nr *newrelic.Application, ch <-chan client.ObjectKey) *BuildDispatcherComponent {
 	return &BuildDispatcherComponent{
-		cfg:    cfg,
-		pool:   pool,
-		delete: ch,
+		cfg:      cfg,
+		pool:     pool,
+		delete:   ch,
+		newRelic: nr,
 	}
 }
 
@@ -60,6 +63,10 @@ func (c *BuildDispatcherComponent) Initialize(ctx *core.Context, _ *ctrl.Builder
 func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, error) {
 	log := ctx.Log
 	obj := ctx.Object.(*hephv1.ImageBuild)
+
+	txn := c.newRelic.StartTransaction("buildDispatcher.reconcile")
+	txn.AddAttribute("imagebuild", obj.ObjectKey())
+	defer txn.End()
 
 	buildCtx, cancel := context.WithCancel(ctx)
 	c.cancels.Store(obj.ObjectKey(), cancel)

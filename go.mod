@@ -49,6 +49,8 @@ require (
 
 require (
 	github.com/hashicorp/go-retryablehttp v0.7.0
+	github.com/newrelic/go-agent/v3 v3.16.1
+	github.com/newrelic/go-agent/v3/integrations/nrzap v1.0.1
 	gomodules.xyz/jsonpatch/v2 v2.2.0
 	k8s.io/apiextensions-apiserver v0.24.0
 	sigs.k8s.io/yaml v1.3.0
