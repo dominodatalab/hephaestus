@@ -32,6 +32,17 @@ istio:
   # network settings when CNI plugin is NOT installed.
   cni: false
 
+# New Relic APM configuration
+newRelic:
+  # Enable monitoring
+  enabled: false
+  # Application name
+  appName: hephaestus
+  # Account API key
+  licenseKey: ""
+  # Tag metadata added to metrics
+  labels: {}
+
 # Controller manager configuration
 controller:
   # Controller manager image
