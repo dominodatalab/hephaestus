@@ -65,7 +65,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	obj := ctx.Object.(*hephv1.ImageBuild)
 
 	txn := c.newRelic.StartTransaction("buildDispatcher.reconcile")
-	txn.AddAttribute("imagebuild", obj.ObjectKey())
+	txn.AddAttribute("imagebuild", obj.ObjectKey().String())
 	defer txn.End()
 
 	buildCtx, cancel := context.WithCancel(ctx)
