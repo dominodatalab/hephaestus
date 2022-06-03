@@ -23,6 +23,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	appsv1typed "k8s.io/client-go/kubernetes/typed/apps/v1"
 	corev1typed "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/util/retry"
 
 	"github.com/dominodatalab/hephaestus/pkg/config"
 )
@@ -159,7 +160,16 @@ func (p *workerPool) Get(ctx context.Context) (string, error) {
 
 		// when the channel is closed, we receive nil
 		if result.pod != nil {
-			return p.buildEndpointURL(ctx, result.pod.Name)
+			addr, err := p.buildEndpointURL(ctx, result.pod.Name)
+			if err == nil {
+				return addr, nil
+			}
+			// when the url cannot be built, we release the pod
+			if rErr := p.releasePod(ctx, result.pod); rErr != nil {
+				p.log.Error(err, "Failed to release pod after URL build error")
+			}
+
+			return "", err
 		}
 	case <-ctx.Done():
 		// context has been cancelled
@@ -194,24 +204,7 @@ func (p *workerPool) Release(ctx context.Context, addr string) error {
 		return err
 	}
 
-	pac, err := corev1ac.ExtractPod(pod, fieldManagerName)
-	if err != nil {
-		return fmt.Errorf("cannot extract pod config: %w", err)
-	}
-
-	pac.WithAnnotations(map[string]string{
-		expiryTimeAnnotation: time.Now().Add(p.podMaxIdleTime).Format(time.RFC3339),
-	})
-	delete(pac.Annotations, leasedAnnotation)
-	delete(pac.Annotations, managerIDAnnotation)
-
-	p.log.Info("Applying pod metadata changes", "annotations", pac.Annotations)
-	if _, err = p.podClient.Apply(ctx, pac, metav1.ApplyOptions{FieldManager: fieldManagerName}); err != nil {
-		return fmt.Errorf("cannot update pod metadata: %w", err)
-	}
-
-	p.triggerReconcile()
-	return nil
+	return p.releasePod(ctx, pod)
 }
 
 // Close shuts down the pool by terminating all background routines used to manage requests and garbage collection.
@@ -240,17 +233,55 @@ func (p *workerPool) leasePod(ctx context.Context, pod *corev1.Pod) (*corev1.Pod
 	return pod, nil
 }
 
+// removes lease metadata from given pod and adds expiry
+func (p *workerPool) releasePod(ctx context.Context, pod *corev1.Pod) error {
+	pac, err := corev1ac.ExtractPod(pod, fieldManagerName)
+	if err != nil {
+		return fmt.Errorf("cannot extract pod config: %w", err)
+	}
+
+	pac.WithAnnotations(map[string]string{
+		expiryTimeAnnotation: time.Now().Add(p.podMaxIdleTime).Format(time.RFC3339),
+	})
+	delete(pac.Annotations, leasedAnnotation)
+	delete(pac.Annotations, managerIDAnnotation)
+
+	p.log.Info("Applying pod metadata changes", "annotations", pac.Annotations)
+	if pod, err = p.podClient.Apply(ctx, pac, metav1.ApplyOptions{FieldManager: fieldManagerName}); err != nil {
+		return fmt.Errorf("cannot update pod metadata: %w", err)
+	}
+
+	p.triggerReconcile()
+
+	return nil
+}
+
 // builds routable url for buildkit pod with protocol and port
 func (p *workerPool) buildEndpointURL(ctx context.Context, podName string) (string, error) {
 	p.log.Info("Querying for endpoints", "name", p.serviceName, "namespace", p.namespace)
-	endpoints, err := p.endpointsClient.Get(ctx, p.serviceName, metav1.GetOptions{})
-	if err != nil {
-		return "", err
-	}
 
-	hostname, err := p.extractHostname(endpoints, podName)
+	var hostname string
+
+	// sometimes it takes a short period of time for the endpoints record to be updated with the latest list of "ready"
+	// pods, so we may need to retry fetching the resource when kubernetes experiences some lag
+	err := retry.OnError(
+		retry.DefaultRetry,
+		func(error) bool { return true },
+		func() error {
+			endpoints, err := p.endpointsClient.Get(ctx, p.serviceName, metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
+
+			if hostname, err = p.extractHostname(endpoints, podName); err != nil {
+				return err
+			}
+
+			return nil
+		},
+	)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to extract hostname: %w", err)
 	}
 
 	u, err := url.ParseRequestURI(fmt.Sprintf("tcp://%s:%d", hostname, p.servicePort))
@@ -324,19 +355,22 @@ func (p *workerPool) updateWorkers(ctx context.Context) error {
 			leased = append(leased, pod.Name)
 		} else if pod.Status.Phase == corev1.PodPending { // mark pending pods
 			pending = append(pending, pod.Name)
-		} else {
+		} else if pod.Status.Phase == corev1.PodRunning { // dispatch builds/check expiry/check age on running pods
 			if req := p.requests.Dequeue(); req != nil {
 				log.Info("Found pending request, attempt to lease pod")
 
+				var result PodRequestResult
 				if pod, err := p.leasePod(ctx, &pod); err != nil {
 					log.Error(err, "Failed to lease pod, requeueing request")
-					p.requests.Enqueue(req)
+					result = PodRequestResult{nil, err}
 				} else {
 					leased = append(leased, pod.Name)
 
 					log.Info("Pod leased, passing to request")
-					req <- PodRequestResult{pod, nil}
+					result = PodRequestResult{pod, nil}
 				}
+
+				req <- result
 
 				continue
 			}
