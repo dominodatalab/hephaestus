@@ -247,7 +247,7 @@ func (p *workerPool) releasePod(ctx context.Context, pod *corev1.Pod) error {
 	delete(pac.Annotations, managerIDAnnotation)
 
 	p.log.Info("Applying pod metadata changes", "annotations", pac.Annotations)
-	if pod, err = p.podClient.Apply(ctx, pac, metav1.ApplyOptions{FieldManager: fieldManagerName}); err != nil {
+	if _, err = p.podClient.Apply(ctx, pac, metav1.ApplyOptions{FieldManager: fieldManagerName}); err != nil {
 		return fmt.Errorf("cannot update pod metadata: %w", err)
 	}
 
