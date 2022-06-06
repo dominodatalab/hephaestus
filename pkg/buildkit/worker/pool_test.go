@@ -33,6 +33,7 @@ type result struct {
 }
 
 var (
+	owner      = "test-owner"
 	namespace  = "test-namespace"
 	testLabels = map[string]string{"owned-by": "testing"}
 	testConfig = config.Buildkit{Namespace: namespace, PodLabels: testLabels, ServiceName: "buildkit", DaemonPort: 1234}
@@ -115,7 +116,7 @@ func TestPoolGet(t *testing.T) {
 
 		leaseChannel := make(chan result)
 		go func() {
-			addr, err := wp.Get(ctx)
+			addr, err := wp.Get(ctx, owner)
 			leaseChannel <- result{addr, err}
 		}()
 
@@ -140,7 +141,8 @@ func TestPoolGet(t *testing.T) {
 		delivered.Status.Phase = ""
 
 		fakeClient := fake.NewSimpleClientset(delivered, validEndpoints)
-		fakeClient.PrependReactor("patch", "pods", func(k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+		fakeClient.PrependReactor("patch", "pods", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			assertLeasedPod(t, action, delivered)
 			return true, delivered, nil
 		})
 
@@ -175,7 +177,7 @@ func TestPoolGet(t *testing.T) {
 		go func() {
 			getExec <- struct{}{}
 
-			addr, err := wp.Get(ctx)
+			addr, err := wp.Get(ctx, owner)
 			leaseChannel <- result{addr, err}
 		}()
 
@@ -206,7 +208,7 @@ func TestPoolGet(t *testing.T) {
 
 		leaseChannel := make(chan result)
 		go func() {
-			addr, err := wp.Get(ctx)
+			addr, err := wp.Get(ctx, owner)
 			leaseChannel <- result{addr, err}
 		}()
 
@@ -250,7 +252,7 @@ func TestPoolGet(t *testing.T) {
 
 		leaseChannel := make(chan result)
 		go func() {
-			addr, err := wp.Get(ctx)
+			addr, err := wp.Get(ctx, owner)
 			leaseChannel <- result{addr, err}
 		}()
 
@@ -294,7 +296,7 @@ func TestPoolGet(t *testing.T) {
 
 		leaseChannel := make(chan result)
 		go func() {
-			addr, err := wp.Get(ctx)
+			addr, err := wp.Get(ctx, owner)
 			leaseChannel <- result{addr, err}
 		}()
 
@@ -318,7 +320,7 @@ func TestPoolGet(t *testing.T) {
 		fakeClient.PrependReactor("patch", "pods", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 			p := validPod.DeepCopy()
 			p.ObjectMeta.Annotations = map[string]string{
-				leasedAnnotation:    "true",
+				leasedByAnnotation:  owner,
 				managerIDAnnotation: string(newUUID()),
 			}
 			return true, p, nil
@@ -355,7 +357,7 @@ func TestPoolGet(t *testing.T) {
 
 		leaseChannel := make(chan result)
 		go func() {
-			addr, err := wp.Get(ctx)
+			addr, err := wp.Get(ctx, owner)
 			leaseChannel <- result{addr, err}
 		}()
 
@@ -395,7 +397,7 @@ func TestPoolGetFailedScaleUp(t *testing.T) {
 		leased = !leased
 		p := validPod.DeepCopy()
 		p.ObjectMeta.Annotations = map[string]string{
-			leasedAnnotation:    "true",
+			leasedByAnnotation:  owner,
 			managerIDAnnotation: string(newUUID()),
 		}
 		return true, p, nil
@@ -408,14 +410,14 @@ func TestPoolGetFailedScaleUp(t *testing.T) {
 	wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond))
 	defer wp.Close()
 
-	addr, err := wp.Get(ctx)
+	addr, err := wp.Get(ctx, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	leaseChannel := make(chan result)
 	go func() {
-		addr, err := wp.Get(ctx)
+		addr, err := wp.Get(ctx, owner)
 		leaseChannel <- result{addr, err}
 	}()
 
@@ -452,7 +454,7 @@ func TestPoolGetAndClose(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		addr, err := wp.Get(context.Background())
+		addr, err := wp.Get(context.Background(), owner)
 		assert.Empty(t, addr, "acquired lease even though pool was closed")
 		assert.Equal(t, ErrNoUnleasedPods, err, "expected no unleased pods error")
 
@@ -484,7 +486,7 @@ func TestPoolGetAndCancel(t *testing.T) {
 	done := make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		addr, err := wp.Get(ctx)
+		addr, err := wp.Get(ctx, owner)
 		assert.Empty(t, addr, "acquired lease even though pool was closed")
 		assert.Equal(t, context.Canceled, err)
 
@@ -508,7 +510,7 @@ func TestPoolRelease(t *testing.T) {
 	leasedPod := func() *corev1.Pod {
 		leased := validPod.DeepCopy()
 		leased.ObjectMeta.Annotations = map[string]string{
-			leasedAnnotation:    "true",
+			leasedByAnnotation:  owner,
 			managerIDAnnotation: string(newUUID()),
 		}
 
@@ -528,7 +530,7 @@ func TestPoolRelease(t *testing.T) {
 				assert.FailNowf(t, "unable to marshal patch into v1.Pod", "received invalid patch %s", patch)
 			}
 
-			assert.NotContains(t, pod.Annotations, leasedAnnotation)
+			assert.NotContains(t, pod.Annotations, leasedByAnnotation)
 			assert.NotContains(t, pod.Annotations, managerIDAnnotation)
 
 			ts, ok := pod.Annotations[expiryTimeAnnotation]
@@ -606,7 +608,7 @@ func TestPoolPodReconciliation(t *testing.T) {
 			objects: func() []runtime.Object {
 				p := validPod.DeepCopy()
 				p.ObjectMeta.Annotations = map[string]string{
-					leasedAnnotation:    "true",
+					leasedByAnnotation:  owner,
 					managerIDAnnotation: string(uuid.NewUUID()),
 				}
 
@@ -619,7 +621,7 @@ func TestPoolPodReconciliation(t *testing.T) {
 			objects: func() []runtime.Object {
 				p := validPod.DeepCopy()
 				p.ObjectMeta.Annotations = map[string]string{
-					leasedAnnotation:    "true",
+					leasedByAnnotation:  owner,
 					managerIDAnnotation: string(newUUID()),
 				}
 
@@ -719,7 +721,7 @@ func TestPoolPodReconciliation(t *testing.T) {
 				leased := validPod.DeepCopy()
 				leased.Name = "buildkit-0"
 				leased.ObjectMeta.Annotations = map[string]string{
-					leasedAnnotation:    "true",
+					leasedByAnnotation:  owner,
 					managerIDAnnotation: string(newUUID()),
 				}
 
@@ -737,7 +739,7 @@ func TestPoolPodReconciliation(t *testing.T) {
 				unmanaged := validPod.DeepCopy()
 				unmanaged.Name = "buildkit-3"
 				unmanaged.ObjectMeta.Annotations = map[string]string{
-					leasedAnnotation:    "true",
+					leasedByAnnotation:  owner,
 					managerIDAnnotation: string(uuid.NewUUID()),
 				}
 
@@ -762,7 +764,7 @@ func TestPoolPodReconciliation(t *testing.T) {
 				unmanaged := validPod.DeepCopy()
 				unmanaged.Name = "buildkit-0"
 				unmanaged.ObjectMeta.Annotations = map[string]string{
-					leasedAnnotation:    "true",
+					leasedByAnnotation:  owner,
 					managerIDAnnotation: string(uuid.NewUUID()),
 				}
 
@@ -776,7 +778,7 @@ func TestPoolPodReconciliation(t *testing.T) {
 				leased := validPod.DeepCopy()
 				leased.Name = "buildkit-2"
 				leased.ObjectMeta.Annotations = map[string]string{
-					leasedAnnotation:    "true",
+					leasedByAnnotation:  owner,
 					managerIDAnnotation: string(newUUID()),
 				}
 
@@ -805,7 +807,7 @@ func TestPoolPodReconciliation(t *testing.T) {
 				leased := validPod.DeepCopy()
 				leased.Name = "buildkit-1"
 				leased.ObjectMeta.Annotations = map[string]string{
-					leasedAnnotation:    "true",
+					leasedByAnnotation:  owner,
 					managerIDAnnotation: string(newUUID()),
 				}
 
@@ -886,7 +888,7 @@ func assertLeasedPod(t *testing.T, action k8stesting.Action, ret *corev1.Pod) {
 		assert.FailNowf(t, "unable to marshal patch into v1.Pod", "received invalid patch %s", patch)
 	}
 
-	assert.Contains(t, pod.Annotations, leasedAnnotation)
+	assert.Contains(t, pod.Annotations, leasedByAnnotation)
 	assert.Contains(t, pod.Annotations, managerIDAnnotation)
 	assert.NotContains(t, pod.Annotations, expiryTimeAnnotation)
 
@@ -906,7 +908,7 @@ func assertUnleasedPod(t *testing.T, action k8stesting.Action) {
 		assert.FailNowf(t, "unable to marshal patch into v1.Pod", "received invalid patch %s", patch)
 	}
 
-	assert.NotContains(t, pod.Annotations, leasedAnnotation)
+	assert.NotContains(t, pod.Annotations, leasedByAnnotation)
 	assert.NotContains(t, pod.Annotations, managerIDAnnotation)
 
 	ts, ok := pod.Annotations[expiryTimeAnnotation]
