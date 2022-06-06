@@ -43,6 +43,7 @@ var (
 
 const (
 	fieldManagerName     = "hephaestus-pod-lease-manager"
+	leasedAtAnnotation   = "hephaestus.dominodatalab.com/leased-at"
 	leasedByAnnotation   = "hephaestus.dominodatalab.com/leased-by"
 	managerIDAnnotation  = "hephaestus.dominodatalab.com/manager-identity"
 	expiryTimeAnnotation = "hephaestus.dominodatalab.com/expiry-time"
@@ -214,6 +215,7 @@ func (p *workerPool) leasePod(ctx context.Context, pod *corev1.Pod, owner string
 	}
 
 	pac.WithAnnotations(map[string]string{
+		leasedAtAnnotation:  time.Now().Format(time.RFC3339),
 		leasedByAnnotation:  owner,
 		managerIDAnnotation: p.uuid,
 	})
@@ -237,6 +239,7 @@ func (p *workerPool) releasePod(ctx context.Context, pod *corev1.Pod) error {
 	pac.WithAnnotations(map[string]string{
 		expiryTimeAnnotation: time.Now().Add(p.podMaxIdleTime).Format(time.RFC3339),
 	})
+	delete(pac.Annotations, leasedAtAnnotation)
 	delete(pac.Annotations, leasedByAnnotation)
 	delete(pac.Annotations, managerIDAnnotation)
 
