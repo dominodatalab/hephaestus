@@ -98,73 +98,286 @@ var (
 )
 
 func TestPoolGet(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	t.Run("running_pod", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
-	fakeClient := fake.NewSimpleClientset(validSts)
-	fakeClient.PrependReactor("patch", "*", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 		p := validPod.DeepCopy()
-		p.ObjectMeta.Annotations = map[string]string{
-			leasedAnnotation:    "true",
-			managerIDAnnotation: string(newUUID()),
-		}
-		return true, p, nil
-	})
 
-	stsUpdateChan := make(chan struct{})
-	errorChan := make(chan error)
+		fakeClient := fake.NewSimpleClientset(p, validEndpoints)
+		fakeClient.PrependReactor("patch", "pods", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			assertLeasedPod(t, action, p)
+			return true, p, nil
+		})
 
-	go func() {
-		<-stsUpdateChan
+		wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond))
+		defer wp.Close()
 
-		if _, err := fakeClient.CoreV1().Pods(namespace).Create(ctx, validPod, metav1.CreateOptions{}); err != nil {
-			errorChan <- err
-			return
-		}
+		leaseChannel := make(chan result)
+		go func() {
+			addr, err := wp.Get(ctx)
+			leaseChannel <- result{addr, err}
+		}()
 
-		if _, err := fakeClient.CoreV1().Endpoints(namespace).Create(ctx, validEndpoints, metav1.CreateOptions{}); err != nil {
-			errorChan <- err
-			return
-		}
-	}()
-
-	fakeClient.PrependReactor("update", "statefulsets", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 		select {
-		case stsUpdateChan <- struct{}{}:
-		default:
-		}
+		case res := <-leaseChannel:
+			require.NoError(t, res.err, "could not acquire a buildkit endpoint")
 
-		return true, nil, nil
-	})
-
-	wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond))
-	defer wp.Close()
-
-	leaseChannel := make(chan result)
-
-	go func() {
-		addr, err := wp.Get(ctx)
-		leaseChannel <- result{addr, err}
-	}()
-
-	select {
-	case res := <-leaseChannel:
-		if res.err != nil {
-			t.Errorf("Could not acquire a buildkit endpoint: %s", res.err.Error())
-		} else {
 			leaseAddr := res.res.(string)
 			expected := "tcp://buildkit-0.buildkit.test-namespace:1234"
-			if leaseAddr != expected {
-				t.Errorf("Did not received correct lease: %s expected, %s actual", expected, leaseAddr)
+			assert.Equal(t, expected, leaseAddr, "did not receive correct lease")
+		case <-time.After(3 * time.Second):
+			assert.Fail(t, "could not acquire a buildkit endpoint within 3s")
+		}
+	})
+
+	t.Run("non_running_pod", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		// non-running phase
+		delivered := validPod.DeepCopy()
+		delivered.Status.Phase = ""
+
+		fakeClient := fake.NewSimpleClientset(delivered, validEndpoints)
+		fakeClient.PrependReactor("patch", "pods", func(k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			return true, delivered, nil
+		})
+
+		getExec := make(chan struct{})
+		countDown := false
+		reactionCount := 0
+		fakeClient.PrependReactor("update", "statefulsets", func(k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			select {
+			case <-getExec:
+				countDown = true
+			default:
 			}
+
+			// deliver running pod a few reconciliations after get is executed
+			if countDown {
+				if reactionCount == 2 {
+					fakeClient.PrependReactor("list", "pods", func(k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+						delivered = validPod.DeepCopy()
+						return true, &corev1.PodList{Items: []corev1.Pod{*delivered}}, nil
+					})
+				}
+				reactionCount++
+			}
+
+			return true, nil, nil
+		})
+
+		wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond))
+		defer wp.Close()
+
+		leaseChannel := make(chan result)
+		go func() {
+			getExec <- struct{}{}
+
+			addr, err := wp.Get(ctx)
+			leaseChannel <- result{addr, err}
+		}()
+
+		select {
+		case res := <-leaseChannel:
+			require.NoError(t, res.err, "could not acquire a buildkit endpoint")
+			require.Equal(t, delivered.Status.Phase, corev1.PodRunning, "non-running pod returned")
+
+			leaseAddr := res.res.(string)
+			expected := "tcp://buildkit-0.buildkit.test-namespace:1234"
+			assert.Equal(t, expected, leaseAddr, "did not receive correct lease")
+		case <-time.After(3 * time.Second):
+			assert.Fail(t, "could not acquire a buildkit endpoint within 3s")
 		}
-	case e := <-errorChan:
-		if e != nil {
-			t.Errorf("Received error attempting to create test setup: %s", e.Error())
+	})
+
+	t.Run("lease_failure", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		fakeClient := fake.NewSimpleClientset(validPod, validEndpoints)
+		fakeClient.PrependReactor("patch", "pods", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			return true, nil, errors.New("expected failure")
+		})
+
+		wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond))
+		defer wp.Close()
+
+		leaseChannel := make(chan result)
+		go func() {
+			addr, err := wp.Get(ctx)
+			leaseChannel <- result{addr, err}
+		}()
+
+		select {
+		case res := <-leaseChannel:
+			assert.Empty(t, res.res.(string), "expected an empty lease address")
+			assert.EqualError(t, res.err, "cannot update pod metadata: expected failure")
+		case <-time.After(3 * time.Second):
+			assert.Fail(t, "could not acquire a buildkit endpoint within 3s")
 		}
-	case <-time.After(3 * time.Second):
-		t.Error("Could not acquire a buildkit endpoint within 3s")
-	}
+	})
+
+	t.Run("endpoints_failure", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		eps := validEndpoints.DeepCopy()
+		eps.Subsets[0].Addresses = nil
+
+		fakeClient := fake.NewSimpleClientset(validPod, eps)
+
+		reactionCount := 0
+		fakeClient.PrependReactor("patch", "pods", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			p := validPod.DeepCopy()
+
+			switch reactionCount {
+			case 0:
+				assertLeasedPod(t, action, p)
+			case 1:
+				assertUnleasedPod(t, action)
+			default:
+				assert.FailNow(t, "pod patched more than twice")
+			}
+			reactionCount++
+
+			return true, p, nil
+		})
+
+		wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond))
+		defer wp.Close()
+
+		leaseChannel := make(chan result)
+		go func() {
+			addr, err := wp.Get(ctx)
+			leaseChannel <- result{addr, err}
+		}()
+
+		select {
+		case res := <-leaseChannel:
+			assert.Empty(t, res.res.(string), "expected an empty lease address")
+			assert.EqualError(t, res.err, `failed to extract hostname: endpoints "buildkit" does not expose pod buildkit-0 on port 1234`)
+		case <-time.After(3 * time.Second):
+			assert.Fail(t, "could not acquire a buildkit endpoint within 3s")
+		}
+	})
+
+	t.Run("endpoints_lag", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		fakeClient := fake.NewSimpleClientset(validPod)
+		fakeClient.PrependReactor("patch", "pods", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			p := validPod.DeepCopy()
+			assertLeasedPod(t, action, p)
+			return true, p, nil
+		})
+
+		present := validEndpoints.DeepCopy()
+		missing := validEndpoints.DeepCopy()
+		missing.Subsets[0].Addresses = nil
+
+		reactionCount := 0
+		fakeClient.PrependReactor("get", "endpoints", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			reactionCount++
+
+			if reactionCount < 3 {
+				return true, missing, nil
+			} else {
+				return true, present, nil
+			}
+		})
+
+		wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond))
+		defer wp.Close()
+
+		leaseChannel := make(chan result)
+		go func() {
+			addr, err := wp.Get(ctx)
+			leaseChannel <- result{addr, err}
+		}()
+
+		select {
+		case res := <-leaseChannel:
+			require.NoError(t, res.err, "could not acquire a buildkit endpoint")
+
+			leaseAddr := res.res.(string)
+			expected := "tcp://buildkit-0.buildkit.test-namespace:1234"
+			assert.Equal(t, expected, leaseAddr, "did not receive correct lease")
+		case <-time.After(3 * time.Second):
+			assert.Fail(t, "could not acquire a buildkit endpoint within 3s")
+		}
+	})
+
+	t.Run("scale_up", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		fakeClient := fake.NewSimpleClientset(validSts)
+		fakeClient.PrependReactor("patch", "pods", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			p := validPod.DeepCopy()
+			p.ObjectMeta.Annotations = map[string]string{
+				leasedAnnotation:    "true",
+				managerIDAnnotation: string(newUUID()),
+			}
+			return true, p, nil
+		})
+
+		stsUpdateChan := make(chan struct{})
+		errorChan := make(chan error)
+
+		go func() {
+			<-stsUpdateChan
+
+			if _, err := fakeClient.CoreV1().Pods(namespace).Create(ctx, validPod, metav1.CreateOptions{}); err != nil {
+				errorChan <- err
+				return
+			}
+
+			if _, err := fakeClient.CoreV1().Endpoints(namespace).Create(ctx, validEndpoints, metav1.CreateOptions{}); err != nil {
+				errorChan <- err
+				return
+			}
+		}()
+
+		fakeClient.PrependReactor("update", "statefulsets", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			select {
+			case stsUpdateChan <- struct{}{}:
+			default:
+			}
+
+			return true, nil, nil
+		})
+
+		wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond))
+		defer wp.Close()
+
+		leaseChannel := make(chan result)
+		go func() {
+			addr, err := wp.Get(ctx)
+			leaseChannel <- result{addr, err}
+		}()
+
+		select {
+		case res := <-leaseChannel:
+			if res.err != nil {
+				t.Errorf("could not acquire a buildkit endpoint: %s", res.err.Error())
+			} else {
+				leaseAddr := res.res.(string)
+				expected := "tcp://buildkit-0.buildkit.test-namespace:1234"
+				if leaseAddr != expected {
+					t.Errorf("did not receive correct lease: %s expected, %s actual", expected, leaseAddr)
+				}
+			}
+		case e := <-errorChan:
+			if e != nil {
+				t.Errorf("Received error attempting to create test setup: %s", e.Error())
+			}
+		case <-time.After(3 * time.Second):
+			t.Error("Could not acquire a buildkit endpoint within 3s")
+		}
+	})
 }
 
 func TestPoolGetFailedScaleUp(t *testing.T) {
@@ -218,7 +431,7 @@ func TestPoolGetFailedScaleUp(t *testing.T) {
 			leaseAddr := res.res.(string)
 			expected := "tcp://buildkit-0.buildkit.test-namespace:1234"
 			if leaseAddr != expected {
-				t.Errorf("Did not received correct lease: %s expected, %s actual", expected, leaseAddr)
+				t.Errorf("did not received correct lease: %s expected, %s actual", expected, leaseAddr)
 			}
 		}
 	case <-time.After(3 * time.Second):
@@ -445,6 +658,16 @@ func TestPoolPodReconciliation(t *testing.T) {
 			expected: 0,
 		},
 		{
+			name: "phase_unknown",
+			objects: func() []runtime.Object {
+				p := validPod.DeepCopy()
+				p.Status.Phase = ""
+
+				return []runtime.Object{p}
+			},
+			expected: 1,
+		},
+		{
 			name: "expiry_upcoming",
 			objects: func() []runtime.Object {
 				p := validPod.DeepCopy()
@@ -648,7 +871,49 @@ func TestPoolPodReconciliation(t *testing.T) {
 			}
 		})
 	}
+}
 
-	// TODO: test leasing a pod mid-reconciliation (success/failure)
-	// 	awaiting https://github.com/kubernetes/client-go/issues/992
+func assertLeasedPod(t *testing.T, action k8stesting.Action, ret *corev1.Pod) {
+	t.Helper()
+
+	patchAction := action.(k8stesting.PatchAction)
+
+	assert.Equal(t, types.ApplyPatchType, patchAction.GetPatchType(), "unexpected patch type")
+
+	pod := corev1.Pod{}
+	patch := patchAction.GetPatch()
+	if err := json.Unmarshal(patch, &pod); err != nil {
+		assert.FailNowf(t, "unable to marshal patch into v1.Pod", "received invalid patch %s", patch)
+	}
+
+	assert.Contains(t, pod.Annotations, leasedAnnotation)
+	assert.Contains(t, pod.Annotations, managerIDAnnotation)
+	assert.NotContains(t, pod.Annotations, expiryTimeAnnotation)
+
+	ret.Annotations = pod.Annotations
+}
+
+func assertUnleasedPod(t *testing.T, action k8stesting.Action) {
+	t.Helper()
+
+	patchAction := action.(k8stesting.PatchAction)
+
+	assert.Equal(t, types.ApplyPatchType, patchAction.GetPatchType(), "unexpected patch type")
+
+	pod := corev1.Pod{}
+	patch := patchAction.GetPatch()
+	if err := json.Unmarshal(patch, &pod); err != nil {
+		assert.FailNowf(t, "unable to marshal patch into v1.Pod", "received invalid patch %s", patch)
+	}
+
+	assert.NotContains(t, pod.Annotations, leasedAnnotation)
+	assert.NotContains(t, pod.Annotations, managerIDAnnotation)
+
+	ts, ok := pod.Annotations[expiryTimeAnnotation]
+	require.True(t, ok, "expiry time annotation not found")
+
+	expiry, err := time.Parse(time.RFC3339, ts)
+	require.NoError(t, err, "invalid expiry time annotation")
+
+	assert.True(t, expiry.After(time.Now().Add(5*time.Minute)), "expiry time is not in the future")
 }
