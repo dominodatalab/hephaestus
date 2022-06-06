@@ -125,31 +125,52 @@ func TestPoolGet(t *testing.T) {
 
 			leaseAddr := res.res.(string)
 			expected := "tcp://buildkit-0.buildkit.test-namespace:1234"
-			assert.Equal(t, expected, leaseAddr, "did not received correct lease")
+			assert.Equal(t, expected, leaseAddr, "did not receive correct lease")
 		case <-time.After(3 * time.Second):
 			assert.Fail(t, "could not acquire a buildkit endpoint within 3s")
 		}
 	})
 
 	t.Run("non_running_pod", func(t *testing.T) {
-		t.Skip("figure out the race condition in the test, it doesn't exist in the binary")
-
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		unready := validPod.DeepCopy()
-		unready.Status.Phase = ""
+		// non-running phase
+		delivered := validPod.DeepCopy()
+		delivered.Status.Phase = ""
 
-		fakeClient := fake.NewSimpleClientset(unready, validEndpoints)
-		// fakeClient.PrependReactor("patch", "pods", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-		// 	assertLeasedPod(t, action, delivered)
-		// 	return true, delivered, nil
-		// })
+		fakeClient := fake.NewSimpleClientset(delivered, validEndpoints)
+		fakeClient.PrependReactor("patch", "pods", func(k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			return true, delivered, nil
+		})
+
+		getExec := make(chan struct{})
+		countDown := false
+		reactionCount := 0
+		fakeClient.PrependReactor("update", "statefulsets", func(k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			select {
+			case <-getExec:
+				countDown = true
+			default:
+			}
+
+			// deliver running pod a few reconciliations after get is executed
+			if countDown {
+				if reactionCount == 2 {
+					fakeClient.PrependReactor("list", "pods", func(k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+						delivered = validPod.DeepCopy()
+						return true, &corev1.PodList{Items: []corev1.Pod{*delivered}}, nil
+					})
+				}
+				reactionCount++
+			}
+
+			return true, nil, nil
+		})
 
 		wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond))
 		defer wp.Close()
 
-		getExec := make(chan struct{}, 1)
 		leaseChannel := make(chan result)
 		go func() {
 			getExec <- struct{}{}
@@ -158,23 +179,6 @@ func TestPoolGet(t *testing.T) {
 			leaseChannel <- result{addr, err}
 		}()
 
-		<-getExec
-
-		delivered := &corev1.Pod{}
-		reactionCount := 0
-		fakeClient.PrependReactor("update", "statefulsets", func(k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-			if reactionCount == 2 {
-				fakeClient.PrependReactor("list", "pods", func(k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					delivered = validPod.DeepCopy()
-					return true, &corev1.PodList{Items: []corev1.Pod{*validPod.DeepCopy()}}, nil
-				})
-			}
-
-			reactionCount++
-
-			return true, nil, nil
-		})
-
 		select {
 		case res := <-leaseChannel:
 			require.NoError(t, res.err, "could not acquire a buildkit endpoint")
@@ -182,7 +186,7 @@ func TestPoolGet(t *testing.T) {
 
 			leaseAddr := res.res.(string)
 			expected := "tcp://buildkit-0.buildkit.test-namespace:1234"
-			assert.Equal(t, expected, leaseAddr, "did not received correct leased")
+			assert.Equal(t, expected, leaseAddr, "did not receive correct lease")
 		case <-time.After(3 * time.Second):
 			assert.Fail(t, "could not acquire a buildkit endpoint within 3s")
 		}
@@ -300,7 +304,7 @@ func TestPoolGet(t *testing.T) {
 
 			leaseAddr := res.res.(string)
 			expected := "tcp://buildkit-0.buildkit.test-namespace:1234"
-			assert.Equal(t, expected, leaseAddr, "did not received correct lease")
+			assert.Equal(t, expected, leaseAddr, "did not receive correct lease")
 		case <-time.After(3 * time.Second):
 			assert.Fail(t, "could not acquire a buildkit endpoint within 3s")
 		}
@@ -363,7 +367,7 @@ func TestPoolGet(t *testing.T) {
 				leaseAddr := res.res.(string)
 				expected := "tcp://buildkit-0.buildkit.test-namespace:1234"
 				if leaseAddr != expected {
-					t.Errorf("Did not received correct lease: %s expected, %s actual", expected, leaseAddr)
+					t.Errorf("did not receive correct lease: %s expected, %s actual", expected, leaseAddr)
 				}
 			}
 		case e := <-errorChan:
@@ -427,7 +431,7 @@ func TestPoolGetFailedScaleUp(t *testing.T) {
 			leaseAddr := res.res.(string)
 			expected := "tcp://buildkit-0.buildkit.test-namespace:1234"
 			if leaseAddr != expected {
-				t.Errorf("Did not received correct lease: %s expected, %s actual", expected, leaseAddr)
+				t.Errorf("did not received correct lease: %s expected, %s actual", expected, leaseAddr)
 			}
 		}
 	case <-time.After(3 * time.Second):
