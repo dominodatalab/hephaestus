@@ -90,7 +90,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	allocStart := time.Now()
 
 	log.Info("Leasing buildkit worker")
-	addr, err := c.pool.Get(ctx)
+	addr, err := c.pool.Get(ctx, obj.ObjectKey().String())
 	if err != nil {
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkit service lookup failed: %w", err))
 	}

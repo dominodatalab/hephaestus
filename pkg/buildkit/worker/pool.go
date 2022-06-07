@@ -29,7 +29,7 @@ import (
 )
 
 type Pool interface {
-	Get(ctx context.Context) (workerAddr string, err error)
+	Get(ctx context.Context, owner string) (workerAddr string, err error)
 	Release(ctx context.Context, workerAddr string) error
 	Close()
 }
@@ -43,7 +43,8 @@ var (
 
 const (
 	fieldManagerName     = "hephaestus-pod-lease-manager"
-	leasedAnnotation     = "hephaestus.dominodatalab.com/leased"
+	leasedAtAnnotation   = "hephaestus.dominodatalab.com/leased-at"
+	leasedByAnnotation   = "hephaestus.dominodatalab.com/leased-by"
 	managerIDAnnotation  = "hephaestus.dominodatalab.com/manager-identity"
 	expiryTimeAnnotation = "hephaestus.dominodatalab.com/expiry-time"
 )
@@ -129,7 +130,7 @@ func NewPool(ctx context.Context, clientset kubernetes.Interface, conf config.Bu
 			case <-wp.ctx.Done():
 				wp.log.Info("Shutting down worker pod monitor")
 				for wp.requests.Len() > 0 {
-					close(wp.requests.Dequeue())
+					close(wp.requests.Dequeue().result)
 				}
 
 				return
@@ -144,32 +145,26 @@ func NewPool(ctx context.Context, clientset kubernetes.Interface, conf config.Bu
 //
 // Adds "lease"/"manager-identity" metadata and removes "expiry-time".
 // The worker will remain leased until the caller provides the address to Release().
-func (p *workerPool) Get(ctx context.Context) (string, error) {
-	ch := make(chan PodRequestResult, 1)
+func (p *workerPool) Get(ctx context.Context, owner string) (string, error) {
+	request := &PodRequest{
+		owner:  owner,
+		result: make(chan PodRequestResult, 1),
+	}
 
-	p.requests.Enqueue(ch)
-	defer p.requests.Remove(ch)
+	p.requests.Enqueue(request)
+	defer p.requests.Remove(request)
 
 	p.triggerReconcile()
 
 	select {
-	case result := <-ch:
-		if result.err != nil {
-			return "", result.err
-		}
-
-		// when the channel is closed, we receive nil
-		if result.pod != nil {
-			addr, err := p.buildEndpointURL(ctx, result.pod.Name)
-			if err == nil {
-				return addr, nil
-			}
-			// when the url cannot be built, we release the pod
-			if rErr := p.releasePod(ctx, result.pod); rErr != nil {
-				p.log.Error(err, "Failed to release pod after URL build error")
+	case result, ok := <-request.result:
+		// check if channel is open before processing
+		if ok {
+			if result.err != nil {
+				return "", result.err
 			}
 
-			return "", err
+			return result.addr, nil
 		}
 	case <-ctx.Done():
 		// context has been cancelled
@@ -213,24 +208,25 @@ func (p *workerPool) Close() {
 }
 
 // applies lease metadata to given pod
-func (p *workerPool) leasePod(ctx context.Context, pod *corev1.Pod) (*corev1.Pod, error) {
+func (p *workerPool) leasePod(ctx context.Context, pod *corev1.Pod, owner string) error {
 	pac, err := corev1ac.ExtractPod(pod, fieldManagerName)
 	if err != nil {
-		return nil, fmt.Errorf("cannot extract pod config: %w", err)
+		return fmt.Errorf("cannot extract pod config: %w", err)
 	}
 
 	pac.WithAnnotations(map[string]string{
-		leasedAnnotation:    "true",
+		leasedAtAnnotation:  time.Now().Format(time.RFC3339),
+		leasedByAnnotation:  owner,
 		managerIDAnnotation: p.uuid,
 	})
 	delete(pac.Annotations, expiryTimeAnnotation)
 
 	p.log.Info("Applying pod metadata changes", "annotations", pac.Annotations)
-	if pod, err = p.podClient.Apply(ctx, pac, metav1.ApplyOptions{FieldManager: fieldManagerName}); err != nil {
-		return nil, fmt.Errorf("cannot update pod metadata: %w", err)
+	if _, err = p.podClient.Apply(ctx, pac, metav1.ApplyOptions{FieldManager: fieldManagerName}); err != nil {
+		return fmt.Errorf("cannot update pod metadata: %w", err)
 	}
 
-	return pod, nil
+	return nil
 }
 
 // removes lease metadata from given pod and adds expiry
@@ -243,7 +239,8 @@ func (p *workerPool) releasePod(ctx context.Context, pod *corev1.Pod) error {
 	pac.WithAnnotations(map[string]string{
 		expiryTimeAnnotation: time.Now().Add(p.podMaxIdleTime).Format(time.RFC3339),
 	})
-	delete(pac.Annotations, leasedAnnotation)
+	delete(pac.Annotations, leasedAtAnnotation)
+	delete(pac.Annotations, leasedByAnnotation)
 	delete(pac.Annotations, managerIDAnnotation)
 
 	p.log.Info("Applying pod metadata changes", "annotations", pac.Annotations)
@@ -349,7 +346,7 @@ func (p *workerPool) updateWorkers(ctx context.Context) error {
 			log.Info("Eligible for termination, manager id mismatch", "expected", p.uuid, "actual", id)
 
 			removals = append(removals, pod.Name)
-		} else if _, hasLease := pod.Annotations[leasedAnnotation]; hasLease { // mark leased pods
+		} else if _, hasLease := pod.Annotations[leasedByAnnotation]; hasLease { // mark leased pods
 			log.Info("Ineligible for termination, pod is leased")
 
 			leased = append(leased, pod.Name)
@@ -357,21 +354,11 @@ func (p *workerPool) updateWorkers(ctx context.Context) error {
 			pending = append(pending, pod.Name)
 		} else if pod.Status.Phase == corev1.PodRunning { // dispatch builds/check expiry/check age on running pods
 			if req := p.requests.Dequeue(); req != nil {
-				log.Info("Found pending request, attempt to lease pod")
+				log.Info("Found pending pod request, processing")
 
-				var result PodRequestResult
-				if pod, err := p.leasePod(ctx, &pod); err != nil {
-					log.Error(err, "Failed to lease pod, requeueing request")
-					result = PodRequestResult{nil, err}
-				} else {
+				if p.processPodRequest(ctx, req, &pod) {
 					leased = append(leased, pod.Name)
-
-					log.Info("Pod leased, passing to request")
-					result = PodRequestResult{pod, nil}
 				}
-
-				req <- result
-
 				continue
 			}
 
@@ -439,6 +426,38 @@ func (p *workerPool) updateWorkers(ctx context.Context) error {
 		metav1.UpdateOptions{FieldManager: fieldManagerName},
 	)
 	return err
+}
+
+// attempts to lease a pod, build and endpoint url, and provide a request result
+func (p *workerPool) processPodRequest(ctx context.Context, req *PodRequest, pod *corev1.Pod) (success bool) {
+	log := p.log.WithValues("podName", pod.Name)
+
+	log.Info("Attempting to lease pod")
+	if err := p.leasePod(ctx, pod, req.owner); err != nil {
+		log.Error(err, "Failed to lease pod")
+
+		req.result <- PodRequestResult{err: err}
+		return
+	}
+
+	log.Info("Building endpoint URL")
+	addr, err := p.buildEndpointURL(ctx, pod.Name)
+
+	if err != nil {
+		log.Error(err, "Failed to build routable URL")
+
+		if rErr := p.releasePod(ctx, pod); rErr != nil {
+			log.Error(err, "Failed to release pod")
+		}
+
+		req.result <- PodRequestResult{err: err}
+		return
+	}
+
+	log.Info("Pod successfully leased, passing address to request owner")
+	req.result <- PodRequestResult{addr: addr}
+
+	return true
 }
 
 // trigger a pool reconciliation

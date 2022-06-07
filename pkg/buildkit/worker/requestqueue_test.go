@@ -7,23 +7,23 @@ import (
 )
 
 func TestRequestQueue(t *testing.T) {
-	var ch1 chan PodRequestResult
-	var ch2 chan PodRequestResult
+	req1 := &PodRequest{}
+	req2 := &PodRequest{}
 
 	queue := NewRequestQueue()
 	assert.Equal(t, 0, queue.Len())
 	assert.Nil(t, queue.Dequeue())
-	assert.False(t, queue.Remove(ch1))
+	assert.False(t, queue.Remove(&PodRequest{}))
 
-	queue.Enqueue(ch1)
-	queue.Enqueue(ch2)
+	queue.Enqueue(req1)
+	queue.Enqueue(req2)
 	assert.Equal(t, 2, queue.Len())
-	assert.Equal(t, ch1, queue.Dequeue())
-	assert.Equal(t, ch2, queue.Dequeue())
+	assert.Equal(t, req1, queue.Dequeue())
+	assert.Equal(t, req2, queue.Dequeue())
 	assert.Equal(t, 0, queue.Len())
 
-	queue.Enqueue(ch1)
+	queue.Enqueue(req1)
 	assert.Equal(t, 1, queue.Len())
-	assert.True(t, queue.Remove(ch1))
+	assert.True(t, queue.Remove(req1))
 	assert.Equal(t, 0, queue.Len())
 }
