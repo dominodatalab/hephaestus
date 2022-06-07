@@ -299,6 +299,7 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 	})
 
 	if err := eg.Wait(); err != nil {
+		c.log.Info(fmt.Sprintf("Build failed: %s", err.Error()))
 		return fmt.Errorf("buildkit solve issue: %w", err)
 	}
 
