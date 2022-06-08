@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docker/distribution/reference"
 	"github.com/dominodatalab/controller-util/core"
 	"gomodules.xyz/jsonpatch/v2"
 	"k8s.io/apimachinery/pkg/types"
@@ -28,8 +29,9 @@ type StatusMessage struct {
 	PreviousPhase hephv1.Phase      `json:"previousPhase"`
 	CurrentPhase  hephv1.Phase      `json:"currentPhase"`
 	OccurredAt    time.Time         `json:"-"`
+	ImageURLs     []string          `json:"imageURLs,omitempty"`
 
-	// NOTE: think about adding ErrorMessage, ImageURLs and ImageSize
+	// NOTE: think about adding ErrorMessage and ImageSize
 }
 
 type StatusMessengerComponent struct {
@@ -110,6 +112,23 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 			PreviousPhase: transition.PreviousPhase,
 			CurrentPhase:  transition.Phase,
 			OccurredAt:    occurredAt,
+		}
+
+		// return image urls when build succeeds
+		if transition.Phase == hephv1.PhaseSucceeded {
+			var images []string
+			for _, image := range obj.Spec.Images {
+				// parse the image name and tag
+				named, err := reference.ParseNormalizedNamed(image)
+				if err != nil {
+					return ctrl.Result{}, fmt.Errorf("parsing image name %q failed: %w", image, err)
+				}
+
+				// add the latest tag when one is not provided
+				named = reference.TagNameOnly(named)
+				images = append(images, named.String())
+			}
+			message.ImageURLs = images
 		}
 
 		log.V(1).Info("Marshalling StatusMessage into JSON", "message", message)
