@@ -26,7 +26,7 @@ type ImageBuildStatusTransitionMessage struct {
 	// CurrentPhase of the resource.
 	CurrentPhase Phase `json:"currentPhase"`
 	// OccurredAt indicates when the transition occurred.
-	OccurredAt time.Time `json:"-"`
+	OccurredAt metav1.Time `json:"-"`
 	// ImageURLs contains a list of fully-qualified registry images.
 	// This field is only populated when an ImageBuild transitions to PhaseSucceeded.
 	ImageURLs []string `json:"imageURLs,omitempty"`

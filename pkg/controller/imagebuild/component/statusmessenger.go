@@ -10,6 +10,7 @@ import (
 	"github.com/docker/distribution/reference"
 	"github.com/dominodatalab/controller-util/core"
 	"gomodules.xyz/jsonpatch/v2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -99,7 +100,7 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 			ObjectLink:    objLink,
 			PreviousPhase: transition.PreviousPhase,
 			CurrentPhase:  transition.Phase,
-			OccurredAt:    occurredAt,
+			OccurredAt:    metav1.Time{Time: occurredAt},
 		}
 
 		// return image urls when build succeeds
