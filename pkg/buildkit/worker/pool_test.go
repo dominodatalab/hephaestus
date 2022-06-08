@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/pointer"
 
 	"github.com/dominodatalab/hephaestus/pkg/config"
@@ -233,6 +234,12 @@ func TestPoolGet(t *testing.T) {
 	})
 
 	t.Run("endpoints_failure", func(t *testing.T) {
+		original := endpointRetryBackoff
+		endpointRetryBackoff = retry.DefaultBackoff
+		t.Cleanup(func() {
+			endpointRetryBackoff = original
+		})
+
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
