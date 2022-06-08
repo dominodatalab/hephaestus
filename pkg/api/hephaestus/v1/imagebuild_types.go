@@ -10,6 +10,34 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// ImageBuildStatusTransitionMessage contains information about ImageBuild status transitions.
+//
+// This type is used to publish JSON-formatted messages to one or more configured messaging
+// endpoints when ImageBuild resources undergo phase changes during the build process.
+type ImageBuildStatusTransitionMessage struct {
+	// Name of the ImageBuild resource that underwent a transition.
+	Name string `json:"name"`
+	// Annotations present on the resource.
+	Annotations map[string]string `json:"annotations"`
+	// ObjectLink points to the resource inside the Kubernetes API.
+	ObjectLink string `json:"objectLink"`
+	// PreviousPhase of the resource.
+	PreviousPhase Phase `json:"previousPhase"`
+	// CurrentPhase of the resource.
+	CurrentPhase Phase `json:"currentPhase"`
+	// OccurredAt indicates when the transition occurred.
+	OccurredAt metav1.Time `json:"-"`
+	// ImageURLs contains a list of fully-qualified registry images.
+	// This field is only populated when an ImageBuild transitions to PhaseSucceeded.
+	ImageURLs []string `json:"imageURLs,omitempty"`
+
+	// NOTE: think about adding ErrorMessage
+}
+
+// ImageBuildStatusPhaseTransitionMessage
+// ImageBuildTransitionMessage
+// ImageBuildStatusMessage
+
 type ImageBuildAMQPOverrides struct {
 	ExchangeName string `json:"exchangeName,omitempty"`
 	QueueName    string `json:"queueName,omitempty"`

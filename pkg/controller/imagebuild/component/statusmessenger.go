@@ -7,8 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docker/distribution/reference"
 	"github.com/dominodatalab/controller-util/core"
 	"gomodules.xyz/jsonpatch/v2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -20,17 +22,6 @@ import (
 )
 
 var publishContentType = "application/json"
-
-type StatusMessage struct {
-	Name          string            `json:"name"`
-	Annotations   map[string]string `json:"annotations"`
-	ObjectLink    string            `json:"objectLink"`
-	PreviousPhase hephv1.Phase      `json:"previousPhase"`
-	CurrentPhase  hephv1.Phase      `json:"currentPhase"`
-	OccurredAt    time.Time         `json:"-"`
-
-	// NOTE: think about adding ErrorMessage, ImageURLs and ImageSize
-}
 
 type StatusMessengerComponent struct {
 	cfg config.Messaging
@@ -103,13 +94,30 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 			occurredAt = transition.OccurredAt.Time
 		}
 
-		message := StatusMessage{
+		message := hephv1.ImageBuildStatusTransitionMessage{
 			Name:          obj.Name,
 			Annotations:   obj.Annotations,
 			ObjectLink:    objLink,
 			PreviousPhase: transition.PreviousPhase,
 			CurrentPhase:  transition.Phase,
-			OccurredAt:    occurredAt,
+			OccurredAt:    metav1.Time{Time: occurredAt},
+		}
+
+		// return image urls when build succeeds
+		if transition.Phase == hephv1.PhaseSucceeded {
+			var images []string
+			for _, image := range obj.Spec.Images {
+				// parse the image name and tag
+				named, err := reference.ParseNormalizedNamed(image)
+				if err != nil {
+					return ctrl.Result{}, fmt.Errorf("parsing image name %q failed: %w", image, err)
+				}
+
+				// add the latest tag when one is not provided
+				named = reference.TagNameOnly(named)
+				images = append(images, named.String())
+			}
+			message.ImageURLs = images
 		}
 
 		log.V(1).Info("Marshalling StatusMessage into JSON", "message", message)
