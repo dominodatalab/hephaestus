@@ -19,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/apimachinery/pkg/util/wait"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	"k8s.io/client-go/kubernetes"
 	appsv1typed "k8s.io/client-go/kubernetes/typed/apps/v1"
@@ -37,8 +38,14 @@ type Pool interface {
 var (
 	ErrNoUnleasedPods = errors.New("no unleased pods found")
 
-	newUUID          = uuid.NewUUID
-	statefulPodRegex = regexp.MustCompile(`^.*-(\d+)$`)
+	newUUID              = uuid.NewUUID
+	statefulPodRegex     = regexp.MustCompile(`^.*-(\d+)$`)
+	endpointRetryBackoff = wait.Backoff{ // 10ms 20ms 40ms 80ms 160ms 320ms 640ms 1280ms 2560ms 5120ms
+		Steps:    10,
+		Duration: 10 * time.Millisecond,
+		Factor:   2.0,
+		Jitter:   0.1,
+	}
 )
 
 const (
@@ -257,14 +264,17 @@ func (p *workerPool) releasePod(ctx context.Context, pod *corev1.Pod) error {
 func (p *workerPool) buildEndpointURL(ctx context.Context, podName string) (string, error) {
 	p.log.Info("Querying for endpoints", "name", p.serviceName, "namespace", p.namespace)
 
+	var attempts int
 	var hostname string
 
 	// sometimes it takes a short period of time for the endpoints record to be updated with the latest list of "ready"
 	// pods, so we may need to retry fetching the resource when kubernetes experiences some lag
 	err := retry.OnError(
-		retry.DefaultRetry,
+		endpointRetryBackoff,
 		func(error) bool { return true },
 		func() error {
+			attempts++
+
 			endpoints, err := p.endpointsClient.Get(ctx, p.serviceName, metav1.GetOptions{})
 			if err != nil {
 				return err
@@ -277,6 +287,8 @@ func (p *workerPool) buildEndpointURL(ctx context.Context, podName string) (stri
 			return nil
 		},
 	)
+	p.log.Info("Finished building hostname from endpoints", "attempts", attempts)
+
 	if err != nil {
 		return "", fmt.Errorf("failed to extract hostname: %w", err)
 	}
