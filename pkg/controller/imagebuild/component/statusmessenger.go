@@ -22,18 +22,6 @@ import (
 
 var publishContentType = "application/json"
 
-type StatusMessage struct {
-	Name          string            `json:"name"`
-	Annotations   map[string]string `json:"annotations"`
-	ObjectLink    string            `json:"objectLink"`
-	PreviousPhase hephv1.Phase      `json:"previousPhase"`
-	CurrentPhase  hephv1.Phase      `json:"currentPhase"`
-	OccurredAt    time.Time         `json:"-"`
-	ImageURLs     []string          `json:"imageURLs,omitempty"`
-
-	// NOTE: think about adding ErrorMessage and ImageSize
-}
-
 type StatusMessengerComponent struct {
 	cfg config.Messaging
 }
@@ -105,7 +93,7 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 			occurredAt = transition.OccurredAt.Time
 		}
 
-		message := StatusMessage{
+		message := hephv1.ImageBuildStatusTransitionMessage{
 			Name:          obj.Name,
 			Annotations:   obj.Annotations,
 			ObjectLink:    objLink,

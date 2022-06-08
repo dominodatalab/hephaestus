@@ -14,19 +14,20 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.BasicAuthCredentials":    schema_pkg_api_hephaestus_v1_BasicAuthCredentials(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuild":              schema_pkg_api_hephaestus_v1_ImageBuild(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildAMQPOverrides": schema_pkg_api_hephaestus_v1_ImageBuildAMQPOverrides(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildList":          schema_pkg_api_hephaestus_v1_ImageBuildList(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildSpec":          schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildStatus":        schema_pkg_api_hephaestus_v1_ImageBuildStatus(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildTransition":    schema_pkg_api_hephaestus_v1_ImageBuildTransition(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCache":              schema_pkg_api_hephaestus_v1_ImageCache(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCacheList":          schema_pkg_api_hephaestus_v1_ImageCacheList(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCacheSpec":          schema_pkg_api_hephaestus_v1_ImageCacheSpec(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCacheStatus":        schema_pkg_api_hephaestus_v1_ImageCacheStatus(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.RegistryCredentials":     schema_pkg_api_hephaestus_v1_RegistryCredentials(ref),
-		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.SecretCredentials":       schema_pkg_api_hephaestus_v1_SecretCredentials(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.BasicAuthCredentials":              schema_pkg_api_hephaestus_v1_BasicAuthCredentials(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuild":                        schema_pkg_api_hephaestus_v1_ImageBuild(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildAMQPOverrides":           schema_pkg_api_hephaestus_v1_ImageBuildAMQPOverrides(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildList":                    schema_pkg_api_hephaestus_v1_ImageBuildList(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildSpec":                    schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildStatus":                  schema_pkg_api_hephaestus_v1_ImageBuildStatus(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildStatusTransitionMessage": schema_pkg_api_hephaestus_v1_ImageBuildStatusTransitionMessage(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildTransition":              schema_pkg_api_hephaestus_v1_ImageBuildTransition(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCache":                        schema_pkg_api_hephaestus_v1_ImageCache(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCacheList":                    schema_pkg_api_hephaestus_v1_ImageCacheList(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCacheSpec":                    schema_pkg_api_hephaestus_v1_ImageCacheSpec(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCacheStatus":                  schema_pkg_api_hephaestus_v1_ImageCacheStatus(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.RegistryCredentials":               schema_pkg_api_hephaestus_v1_RegistryCredentials(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.SecretCredentials":                 schema_pkg_api_hephaestus_v1_SecretCredentials(ref),
 	}
 }
 
@@ -344,6 +345,83 @@ func schema_pkg_api_hephaestus_v1_ImageBuildStatus(ref common.ReferenceCallback)
 		},
 		Dependencies: []string{
 			"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildTransition", "k8s.io/apimachinery/pkg/apis/meta/v1.Condition"},
+	}
+}
+
+func schema_pkg_api_hephaestus_v1_ImageBuildStatusTransitionMessage(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ImageBuildStatusTransitionMessage contains information about ImageBuild status transitions.\n\nThis type is used to publish JSON-formatted messages to one or more configured messaging endpoints when ImageBuild resources undergo phase changes during the build process.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name of the ImageBuild resource that underwent a transition.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"annotations": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Annotations present on the resource.",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"objectLink": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ObjectLink points to the resource inside the Kubernetes API.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"previousPhase": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PreviousPhase of the resource.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"currentPhase": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CurrentPhase of the resource.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"imageURLs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ImageURLs contains a list of fully-qualified registry images. This field is only populated when an ImageBuild transitions to PhaseSucceeded.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"name", "annotations", "objectLink", "previousPhase", "currentPhase"},
+			},
+		},
 	}
 }
 
