@@ -107,8 +107,8 @@ docker run --user "$(id -u):$(id -g)" --rm -v "$PROJECT_DIR:/wd" --workdir /wd \
     --input-spec /wd/$SWAGGER_FILE \
     --generator-name java \
     --output /wd/sdks/gen \
-    --api-package com.dominodatalab.hephaestus.apis \
-    --model-package com.dominodatalab.hephaestus.models \
+    --api-package com.dominodatalab.hephaestus.v1.apis \
+    --model-package com.dominodatalab.hephaestus.v1.models \
     --invoker-package io.kubernetes.client.openapi \
     --group-id com.dominodatalab.hephaestus \
     --artifact-id hephaestus-client-java \
