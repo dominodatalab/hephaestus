@@ -19,12 +19,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/uuid"
-	"k8s.io/apimachinery/pkg/util/wait"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	"k8s.io/client-go/kubernetes"
 	appsv1typed "k8s.io/client-go/kubernetes/typed/apps/v1"
 	corev1typed "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/pointer"
 
 	"github.com/dominodatalab/hephaestus/pkg/config"
 )
@@ -40,12 +39,7 @@ var (
 
 	newUUID              = uuid.NewUUID
 	statefulPodRegex     = regexp.MustCompile(`^.*-(\d+)$`)
-	endpointRetryBackoff = wait.Backoff{ // 10ms 20ms 40ms 80ms 160ms 320ms 640ms 1280ms 2560ms 5120ms
-		Steps:    10,
-		Duration: 10 * time.Millisecond,
-		Factor:   2.0,
-		Jitter:   0.1,
-	}
+	endpointWatchTimeout = pointer.Int64(90)
 )
 
 const (
@@ -262,34 +256,32 @@ func (p *workerPool) releasePod(ctx context.Context, pod *corev1.Pod) error {
 
 // builds routable url for buildkit pod with protocol and port
 func (p *workerPool) buildEndpointURL(ctx context.Context, podName string) (string, error) {
-	p.log.Info("Querying for endpoints", "name", p.serviceName, "namespace", p.namespace)
+	p.log.Info("Watching endpoints for new address", "podName", podName)
 
-	var attempts int
-	var hostname string
-
-	// sometimes it takes a short period of time for the endpoints record to be updated with the latest list of "ready"
-	// pods, so we may need to retry fetching the resource when kubernetes experiences some lag
-	err := retry.OnError(
-		endpointRetryBackoff,
-		func(error) bool { return true },
-		func() error {
-			attempts++
-
-			endpoints, err := p.endpointsClient.Get(ctx, p.serviceName, metav1.GetOptions{})
-			if err != nil {
-				return err
-			}
-
-			if hostname, err = p.extractHostname(endpoints, podName); err != nil {
-				return err
-			}
-
-			return nil
-		},
-	)
-	p.log.Info("Finished building hostname from endpoints", "attempts", attempts)
-
+	watchOpts := metav1.ListOptions{LabelSelector: p.podListOptions.LabelSelector, TimeoutSeconds: endpointWatchTimeout}
+	watcher, err := p.endpointsClient.Watch(ctx, watchOpts)
 	if err != nil {
+		return "", fmt.Errorf("failed to watch endpoints: %w", err)
+	}
+	defer watcher.Stop()
+
+	var lastErr error
+	var hostname string
+	start := time.Now()
+
+	// sometimes buildkit pods more time to "boot" when their cache is large. this watch will wait until the pods become
+	// ready and are added to the endpoints addresses collection.
+	for event := range watcher.ResultChan() {
+		endpoints := event.Object.(*corev1.Endpoints)
+
+		hostname, lastErr = p.extractHostname(endpoints, podName)
+		if lastErr == nil {
+			break
+		}
+	}
+	p.log.Info("Finished watching endpoints", "podName", podName, "duration", time.Since(start))
+
+	if lastErr != nil {
 		return "", fmt.Errorf("failed to extract hostname: %w", err)
 	}
 
