@@ -26,7 +26,6 @@ rules:
     verbs:
       - create
       - delete
-
   - apiGroups:
       - hephaestus.dominodatalab.com
     resources:
@@ -71,10 +70,15 @@ rules:
   - apiGroups:
       - ""
     resources:
-      - endpoints
       - secrets
     verbs:
       - get
+  - apiGroups:
+      - ""
+    resources:
+      - endpoints
+    verbs:
+      - watch
   - apiGroups:
       - apps
     resources:

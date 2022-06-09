@@ -273,7 +273,6 @@ func (p *workerPool) buildEndpointURL(ctx context.Context, podName string) (stri
 	// ready and are added to the endpoints addresses collection.
 	for event := range watcher.ResultChan() {
 		endpoints := event.Object.(*corev1.Endpoints)
-
 		hostname, lastErr = p.extractHostname(endpoints, podName)
 		if lastErr == nil {
 			break
@@ -282,7 +281,7 @@ func (p *workerPool) buildEndpointURL(ctx context.Context, podName string) (stri
 	p.log.Info("Finished watching endpoints", "podName", podName, "duration", time.Since(start))
 
 	if lastErr != nil {
-		return "", fmt.Errorf("failed to extract hostname: %w", err)
+		return "", fmt.Errorf("failed to extract hostname after %d seconds: %w", *endpointWatchTimeout, err)
 	}
 
 	u, err := url.ParseRequestURI(fmt.Sprintf("tcp://%s:%d", hostname, p.servicePort))
