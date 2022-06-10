@@ -66,14 +66,14 @@ spec:
                 - buildctl
                 - debug
                 - workers
-            {{- .Values.buildkit.livenessProbe | toYaml | nindent 12 }}
+            periodSeconds: 30
           readinessProbe:
             exec:
               command:
                 - buildctl
                 - debug
                 - workers
-            {{- .Values.buildkit.readinessProbe | toYaml | nindent 12 }}
+            periodSeconds: 30
           resources:
             {{- toYaml .Values.buildkit.resources | nindent 12 }}
           volumeMounts:

@@ -311,19 +311,3 @@ buildkit:
                   values:
                     - {{ .Chart.Name }}
             topologyKey: "kubernetes.io/hostname"
-
-  # Liveness probe configuration
-  livenessProbe:
-    failureThreshold: 3
-    initialDelaySeconds: 5
-    periodSeconds: 30
-    successThreshold: 1
-    timeoutSeconds: 1
-
-  # Readiness probe configuration
-  readinessProbe:
-    failureThreshold: 3
-    initialDelaySeconds: 5
-    periodSeconds: 30
-    successThreshold: 1
-    timeoutSeconds: 1
