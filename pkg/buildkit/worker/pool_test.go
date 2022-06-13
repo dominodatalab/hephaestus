@@ -12,10 +12,12 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/utils/pointer"
@@ -69,30 +71,28 @@ var (
 		},
 	}
 
-	validEndpoints = &corev1.Endpoints{
+	validEndpointSlice = &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "buildkit",
+			Name:      "buildkit-bgk87",
 			Namespace: namespace,
 		},
-		Subsets: []corev1.EndpointSubset{
+		Endpoints: []discoveryv1.Endpoint{
 			{
-				Addresses: []corev1.EndpointAddress{
-					{
-						IP:       "1.2.3.4",
-						Hostname: "buildkit-0",
-						TargetRef: &corev1.ObjectReference{
-							Namespace: namespace,
-							Name:      "buildkit-0",
-						},
-					},
+				Conditions: discoveryv1.EndpointConditions{
+					Ready:   pointer.Bool(true),
+					Serving: pointer.Bool(true),
 				},
-				Ports: []corev1.EndpointPort{
-					{
-						Name:     "buildkit",
-						Port:     1234,
-						Protocol: "tcp",
-					},
+				Hostname: pointer.String("buildkit-0"),
+				TargetRef: &corev1.ObjectReference{
+					Name:      "buildkit-0",
+					Namespace: namespace,
 				},
+			},
+		},
+		Ports: []discoveryv1.EndpointPort{
+			{
+				Name: pointer.String("daemon"),
+				Port: pointer.Int32(1234),
 			},
 		},
 	}
@@ -109,16 +109,79 @@ func leasedPod() *corev1.Pod {
 	return leased
 }
 
-func TestPoolGet(t *testing.T) {
-	t.Skip("re-write using watch reactor")
+func assertLeasedPod(t *testing.T, action k8stesting.Action, ret *corev1.Pod) {
+	t.Helper()
 
+	patchAction := action.(k8stesting.PatchAction)
+
+	assert.Equal(t, types.ApplyPatchType, patchAction.GetPatchType(), "unexpected patch type")
+
+	pod := corev1.Pod{}
+	patch := patchAction.GetPatch()
+	if err := json.Unmarshal(patch, &pod); err != nil {
+		assert.FailNowf(t, "unable to marshal patch into v1.Pod", "received invalid patch %s", patch)
+	}
+
+	assert.Contains(t, pod.Annotations, leasedByAnnotation)
+	assert.Contains(t, pod.Annotations, managerIDAnnotation)
+	assert.NotContains(t, pod.Annotations, expiryTimeAnnotation)
+
+	ts, ok := pod.Annotations[leasedAtAnnotation]
+	require.True(t, ok, "leased at annotation not found")
+
+	leasedAt, err := time.Parse(time.RFC3339, ts)
+	require.NoError(t, err, "invalid lease at annotation")
+
+	assert.True(t, leasedAt.Before(time.Now()), "leased at is not in the past")
+
+	ret.Annotations = pod.Annotations
+}
+
+// NOTE: this set of assertions is fine, but it's not great. we need a better way of asserting the patching. ideally, we
+//  would make assertions against the API object after the event but client-go doesn't support SSA right now, which
+//  means we have to override the "patch" action with a reactor.
+func assertUnleasedPod(t *testing.T, action k8stesting.Action) {
+	t.Helper()
+
+	patchAction := action.(k8stesting.PatchAction)
+
+	assert.Equal(t, types.ApplyPatchType, patchAction.GetPatchType(), "unexpected patch type")
+
+	pp := corev1.Pod{}
+	patch := patchAction.GetPatch()
+	if err := json.Unmarshal(patch, &pp); err != nil {
+		assert.FailNowf(t, "unable to marshal patch into v1.Pod", "received invalid patch %s", patch)
+	}
+
+	assert.NotContains(t, pp.Annotations, leasedAtAnnotation)
+	assert.NotContains(t, pp.Annotations, leasedByAnnotation)
+	assert.NotContains(t, pp.Annotations, managerIDAnnotation)
+
+	ts, ok := pp.Annotations[expiryTimeAnnotation]
+	require.True(t, ok, "expiry time annotation not found")
+
+	expiry, err := time.Parse(time.RFC3339, ts)
+	require.NoError(t, err, "invalid expiry time annotation")
+
+	assert.True(t, expiry.After(time.Now().Add(5*time.Minute)), "expiry time is not in the future")
+}
+
+func TestPoolGet(t *testing.T) {
 	t.Run("running_pod", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
 		p := validPod.DeepCopy()
 
-		fakeClient := fake.NewSimpleClientset(p, validEndpoints)
+		fakeClient := fake.NewSimpleClientset(p)
+		fakeClient.PrependWatchReactor("endpointslices", func(k8stesting.Action) (handled bool, ret watch.Interface, err error) {
+			watcher := watch.NewFake()
+			go func() {
+				defer watcher.Stop()
+				watcher.Add(validEndpointSlice)
+			}()
+			return true, watcher, nil
+		})
 		fakeClient.PrependReactor("patch", "pods", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 			assertLeasedPod(t, action, p)
 			return true, p, nil
@@ -153,7 +216,15 @@ func TestPoolGet(t *testing.T) {
 		delivered := validPod.DeepCopy()
 		delivered.Status.Phase = ""
 
-		fakeClient := fake.NewSimpleClientset(delivered, validEndpoints)
+		fakeClient := fake.NewSimpleClientset(delivered)
+		fakeClient.PrependWatchReactor("endpointslices", func(action k8stesting.Action) (handled bool, ret watch.Interface, err error) {
+			watcher := watch.NewFake()
+			go func() {
+				defer watcher.Stop()
+				watcher.Add(validEndpointSlice)
+			}()
+			return true, watcher, nil
+		})
 		fakeClient.PrependReactor("patch", "pods", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 			assertLeasedPod(t, action, delivered)
 			return true, delivered, nil
@@ -211,7 +282,7 @@ func TestPoolGet(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		fakeClient := fake.NewSimpleClientset(validPod, validEndpoints)
+		fakeClient := fake.NewSimpleClientset(validPod)
 		fakeClient.PrependReactor("patch", "pods", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 			return true, nil, errors.New("expected failure")
 		})
@@ -238,10 +309,18 @@ func TestPoolGet(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		eps := validEndpoints.DeepCopy()
-		eps.Subsets[0].Addresses = nil
+		fakeClient := fake.NewSimpleClientset(validPod)
+		fakeClient.PrependWatchReactor("endpointslices", func(action k8stesting.Action) (handled bool, ret watch.Interface, err error) {
+			watcher := watch.NewFake()
+			go func() {
+				defer watcher.Stop()
 
-		fakeClient := fake.NewSimpleClientset(validPod, eps)
+				eps := validEndpointSlice.DeepCopy()
+				eps.Endpoints = nil
+				watcher.Add(eps)
+			}()
+			return true, watcher, nil
+		})
 
 		reactionCount := 0
 		fakeClient.PrependReactor("patch", "pods", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
@@ -272,7 +351,7 @@ func TestPoolGet(t *testing.T) {
 		select {
 		case res := <-leaseChannel:
 			assert.Empty(t, res.res.(string), "expected an empty lease address")
-			assert.EqualError(t, res.err, `failed to extract hostname: endpoints "buildkit" does not expose pod buildkit-0 on port 1234`)
+			assert.EqualError(t, res.err, "failed to extract hostname after 90 seconds")
 		case <-time.After(3 * time.Second):
 			assert.Fail(t, "could not acquire a buildkit endpoint within 3s")
 		}
@@ -289,19 +368,27 @@ func TestPoolGet(t *testing.T) {
 			return true, p, nil
 		})
 
-		present := validEndpoints.DeepCopy()
-		missing := validEndpoints.DeepCopy()
-		missing.Subsets[0].Addresses = nil
+		fakeClient.PrependWatchReactor("endpointslices", func(action k8stesting.Action) (handled bool, ret watch.Interface, err error) {
+			watcher := watch.NewFake()
+			go func() {
+				defer watcher.Stop()
 
-		reactionCount := 0
-		fakeClient.PrependReactor("get", "endpoints", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-			reactionCount++
+				eps := validEndpointSlice.DeepCopy()
+				eps.Endpoints = nil
+				watcher.Add(eps)
 
-			if reactionCount < 3 {
-				return true, missing, nil
-			} else {
-				return true, present, nil
-			}
+				eps = validEndpointSlice.DeepCopy()
+				eps.Endpoints[0].Conditions.Ready = pointer.Bool(false)
+				watcher.Add(eps)
+
+				eps = validEndpointSlice.DeepCopy()
+				eps.Endpoints[0].Hostname = nil
+				watcher.Add(eps)
+
+				watcher.Add(validEndpointSlice)
+			}()
+
+			return true, watcher, nil
 		})
 
 		wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond))
@@ -345,10 +432,14 @@ func TestPoolGet(t *testing.T) {
 				return
 			}
 
-			if _, err := fakeClient.CoreV1().Endpoints(namespace).Create(ctx, validEndpoints, metav1.CreateOptions{}); err != nil {
-				errorChan <- err
-				return
-			}
+			fakeClient.PrependWatchReactor("endpointslices", func(action k8stesting.Action) (handled bool, ret watch.Interface, err error) {
+				watcher := watch.NewFake()
+				go func() {
+					defer watcher.Stop()
+					watcher.Add(validEndpointSlice)
+				}()
+				return true, watcher, nil
+			})
 		}()
 
 		fakeClient.PrependReactor("update", "statefulsets", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
@@ -391,12 +482,19 @@ func TestPoolGet(t *testing.T) {
 }
 
 func TestPoolGetFailedScaleUp(t *testing.T) {
-	t.Skip("re-write using watch reactor")
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	fakeClient := fake.NewSimpleClientset(validSts, validPod, validEndpoints)
+	fakeClient := fake.NewSimpleClientset(validSts, validPod)
+
+	fakeClient.PrependWatchReactor("endpointslices", func(action k8stesting.Action) (handled bool, ret watch.Interface, err error) {
+		watcher := watch.NewFake()
+		go func() {
+			defer watcher.Stop()
+			watcher.Add(validEndpointSlice)
+		}()
+		return true, watcher, nil
+	})
 
 	leased := false
 	fakeClient.PrependReactor("patch", "*", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
@@ -821,61 +919,4 @@ func TestPoolPodReconciliation(t *testing.T) {
 			}
 		})
 	}
-}
-
-func assertLeasedPod(t *testing.T, action k8stesting.Action, ret *corev1.Pod) {
-	t.Helper()
-
-	patchAction := action.(k8stesting.PatchAction)
-
-	assert.Equal(t, types.ApplyPatchType, patchAction.GetPatchType(), "unexpected patch type")
-
-	pod := corev1.Pod{}
-	patch := patchAction.GetPatch()
-	if err := json.Unmarshal(patch, &pod); err != nil {
-		assert.FailNowf(t, "unable to marshal patch into v1.Pod", "received invalid patch %s", patch)
-	}
-
-	assert.Contains(t, pod.Annotations, leasedByAnnotation)
-	assert.Contains(t, pod.Annotations, managerIDAnnotation)
-	assert.NotContains(t, pod.Annotations, expiryTimeAnnotation)
-
-	ts, ok := pod.Annotations[leasedAtAnnotation]
-	require.True(t, ok, "leased at annotation not found")
-
-	leasedAt, err := time.Parse(time.RFC3339, ts)
-	require.NoError(t, err, "invalid lease at annotation")
-
-	assert.True(t, leasedAt.Before(time.Now()), "leased at is not in the past")
-
-	ret.Annotations = pod.Annotations
-}
-
-// NOTE: this set of assertions is fine, but it's not great. we need a better way of asserting the patching. ideally, we
-//  would make assertions against the API object after the event but client-go doesn't support SSA right now, which
-//  means we have to override the "patch" action with a reactor.
-func assertUnleasedPod(t *testing.T, action k8stesting.Action) {
-	t.Helper()
-
-	patchAction := action.(k8stesting.PatchAction)
-
-	assert.Equal(t, types.ApplyPatchType, patchAction.GetPatchType(), "unexpected patch type")
-
-	pp := corev1.Pod{}
-	patch := patchAction.GetPatch()
-	if err := json.Unmarshal(patch, &pp); err != nil {
-		assert.FailNowf(t, "unable to marshal patch into v1.Pod", "received invalid patch %s", patch)
-	}
-
-	assert.NotContains(t, pp.Annotations, leasedAtAnnotation)
-	assert.NotContains(t, pp.Annotations, leasedByAnnotation)
-	assert.NotContains(t, pp.Annotations, managerIDAnnotation)
-
-	ts, ok := pp.Annotations[expiryTimeAnnotation]
-	require.True(t, ok, "expiry time annotation not found")
-
-	expiry, err := time.Parse(time.RFC3339, ts)
-	require.NoError(t, err, "invalid expiry time annotation")
-
-	assert.True(t, expiry.After(time.Now().Add(5*time.Minute)), "expiry time is not in the future")
 }
