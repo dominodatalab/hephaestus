@@ -15,6 +15,7 @@ import (
 	"github.com/go-logr/logr"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -23,6 +24,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	appsv1typed "k8s.io/client-go/kubernetes/typed/apps/v1"
 	corev1typed "k8s.io/client-go/kubernetes/typed/core/v1"
+	discoveryv1typed "k8s.io/client-go/kubernetes/typed/discovery/v1"
 	"k8s.io/utils/pointer"
 
 	"github.com/dominodatalab/hephaestus/pkg/config"
@@ -37,9 +39,9 @@ type Pool interface {
 var (
 	ErrNoUnleasedPods = errors.New("no unleased pods found")
 
-	newUUID              = uuid.NewUUID
-	statefulPodRegex     = regexp.MustCompile(`^.*-(\d+)$`)
-	endpointWatchTimeout = pointer.Int64(90)
+	newUUID                   = uuid.NewUUID
+	statefulPodRegex          = regexp.MustCompile(`^.*-(\d+)$`)
+	endpointSliceWatchTimeout = pointer.Int64(90)
 )
 
 const (
@@ -66,12 +68,12 @@ type workerPool struct {
 	notifyReconcile chan struct{}
 
 	// leasing
-	mu              sync.Mutex
-	uuid            string
-	namespace       string
-	podClient       corev1typed.PodInterface
-	endpointsClient corev1typed.EndpointsInterface
-	podListOptions  metav1.ListOptions
+	mu                  sync.Mutex
+	uuid                string
+	namespace           string
+	podClient           corev1typed.PodInterface
+	endpointSliceClient discoveryv1typed.EndpointSliceInterface
+	podListOptions      metav1.ListOptions
 
 	// endpoints discovery
 	serviceName string
@@ -94,22 +96,22 @@ func NewPool(ctx context.Context, clientset kubernetes.Interface, conf config.Bu
 
 	ctx, cancel := context.WithCancel(ctx)
 	wp := &workerPool{
-		ctx:               ctx,
-		cancel:            cancel,
-		log:               o.Log,
-		poolSyncTime:      o.SyncWaitTime,
-		podMaxIdleTime:    o.MaxIdleTime,
-		uuid:              string(newUUID()),
-		requests:          NewRequestQueue(),
-		notifyReconcile:   make(chan struct{}, 1),
-		podClient:         clientset.CoreV1().Pods(conf.Namespace),
-		endpointsClient:   clientset.CoreV1().Endpoints(conf.Namespace),
-		podListOptions:    podListOptions,
-		serviceName:       conf.ServiceName,
-		servicePort:       conf.DaemonPort,
-		statefulSetName:   conf.StatefulSetName,
-		statefulSetClient: clientset.AppsV1().StatefulSets(conf.Namespace),
-		namespace:         conf.Namespace,
+		ctx:                 ctx,
+		cancel:              cancel,
+		log:                 o.Log,
+		poolSyncTime:        o.SyncWaitTime,
+		podMaxIdleTime:      o.MaxIdleTime,
+		uuid:                string(newUUID()),
+		requests:            NewRequestQueue(),
+		notifyReconcile:     make(chan struct{}, 1),
+		podClient:           clientset.CoreV1().Pods(conf.Namespace),
+		endpointSliceClient: clientset.DiscoveryV1().EndpointSlices(conf.Namespace),
+		podListOptions:      podListOptions,
+		serviceName:         conf.ServiceName,
+		servicePort:         conf.DaemonPort,
+		statefulSetName:     conf.StatefulSetName,
+		statefulSetClient:   clientset.AppsV1().StatefulSets(conf.Namespace),
+		namespace:           conf.Namespace,
 	}
 
 	wp.log.Info("Starting worker pod monitor", "syncTime", wp.poolSyncTime.String())
@@ -258,30 +260,28 @@ func (p *workerPool) releasePod(ctx context.Context, pod *corev1.Pod) error {
 func (p *workerPool) buildEndpointURL(ctx context.Context, podName string) (string, error) {
 	p.log.Info("Watching endpoints for new address", "podName", podName)
 
-	watchOpts := metav1.ListOptions{LabelSelector: p.podListOptions.LabelSelector, TimeoutSeconds: endpointWatchTimeout}
-	watcher, err := p.endpointsClient.Watch(ctx, watchOpts)
+	watchOpts := metav1.ListOptions{LabelSelector: p.podListOptions.LabelSelector, TimeoutSeconds: endpointSliceWatchTimeout}
+	watcher, err := p.endpointSliceClient.Watch(ctx, watchOpts)
 	if err != nil {
-		return "", fmt.Errorf("failed to watch endpoints: %w", err)
+		return "", fmt.Errorf("failed to watch endpointslices: %w", err)
 	}
 	defer watcher.Stop()
 
-	var lastErr error
+	var handled bool
 	var hostname string
-	start := time.Now()
 
-	// sometimes buildkit pods more time to "boot" when their cache is large. this watch will wait until the pods become
-	// ready and are added to the endpoints addresses collection.
+	start := time.Now()
 	for event := range watcher.ResultChan() {
-		endpoints := event.Object.(*corev1.Endpoints)
-		hostname, lastErr = p.extractHostname(endpoints, podName)
-		if lastErr == nil {
+		endpointSlice := event.Object.(*discoveryv1.EndpointSlice)
+
+		if handled, hostname = p.extractHostname(endpointSlice, podName); handled {
 			break
 		}
 	}
 	p.log.Info("Finished watching endpoints", "podName", podName, "duration", time.Since(start))
 
-	if lastErr != nil {
-		return "", fmt.Errorf("failed to extract hostname after %d seconds: %w", *endpointWatchTimeout, err)
+	if hostname == "" {
+		return "", fmt.Errorf("failed to extract hostname after %d seconds", *endpointSliceWatchTimeout)
 	}
 
 	u, err := url.ParseRequestURI(fmt.Sprintf("tcp://%s:%d", hostname, p.servicePort))
@@ -292,31 +292,40 @@ func (p *workerPool) buildEndpointURL(ctx context.Context, podName string) (stri
 	return u.String(), nil
 }
 
-// generates internal hostname for pod using endpoints
-func (p *workerPool) extractHostname(endpoints *corev1.Endpoints, podName string) (string, error) {
-	var hostname string
-
-scan:
-	for _, subset := range endpoints.Subsets {
-		for _, address := range subset.Addresses {
-			if address.TargetRef.Name == podName {
-				for _, port := range subset.Ports {
-					if port.Port == p.servicePort {
-						hostname = strings.Join([]string{address.Hostname, endpoints.Name, endpoints.Namespace}, ".")
-						p.log.Info("Found eligible endpoint address", "hostname", hostname)
-
-						break scan
-					}
-				}
-			}
+// generates internal hostname for pod using an endpoint slice
+func (p *workerPool) extractHostname(epSlice *discoveryv1.EndpointSlice, podName string) (handled bool, hostname string) {
+	var portPresent bool
+	for _, port := range epSlice.Ports {
+		if pointer.Int32Deref(port.Port, 0) == p.servicePort {
+			portPresent = true
+			break
 		}
 	}
-
-	if hostname == "" {
-		return "", fmt.Errorf("endpoints %q does not expose pod %s on port %d", endpoints.Name, podName, p.servicePort)
+	if !portPresent {
+		return
 	}
 
-	return hostname, nil
+	for _, endpoint := range epSlice.Endpoints {
+		if endpoint.TargetRef.Name != podName {
+			continue
+		}
+
+		if !pointer.BoolDeref(endpoint.Conditions.Ready, false) {
+			break
+		}
+
+		if endpoint.Hostname == nil {
+			break
+		}
+
+		handled = true
+		hostname = strings.Join([]string{*endpoint.Hostname, p.serviceName, epSlice.Namespace}, ".")
+		p.log.Info("Found eligible endpoint address", "hostname", hostname)
+
+		break
+	}
+
+	return
 }
 
 // reconcile pods in worker pool

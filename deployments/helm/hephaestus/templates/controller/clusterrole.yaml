@@ -74,17 +74,17 @@ rules:
     verbs:
       - get
   - apiGroups:
-      - ""
-    resources:
-      - endpoints
-    verbs:
-      - watch
-  - apiGroups:
       - apps
     resources:
       - statefulsets/scale
     verbs:
       - update
+  - apiGroups:
+      - discovery.k8s.io
+    resources:
+      - endpointslices
+    verbs:
+      - watch
   {{- if or (include "hephaestus.pspRequired" .) (include "hephaestus.istioWithoutCNI" .) }}
   - apiGroups:
       - policy
