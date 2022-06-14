@@ -267,14 +267,13 @@ func (p *workerPool) buildEndpointURL(ctx context.Context, podName string) (stri
 	}
 	defer watcher.Stop()
 
-	var handled bool
 	var hostname string
 
 	start := time.Now()
 	for event := range watcher.ResultChan() {
 		endpointSlice := event.Object.(*discoveryv1.EndpointSlice)
 
-		if handled, hostname = p.extractHostname(endpointSlice, podName); handled {
+		if hostname = p.extractHostname(endpointSlice, podName); hostname != "" {
 			break
 		}
 	}
@@ -293,7 +292,7 @@ func (p *workerPool) buildEndpointURL(ctx context.Context, podName string) (stri
 }
 
 // generates internal hostname for pod using an endpoint slice
-func (p *workerPool) extractHostname(epSlice *discoveryv1.EndpointSlice, podName string) (handled bool, hostname string) {
+func (p *workerPool) extractHostname(epSlice *discoveryv1.EndpointSlice, podName string) (hostname string) {
 	var portPresent bool
 	for _, port := range epSlice.Ports {
 		if pointer.Int32Deref(port.Port, 0) == p.servicePort {
@@ -318,7 +317,6 @@ func (p *workerPool) extractHostname(epSlice *discoveryv1.EndpointSlice, podName
 			break
 		}
 
-		handled = true
 		hostname = strings.Join([]string{*endpoint.Hostname, p.serviceName, epSlice.Namespace}, ".")
 		p.log.Info("Found eligible endpoint address", "hostname", hostname)
 
