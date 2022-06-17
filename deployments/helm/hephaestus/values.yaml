@@ -32,124 +32,11 @@ istio:
   # network settings when CNI plugin is NOT installed.
   cni: false
 
-# Controller manager configuration
+# Controller configuration
 controller:
-  # Controller manager image
-  # The default image tag is the chart appVersion.
-  image:
-    registry: ghcr.io
-    repository: dominodatalab/hephaestus
-    tag: ""
-    pullPolicy: IfNotPresent
-    pullSecrets: []
-
-  # Build status messaging configuration
-  messaging:
-    # Enable message publisher
-    enabled: false
-    # Remote AMQP server configuration
-    amqp:
-      url: "amqp://user:password@rabbitmq.default:5672"
-      exchange: ""
-      queue: "hephaestus.imagebuilds.status"
-    # Remote Kafka cluster configuration
-    kafka: {}
-
-  # Manager logging configuration
-  logging:
-    # Level at which stacktraces are printed can be either 'info', 'error', or 'panic'
-    stacktraceLevel: error
-    # Logs sent to stdout/stderr
-    container:
-      # Level can be 'debug', 'info', 'error', or any integer value >= 0 which corresponds to custom debug levels of increasing verbosity
-      level: info
-      # Defaults to 'console' but can also be 'json'
-      encoding: console
-    # Logs sent to JSON file for post-processing. These logs are only produced when log processor is enabled
-    logfile:
-      level: info
-
-  # Maximum number of concurrent builds which can be run
-  imageBuildMaxConcurrency: 5
-
-  # Webhook server port
-  webhookPort: 9443
-
-  # Prometheus metric ports
-  metricsPort: 8080
-
-  # Health probe port
-  healthProbePort: 8081
-
-  # Limit watch to a specific set of namespaces, default is all namespaces
-  watchNamespaces: []
-
-  # Duration after which buildkit cluster is inspected for idle pods
-  # Defaults to "30s"
-  poolSyncWaitTime: null
-
-  # Duration after which idle buildkit pods will be terminated
-  # Defaults to "10m"
-  poolMaxIdleTime: null
-
-  # Duration after which buildkit statefulset scale watch will be terminated
-  # Defaults to "60s"
-  poolWatchTimeout: null
-
-  # Secrets (name: path) to expose into builds that request it
-  secrets: {}
-
-  # Resource requests and limits
-  resources:
-    requests: {}
-    limits: {}
-
-  # Metrics configuration for the manager
-  metrics:
-    # Enable the export of prometheus metrics
-    enabled: true
-    # Allow ingress traffic from prometheus pods with the following labels
-    podLabels:
-      app.kubernetes.io/name: prometheus
-    # Namespace labels where prometheus is running if different from app's namespace
-    namespaceLabels: {}
-
-  # Configure pod security context
-  podSecurityContext: {}
-
-  # Configure container security context
-  containerSecurityContext: {}
-
-  # Extra labels for manager pods
-  podLabels: {}
-
-  # Annotations for manager pods
-  podAnnotations: {}
-
-  # Tolerations for manager pod assignment
-  tolerations: []
-
-  # Affinities for manager pod assignment
-  affinity: {}
-
-  # Node labels for manager pod assignment
-  nodeSelector: {}
-
-  # Manager pods priorityClassName
-  priorityClassName: ""
-
-  # Additional volume mounts
-  extraVolumeMounts: []
-
-  # Additional volumes
-  extraVolumes: []
-
-  # Extra environment variables provided to the controller container
-  extraEnvVars: []
-
-  # Number of manager instances to run. Leader election will be enabled
-  # whenever this value is greater than 1; this ensures that only one instance
-  # is active at a time.
+  # Number of instances to run. Leader election will be enabled whenever this
+  # value is greater than 1; this ensures that only one instance is active at
+  # any given time.
   replicaCount: 1
 
   # Service account configuration
@@ -162,40 +49,150 @@ controller:
     # If not set and create is true, a name is generated using the fullname template
     name: ""
 
-# Log processor configuration
-logProcessor:
-  # Log processor image
-  image:
-    registry: ""
-    repository: timberio/vector
-    tag: 0.21.X-distroless-static
-    pullPolicy: IfNotPresent
-    pullSecrets: []
+  # Metrics configuration
+  metrics:
+    # Enable the export of prometheus metrics
+    enabled: true
+    # Allow ingress traffic from prometheus pods with the following labels
+    podLabels:
+      app.kubernetes.io/name: prometheus
+    # Namespace labels where prometheus is running if different from app's namespace
+    namespaceLabels: {}
 
-  # Enable the deployment of the log processing sidecar
-  enabled: true
+  # Configure controller pod security context
+  podSecurityContext: {}
 
-  # Resource requests and limits
-  resources:
-    requests: {}
-    limits: {}
+  # Annotations for controller pods
+  podAnnotations: {}
 
-  # Configure the transformation and delivery of your logs using "hephaestus_output" as the name of your input
-  config:
-    # See https://vector.dev/docs/reference/configuration/transforms/
-    transforms: {}
-    # See https://vector.dev/docs/reference/configuration/sinks/
-    sinks:
-      stdout:
-        type: console
-        inputs:
-          - hephaestus_output
-        encoding:
-          codec: json
+  # Extra labels for controller pods
+  podLabels: {}
 
-  # Additional volume mounts into log processor container. Volumes are listed
-  # in controller.extraVolumes since the two containers live in the same pod.
+  # Tolerations for controller pod assignment
+  tolerations: []
+
+  # Affinities for controller pod assignment
+  affinity: {}
+
+  # Node labels for controller pod assignment
+  nodeSelector: {}
+
+  # Controller pods priorityClassName
+  priorityClassName: ""
+
+  # Additional volumes
+  extraVolumes: []
+
+  # Additional volume mounts added to both the manager and vector containers
   extraVolumeMounts: []
+
+  # Manager configuration
+  manager:
+    # Manager image (default image tag is the chart appVersion)
+    image:
+      registry: ghcr.io
+      repository: dominodatalab/hephaestus
+      tag: ""
+      pullPolicy: IfNotPresent
+      pullSecrets: []
+
+    # Maximum number of concurrent builds which can be run
+    imageBuildMaxConcurrency: 5
+
+    # Webhook server port
+    webhookPort: 9443
+
+    # Prometheus metric ports
+    metricsPort: 8080
+
+    # Health probe port
+    healthProbePort: 8081
+
+    # Limit watch to a specific set of namespaces, default is all namespaces
+    watchNamespaces: []
+
+    # Duration after which buildkit cluster is inspected for idle pods
+    # Defaults to "30s"
+    poolSyncWaitTime: null
+
+    # Duration after which idle buildkit pods will be terminated
+    # Defaults to "10m"
+    poolMaxIdleTime: null
+
+    # Duration after which buildkit statefulset scale watch will be terminated
+    # Defaults to "60s"
+    poolWatchTimeout: null
+
+    # Secrets (name: path) to expose into builds that request it
+    secrets: {}
+
+    # Build status messaging configuration
+    messaging:
+      # Enable message publisher
+      enabled: false
+      # Remote AMQP server configuration
+      amqp:
+        url: "amqp://user:password@rabbitmq.default:5672"
+        exchange: ""
+        queue: "hephaestus.imagebuilds.status"
+      # Remote Kafka cluster configuration
+      kafka: {}
+
+    # Manager logging configuration
+    logging:
+      # Level at which stacktraces are printed can be either 'info', 'error', or 'panic'
+      stacktraceLevel: error
+      # Logs sent to stdout/stderr
+      container:
+        # Level can be 'debug', 'info', 'error', or any integer value >= 0 which corresponds to custom debug levels of increasing verbosity
+        level: info
+        # Defaults to 'console' but can also be 'json'
+        encoding: console
+      # Logs sent to JSON file for post-processing. These logs are only produced when log processor is enabled
+      logfile:
+        level: info
+
+    # Configure manager container security context
+    containerSecurityContext: {}
+
+    # Extra environment variables provided to the manager container
+    extraEnvVars: []
+
+    # Resource requests and limits
+    resources:
+      requests: {}
+      limits: {}
+
+  # Log processor configuration
+  vector:
+    # Enable log processing sidecar container
+    enabled: true
+
+    # Vector image
+    image:
+      registry: ""
+      repository: timberio/vector
+      tag: 0.21.X-distroless-static
+      pullPolicy: IfNotPresent
+      pullSecrets: []
+
+    # Configure the transformation and delivery of your logs using "hephaestus_output" as the name of your input
+    config:
+      # See https://vector.dev/docs/reference/configuration/transforms/
+      transforms: {}
+      # See https://vector.dev/docs/reference/configuration/sinks/
+      sinks:
+        stdout:
+          type: console
+          inputs:
+            - hephaestus_output
+          encoding:
+            codec: json
+
+    # Resource requests and limits
+    resources:
+      requests: {}
+      limits: {}
 
 # Buildkit cluster configuration
 buildkit:

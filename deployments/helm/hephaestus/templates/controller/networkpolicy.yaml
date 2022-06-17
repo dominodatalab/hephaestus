@@ -14,12 +14,12 @@ spec:
   ingress:
     {{- with .Values.controller }}
     - ports:
-        - port: {{ .webhookPort }}
+        - port: {{ .manager.webhookPort }}
           protocol: TCP
-        - port: {{ .healthProbePort }}
+        - port: {{ .manager.healthProbePort }}
           protocol: TCP
     - ports:
-        - port: {{ .metricsPort }}
+        - port: {{ .manager.metricsPort }}
           protocol: TCP
       from:
         - podSelector:

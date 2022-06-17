@@ -1,9 +1,9 @@
 {{/*
-Return the controller image name.
+Return the controller manager image name.
 */}}
-{{- define "hephaestus.controller.image" -}}
-{{- $imageRoot := .Values.controller.image }}
-{{- $_ := set $imageRoot "tag" (.Values.controller.image.tag | default .Chart.AppVersion) }}
+{{- define "hephaestus.manager.image" -}}
+{{- $imageRoot := .Values.controller.manager.image }}
+{{- $_ := set $imageRoot "tag" (.Values.controller.manager.image.tag | default .Chart.AppVersion) }}
 {{- include "common.images.image" (dict "imageRoot" $imageRoot "global" .Values.global) }}
 {{- end }}
 
@@ -45,7 +45,7 @@ Return the controller service account name.
 Returns a unified list of image pull secrets.
 */}}
 {{- define "hephaestus.imagePullSecrets" -}}
-{{- include "common.images.renderPullSecrets" (dict "images" (list .Values.controller.image .Values.logProcessor.image .Values.buildkit.image) "global" .Values.global) }}
+{{- include "common.images.renderPullSecrets" (dict "images" (list .Values.controller.manager.image .Values.controller.vector.image .Values.buildkit.image) "global" .Values.global) }}
 {{- end }}
 
 {{/*
@@ -76,8 +76,8 @@ dominodatalab:controller:{{ include "common.names.fullname" . }}
 {{/*
 Return the log processor image name.
 */}}
-{{- define "hephaestus.logprocessor.image" -}}
-{{- include "common.images.image" (dict "imageRoot" .Values.logProcessor.image "global" .Values.global) }}
+{{- define "hephaestus.vector.image" -}}
+{{- include "common.images.image" (dict "imageRoot" .Values.controller.vector.image "global" .Values.global) }}
 {{- end }}
 
 {{/*

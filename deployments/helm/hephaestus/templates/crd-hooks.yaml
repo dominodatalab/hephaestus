@@ -86,9 +86,9 @@ spec:
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
-            {{- toYaml .Values.controller.containerSecurityContext | nindent 12 }}
-          image: {{ include "hephaestus.controller.image" . }}
-          imagePullPolicy: {{ .Values.controller.image.pullPolicy }}
+            {{- toYaml .Values.controller.manager.containerSecurityContext | nindent 12 }}
+          image: {{ include "hephaestus.manager.image" . }}
+          imagePullPolicy: {{ .Values.controller.manager.image.pullPolicy }}
           args:
             - crd-apply
             {{- if .Values.istio.enabled }}
@@ -131,9 +131,9 @@ spec:
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
-            {{- toYaml .Values.controller.containerSecurityContext | nindent 12 }}
-          image: {{ include "hephaestus.controller.image" . }}
-          imagePullPolicy: {{ .Values.controller.image.pullPolicy }}
+            {{- toYaml .Values.controller.manager.containerSecurityContext | nindent 12 }}
+          image: {{ include "hephaestus.manager.image" . }}
+          imagePullPolicy: {{ .Values.controller.manager.image.pullPolicy }}
           args:
             - crd-delete
             {{- if .Values.istio.enabled }}
