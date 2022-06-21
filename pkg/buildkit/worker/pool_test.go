@@ -12,7 +12,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
-	discoveryv1 "k8s.io/api/discovery/v1"
+	discoveryv1beta1 "k8s.io/api/discovery/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -71,14 +71,14 @@ var (
 		},
 	}
 
-	validEndpointSlice = &discoveryv1.EndpointSlice{
+	validEndpointSlice = &discoveryv1beta1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "buildkit-bgk87",
 			Namespace: namespace,
 		},
-		Endpoints: []discoveryv1.Endpoint{
+		Endpoints: []discoveryv1beta1.Endpoint{
 			{
-				Conditions: discoveryv1.EndpointConditions{
+				Conditions: discoveryv1beta1.EndpointConditions{
 					Ready:   pointer.Bool(true),
 					Serving: pointer.Bool(true),
 				},
@@ -89,7 +89,7 @@ var (
 				},
 			},
 		},
-		Ports: []discoveryv1.EndpointPort{
+		Ports: []discoveryv1beta1.EndpointPort{
 			{
 				Name: pointer.String("daemon"),
 				Port: pointer.Int32(1234),
