@@ -88,6 +88,9 @@ spec:
             {{- with .Values.controller.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+            {{- with .Values.controller.manager.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
         {{- if .Values.controller.vector.enabled }}
         - name: log-processor
           securityContext:
@@ -110,6 +113,9 @@ spec:
             - name: log-vol
               mountPath: /var/lib/vector
             {{- with .Values.controller.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- with .Values.controller.vector.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
         {{- end }}

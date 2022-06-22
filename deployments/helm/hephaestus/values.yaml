@@ -158,6 +158,9 @@ controller:
     # Extra environment variables provided to the manager container
     extraEnvVars: []
 
+    # Additional volume mounts added to the manager container
+    extraVolumeMounts: []
+
     # Resource requests and limits
     resources:
       requests: {}
@@ -188,6 +191,9 @@ controller:
             - hephaestus_output
           encoding:
             codec: json
+
+    # Additional volume mounts added to the vector container
+    extraVolumeMounts: []
 
     # Resource requests and limits
     resources:
