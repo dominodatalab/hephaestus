@@ -138,7 +138,7 @@ jobs:
       - name: Push Vector image to Quay
         uses: ./.github/actions/vendor-docker-image
         with:
-          query: ".logProcessor.image"
+          query: ".controller.vector.image"
           username: ${{ secrets.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_PASSWORD }}
 
