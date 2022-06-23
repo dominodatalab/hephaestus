@@ -73,7 +73,7 @@ func (b *clientBuilder) Build(ctx context.Context) (*Client, error) {
 	b.log.Info("Confirming buildkitd connectivity")
 	err = wait.ExponentialBackoffWithContext(ctx, clientCheckBackoff, func() (done bool, err error) {
 		if _, lastErr = bk.ListWorkers(ctx); lastErr != nil {
-			b.log.Info("Buildkitd is not ready")
+			b.log.V(1).Info("Buildkitd is not ready")
 			return false, nil
 		}
 
@@ -82,6 +82,7 @@ func (b *clientBuilder) Build(ctx context.Context) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to contact buildkitd after %d attempts: %w", clientCheckBackoff.Steps, lastErr)
 	}
+	b.log.Info("Buildkitd connectivity established")
 
 	return &Client{
 		bk:               bk,
