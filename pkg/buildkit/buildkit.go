@@ -18,9 +18,17 @@ import (
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/dominodatalab/hephaestus/pkg/buildkit/archive"
 )
+
+var clientCheckBackoff = wait.Backoff{ // retries after 10ms 50ms 250ms 1250ms 6250ms
+	Steps:    5,
+	Duration: 10 * time.Millisecond,
+	Factor:   5.0,
+	Jitter:   0.1,
+}
 
 type clientBuilder struct {
 	addr             string
@@ -58,6 +66,21 @@ func (b *clientBuilder) Build(ctx context.Context) (*Client, error) {
 	bk, err := bkclient.New(ctx, b.addr, append(b.bkOpts, bkclient.WithFailFast())...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create buildkit client: %w", err)
+	}
+
+	var lastErr error
+
+	b.log.Info("Confirming buildkitd connectivity")
+	err = wait.ExponentialBackoffWithContext(ctx, clientCheckBackoff, func() (done bool, err error) {
+		if _, lastErr = bk.ListWorkers(ctx); lastErr != nil {
+			b.log.Info("Buildkitd is not ready")
+			return false, nil
+		}
+
+		return true, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to contact buildkitd after %d attempts: %w", clientCheckBackoff.Steps, lastErr)
 	}
 
 	return &Client{
