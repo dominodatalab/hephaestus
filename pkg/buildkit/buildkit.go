@@ -23,10 +23,10 @@ import (
 	"github.com/dominodatalab/hephaestus/pkg/buildkit/archive"
 )
 
-var clientCheckBackoff = wait.Backoff{ // retries after 10ms 50ms 250ms 1250ms 6250ms
+var clientCheckBackoff = wait.Backoff{ // retries after 500ms 1s 2s 4s 8s with jitter
 	Steps:    5,
-	Duration: 10 * time.Millisecond,
-	Factor:   5.0,
+	Duration: 500 * time.Millisecond,
+	Factor:   2.0,
 	Jitter:   0.1,
 }
 
