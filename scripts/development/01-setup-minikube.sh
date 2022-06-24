@@ -8,6 +8,7 @@
 set -e
 
 minikube start \
+  --kubernetes-version=v1.20.15 \
   --extra-config=apiserver.service-node-port-range=1-65535 \
   --cpus=4 \
   --memory=16g \

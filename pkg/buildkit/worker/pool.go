@@ -15,6 +15,7 @@ import (
 	"github.com/go-logr/logr"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1beta1 "k8s.io/api/discovery/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -23,12 +24,14 @@ import (
 	"k8s.io/client-go/kubernetes"
 	appsv1typed "k8s.io/client-go/kubernetes/typed/apps/v1"
 	corev1typed "k8s.io/client-go/kubernetes/typed/core/v1"
+	discoveryv1beta1typed "k8s.io/client-go/kubernetes/typed/discovery/v1beta1"
+	"k8s.io/utils/pointer"
 
 	"github.com/dominodatalab/hephaestus/pkg/config"
 )
 
 type Pool interface {
-	Get(ctx context.Context) (workerAddr string, err error)
+	Get(ctx context.Context, owner string) (workerAddr string, err error)
 	Release(ctx context.Context, workerAddr string) error
 	Close()
 }
@@ -36,13 +39,15 @@ type Pool interface {
 var (
 	ErrNoUnleasedPods = errors.New("no unleased pods found")
 
-	newUUID          = uuid.NewUUID
-	statefulPodRegex = regexp.MustCompile(`^.*-(\d+)$`)
+	newUUID                   = uuid.NewUUID
+	statefulPodRegex          = regexp.MustCompile(`^.*-(\d+)$`)
+	endpointSliceWatchTimeout = pointer.Int64(90)
 )
 
 const (
 	fieldManagerName     = "hephaestus-pod-lease-manager"
-	leasedAnnotation     = "hephaestus.dominodatalab.com/leased"
+	leasedAtAnnotation   = "hephaestus.dominodatalab.com/leased-at"
+	leasedByAnnotation   = "hephaestus.dominodatalab.com/leased-by"
 	managerIDAnnotation  = "hephaestus.dominodatalab.com/manager-identity"
 	expiryTimeAnnotation = "hephaestus.dominodatalab.com/expiry-time"
 )
@@ -63,12 +68,12 @@ type workerPool struct {
 	notifyReconcile chan struct{}
 
 	// leasing
-	mu              sync.Mutex
-	uuid            string
-	namespace       string
-	podClient       corev1typed.PodInterface
-	endpointsClient corev1typed.EndpointsInterface
-	podListOptions  metav1.ListOptions
+	mu                  sync.Mutex
+	uuid                string
+	namespace           string
+	podClient           corev1typed.PodInterface
+	endpointSliceClient discoveryv1beta1typed.EndpointSliceInterface
+	podListOptions      metav1.ListOptions
 
 	// endpoints discovery
 	serviceName string
@@ -91,22 +96,22 @@ func NewPool(ctx context.Context, clientset kubernetes.Interface, conf config.Bu
 
 	ctx, cancel := context.WithCancel(ctx)
 	wp := &workerPool{
-		ctx:               ctx,
-		cancel:            cancel,
-		log:               o.Log,
-		poolSyncTime:      o.SyncWaitTime,
-		podMaxIdleTime:    o.MaxIdleTime,
-		uuid:              string(newUUID()),
-		requests:          NewRequestQueue(),
-		notifyReconcile:   make(chan struct{}, 1),
-		podClient:         clientset.CoreV1().Pods(conf.Namespace),
-		endpointsClient:   clientset.CoreV1().Endpoints(conf.Namespace),
-		podListOptions:    podListOptions,
-		serviceName:       conf.ServiceName,
-		servicePort:       conf.DaemonPort,
-		statefulSetName:   conf.StatefulSetName,
-		statefulSetClient: clientset.AppsV1().StatefulSets(conf.Namespace),
-		namespace:         conf.Namespace,
+		ctx:                 ctx,
+		cancel:              cancel,
+		log:                 o.Log,
+		poolSyncTime:        o.SyncWaitTime,
+		podMaxIdleTime:      o.MaxIdleTime,
+		uuid:                string(newUUID()),
+		requests:            NewRequestQueue(),
+		notifyReconcile:     make(chan struct{}, 1),
+		podClient:           clientset.CoreV1().Pods(conf.Namespace),
+		endpointSliceClient: clientset.DiscoveryV1beta1().EndpointSlices(conf.Namespace),
+		podListOptions:      podListOptions,
+		serviceName:         conf.ServiceName,
+		servicePort:         conf.DaemonPort,
+		statefulSetName:     conf.StatefulSetName,
+		statefulSetClient:   clientset.AppsV1().StatefulSets(conf.Namespace),
+		namespace:           conf.Namespace,
 	}
 
 	wp.log.Info("Starting worker pod monitor", "syncTime", wp.poolSyncTime.String())
@@ -128,7 +133,7 @@ func NewPool(ctx context.Context, clientset kubernetes.Interface, conf config.Bu
 			case <-wp.ctx.Done():
 				wp.log.Info("Shutting down worker pod monitor")
 				for wp.requests.Len() > 0 {
-					close(wp.requests.Dequeue())
+					close(wp.requests.Dequeue().result)
 				}
 
 				return
@@ -143,23 +148,26 @@ func NewPool(ctx context.Context, clientset kubernetes.Interface, conf config.Bu
 //
 // Adds "lease"/"manager-identity" metadata and removes "expiry-time".
 // The worker will remain leased until the caller provides the address to Release().
-func (p *workerPool) Get(ctx context.Context) (string, error) {
-	ch := make(chan PodRequestResult, 1)
+func (p *workerPool) Get(ctx context.Context, owner string) (string, error) {
+	request := &PodRequest{
+		owner:  owner,
+		result: make(chan PodRequestResult, 1),
+	}
 
-	p.requests.Enqueue(ch)
-	defer p.requests.Remove(ch)
+	p.requests.Enqueue(request)
+	defer p.requests.Remove(request)
 
 	p.triggerReconcile()
 
 	select {
-	case result := <-ch:
-		if result.err != nil {
-			return "", result.err
-		}
+	case result, ok := <-request.result:
+		// check if channel is open before processing
+		if ok {
+			if result.err != nil {
+				return "", result.err
+			}
 
-		// when the channel is closed, we receive nil
-		if result.pod != nil {
-			return p.buildEndpointURL(ctx, result.pod.Name)
+			return result.addr, nil
 		}
 	case <-ctx.Done():
 		// context has been cancelled
@@ -194,24 +202,7 @@ func (p *workerPool) Release(ctx context.Context, addr string) error {
 		return err
 	}
 
-	pac, err := corev1ac.ExtractPod(pod, fieldManagerName)
-	if err != nil {
-		return fmt.Errorf("cannot extract pod config: %w", err)
-	}
-
-	pac.WithAnnotations(map[string]string{
-		expiryTimeAnnotation: time.Now().Add(p.podMaxIdleTime).Format(time.RFC3339),
-	})
-	delete(pac.Annotations, leasedAnnotation)
-	delete(pac.Annotations, managerIDAnnotation)
-
-	p.log.Info("Applying pod metadata changes", "annotations", pac.Annotations)
-	if _, err = p.podClient.Apply(ctx, pac, metav1.ApplyOptions{FieldManager: fieldManagerName}); err != nil {
-		return fmt.Errorf("cannot update pod metadata: %w", err)
-	}
-
-	p.triggerReconcile()
-	return nil
+	return p.releasePod(ctx, pod)
 }
 
 // Close shuts down the pool by terminating all background routines used to manage requests and garbage collection.
@@ -220,37 +211,76 @@ func (p *workerPool) Close() {
 }
 
 // applies lease metadata to given pod
-func (p *workerPool) leasePod(ctx context.Context, pod *corev1.Pod) (*corev1.Pod, error) {
+func (p *workerPool) leasePod(ctx context.Context, pod *corev1.Pod, owner string) error {
 	pac, err := corev1ac.ExtractPod(pod, fieldManagerName)
 	if err != nil {
-		return nil, fmt.Errorf("cannot extract pod config: %w", err)
+		return fmt.Errorf("cannot extract pod config: %w", err)
 	}
 
 	pac.WithAnnotations(map[string]string{
-		leasedAnnotation:    "true",
+		leasedAtAnnotation:  time.Now().Format(time.RFC3339),
+		leasedByAnnotation:  owner,
 		managerIDAnnotation: p.uuid,
 	})
 	delete(pac.Annotations, expiryTimeAnnotation)
 
 	p.log.Info("Applying pod metadata changes", "annotations", pac.Annotations)
-	if pod, err = p.podClient.Apply(ctx, pac, metav1.ApplyOptions{FieldManager: fieldManagerName}); err != nil {
-		return nil, fmt.Errorf("cannot update pod metadata: %w", err)
+	if _, err = p.podClient.Apply(ctx, pac, metav1.ApplyOptions{FieldManager: fieldManagerName}); err != nil {
+		return fmt.Errorf("cannot update pod metadata: %w", err)
 	}
 
-	return pod, nil
+	return nil
+}
+
+// removes lease metadata from given pod and adds expiry
+func (p *workerPool) releasePod(ctx context.Context, pod *corev1.Pod) error {
+	pac, err := corev1ac.ExtractPod(pod, fieldManagerName)
+	if err != nil {
+		return fmt.Errorf("cannot extract pod config: %w", err)
+	}
+
+	pac.WithAnnotations(map[string]string{
+		expiryTimeAnnotation: time.Now().Add(p.podMaxIdleTime).Format(time.RFC3339),
+	})
+	delete(pac.Annotations, leasedAtAnnotation)
+	delete(pac.Annotations, leasedByAnnotation)
+	delete(pac.Annotations, managerIDAnnotation)
+
+	p.log.Info("Applying pod metadata changes", "annotations", pac.Annotations)
+	if _, err = p.podClient.Apply(ctx, pac, metav1.ApplyOptions{FieldManager: fieldManagerName}); err != nil {
+		return fmt.Errorf("cannot update pod metadata: %w", err)
+	}
+
+	p.triggerReconcile()
+
+	return nil
 }
 
 // builds routable url for buildkit pod with protocol and port
 func (p *workerPool) buildEndpointURL(ctx context.Context, podName string) (string, error) {
-	p.log.Info("Querying for endpoints", "name", p.serviceName, "namespace", p.namespace)
-	endpoints, err := p.endpointsClient.Get(ctx, p.serviceName, metav1.GetOptions{})
-	if err != nil {
-		return "", err
-	}
+	p.log.Info("Watching endpoints for new address", "podName", podName)
 
-	hostname, err := p.extractHostname(endpoints, podName)
+	watchOpts := metav1.ListOptions{LabelSelector: p.podListOptions.LabelSelector, TimeoutSeconds: endpointSliceWatchTimeout}
+	watcher, err := p.endpointSliceClient.Watch(ctx, watchOpts)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to watch endpointslices: %w", err)
+	}
+	defer watcher.Stop()
+
+	var hostname string
+
+	start := time.Now()
+	for event := range watcher.ResultChan() {
+		endpointSlice := event.Object.(*discoveryv1beta1.EndpointSlice)
+
+		if hostname = p.extractHostname(endpointSlice, podName); hostname != "" {
+			break
+		}
+	}
+	p.log.Info("Finished watching endpoints", "podName", podName, "duration", time.Since(start))
+
+	if hostname == "" {
+		return "", fmt.Errorf("failed to extract hostname after %d seconds", *endpointSliceWatchTimeout)
 	}
 
 	u, err := url.ParseRequestURI(fmt.Sprintf("tcp://%s:%d", hostname, p.servicePort))
@@ -261,31 +291,39 @@ func (p *workerPool) buildEndpointURL(ctx context.Context, podName string) (stri
 	return u.String(), nil
 }
 
-// generates internal hostname for pod using endpoints
-func (p *workerPool) extractHostname(endpoints *corev1.Endpoints, podName string) (string, error) {
-	var hostname string
-
-scan:
-	for _, subset := range endpoints.Subsets {
-		for _, address := range subset.Addresses {
-			if address.TargetRef.Name == podName {
-				for _, port := range subset.Ports {
-					if port.Port == p.servicePort {
-						hostname = strings.Join([]string{address.Hostname, endpoints.Name, endpoints.Namespace}, ".")
-						p.log.Info("Found eligible endpoint address", "hostname", hostname)
-
-						break scan
-					}
-				}
-			}
+// generates internal hostname for pod using an endpoint slice
+func (p *workerPool) extractHostname(epSlice *discoveryv1beta1.EndpointSlice, podName string) (hostname string) {
+	var portPresent bool
+	for _, port := range epSlice.Ports {
+		if pointer.Int32Deref(port.Port, 0) == p.servicePort {
+			portPresent = true
+			break
 		}
 	}
-
-	if hostname == "" {
-		return "", fmt.Errorf("endpoints %q does not expose pod %s on port %d", endpoints.Name, podName, p.servicePort)
+	if !portPresent {
+		return
 	}
 
-	return hostname, nil
+	for _, endpoint := range epSlice.Endpoints {
+		if endpoint.TargetRef.Name != podName {
+			continue
+		}
+
+		if !pointer.BoolDeref(endpoint.Conditions.Ready, false) {
+			break
+		}
+
+		if endpoint.Hostname == nil {
+			break
+		}
+
+		hostname = strings.Join([]string{*endpoint.Hostname, p.serviceName, epSlice.Namespace}, ".")
+		p.log.Info("Found eligible endpoint address", "hostname", hostname)
+
+		break
+	}
+
+	return
 }
 
 // reconcile pods in worker pool
@@ -318,26 +356,19 @@ func (p *workerPool) updateWorkers(ctx context.Context) error {
 			log.Info("Eligible for termination, manager id mismatch", "expected", p.uuid, "actual", id)
 
 			removals = append(removals, pod.Name)
-		} else if _, hasLease := pod.Annotations[leasedAnnotation]; hasLease { // mark leased pods
+		} else if _, hasLease := pod.Annotations[leasedByAnnotation]; hasLease { // mark leased pods
 			log.Info("Ineligible for termination, pod is leased")
 
 			leased = append(leased, pod.Name)
 		} else if pod.Status.Phase == corev1.PodPending { // mark pending pods
 			pending = append(pending, pod.Name)
-		} else {
+		} else if pod.Status.Phase == corev1.PodRunning { // dispatch builds/check expiry/check age on running pods
 			if req := p.requests.Dequeue(); req != nil {
-				log.Info("Found pending request, attempt to lease pod")
+				log.Info("Found pending pod request, processing")
 
-				if pod, err := p.leasePod(ctx, &pod); err != nil {
-					log.Error(err, "Failed to lease pod, requeueing request")
-					p.requests.Enqueue(req)
-				} else {
+				if p.processPodRequest(ctx, req, &pod) {
 					leased = append(leased, pod.Name)
-
-					log.Info("Pod leased, passing to request")
-					req <- PodRequestResult{pod, nil}
 				}
-
 				continue
 			}
 
@@ -405,6 +436,38 @@ func (p *workerPool) updateWorkers(ctx context.Context) error {
 		metav1.UpdateOptions{FieldManager: fieldManagerName},
 	)
 	return err
+}
+
+// attempts to lease a pod, build and endpoint url, and provide a request result
+func (p *workerPool) processPodRequest(ctx context.Context, req *PodRequest, pod *corev1.Pod) (success bool) {
+	log := p.log.WithValues("podName", pod.Name)
+
+	log.Info("Attempting to lease pod")
+	if err := p.leasePod(ctx, pod, req.owner); err != nil {
+		log.Error(err, "Failed to lease pod")
+
+		req.result <- PodRequestResult{err: err}
+		return
+	}
+
+	log.Info("Building endpoint URL")
+	addr, err := p.buildEndpointURL(ctx, pod.Name)
+
+	if err != nil {
+		log.Error(err, "Failed to build routable URL")
+
+		if rErr := p.releasePod(ctx, pod); rErr != nil {
+			log.Error(err, "Failed to release pod")
+		}
+
+		req.result <- PodRequestResult{err: err}
+		return
+	}
+
+	log.Info("Pod successfully leased, passing address to request owner")
+	req.result <- PodRequestResult{addr: addr}
+
+	return true
 }
 
 // trigger a pool reconciliation

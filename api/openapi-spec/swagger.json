@@ -1927,6 +1927,55 @@
         }
       }
     },
+    ".ImageBuildStatusTransitionMessage": {
+      "description": "ImageBuildStatusTransitionMessage contains information about ImageBuild status transitions.\n\nThis type is used to publish JSON-formatted messages to one or more configured messaging endpoints when ImageBuild resources undergo phase changes during the build process.",
+      "type": "object",
+      "required": [
+        "name",
+        "annotations",
+        "objectLink",
+        "previousPhase",
+        "currentPhase"
+      ],
+      "properties": {
+        "annotations": {
+          "description": "Annotations present on the resource.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "default": ""
+          }
+        },
+        "currentPhase": {
+          "description": "CurrentPhase of the resource.",
+          "type": "string",
+          "default": ""
+        },
+        "imageURLs": {
+          "description": "ImageURLs contains a list of fully-qualified registry images. This field is only populated when an ImageBuild transitions to PhaseSucceeded.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "default": ""
+          }
+        },
+        "name": {
+          "description": "Name of the ImageBuild resource that underwent a transition.",
+          "type": "string",
+          "default": ""
+        },
+        "objectLink": {
+          "description": "ObjectLink points to the resource inside the Kubernetes API.",
+          "type": "string",
+          "default": ""
+        },
+        "previousPhase": {
+          "description": "PreviousPhase of the resource.",
+          "type": "string",
+          "default": ""
+        }
+      }
+    },
     ".ImageBuildTransition": {
       "type": "object",
       "required": [

@@ -3,20 +3,23 @@ package worker
 import (
 	"container/list"
 	"sync"
-
-	corev1 "k8s.io/api/core/v1"
 )
 
 type RequestQueue interface {
-	Enqueue(chan PodRequestResult)
-	Dequeue() chan PodRequestResult
+	Enqueue(*PodRequest)
+	Dequeue() *PodRequest
 	Len() int
-	Remove(chan PodRequestResult) bool
+	Remove(*PodRequest) bool
+}
+
+type PodRequest struct {
+	owner  string
+	result chan PodRequestResult
 }
 
 type PodRequestResult struct {
-	pod *corev1.Pod
-	err error
+	addr string
+	err  error
 }
 
 type requestQueue struct {
@@ -28,19 +31,19 @@ func NewRequestQueue() *requestQueue {
 	return &requestQueue{dll: list.New()}
 }
 
-func (q *requestQueue) Enqueue(ch chan PodRequestResult) {
+func (q *requestQueue) Enqueue(req *PodRequest) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	q.dll.PushBack(ch)
+	q.dll.PushBack(req)
 }
 
-func (q *requestQueue) Remove(ch chan PodRequestResult) bool {
+func (q *requestQueue) Remove(req *PodRequest) bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	for el := q.dll.Front(); el != nil; el = el.Next() {
-		if el.Value == ch {
+		if el.Value == req {
 			q.dll.Remove(el)
 			return true
 		}
@@ -49,7 +52,7 @@ func (q *requestQueue) Remove(ch chan PodRequestResult) bool {
 	return false
 }
 
-func (q *requestQueue) Dequeue() chan PodRequestResult {
+func (q *requestQueue) Dequeue() *PodRequest {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -59,7 +62,7 @@ func (q *requestQueue) Dequeue() chan PodRequestResult {
 	}
 
 	q.dll.Remove(e)
-	return e.Value.(chan PodRequestResult)
+	return e.Value.(*PodRequest)
 }
 
 func (q *requestQueue) Len() int {

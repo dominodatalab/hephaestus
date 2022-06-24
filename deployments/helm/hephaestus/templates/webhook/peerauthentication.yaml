@@ -12,6 +12,6 @@ spec:
   mtls:
     mode: UNSET
   portLevelMtls:
-    {{ .Values.controller.webhookPort }}:
+    {{ .Values.controller.manager.webhookPort }}:
       mode: PERMISSIVE
 {{- end }}

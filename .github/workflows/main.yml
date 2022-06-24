@@ -4,8 +4,7 @@ on:
   push:
     branches: [ main ]
     tags: [ 'v[0-9]+.[0-9]+.[0-9]+*' ]
-  pull_request:
-    types: [synchronize]
+  pull_request: {}
 
 env:
   GO_VERSION: 1.18
@@ -139,7 +138,7 @@ jobs:
       - name: Push Vector image to Quay
         uses: ./.github/actions/vendor-docker-image
         with:
-          query: ".logProcessor.image"
+          query: ".controller.vector.image"
           username: ${{ secrets.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_PASSWORD }}
 
