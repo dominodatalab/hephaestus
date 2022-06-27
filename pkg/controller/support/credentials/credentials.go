@@ -10,6 +10,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/registry"
 	"github.com/go-logr/logr"
+	"go.uber.org/multierr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -145,6 +146,9 @@ func Verify(ctx context.Context, configDir string) error {
 		if _, _, err = svc.Auth(ctx, &auth, "DominoDataLab_Hephaestus/1.0"); err != nil {
 			errs = append(errs, fmt.Errorf("%q client credentials are invalid: %w", server, err))
 		}
+	}
+	if len(errs) != 0 {
+		return multierr.Combine(errs...)
 	}
 
 	return nil
