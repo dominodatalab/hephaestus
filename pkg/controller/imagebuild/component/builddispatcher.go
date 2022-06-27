@@ -88,7 +88,10 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	configDir, err := credentials.Persist(ctx, ctx.Config, obj.Spec.RegistryAuth)
 	if err != nil {
 		err = fmt.Errorf("registry credentials processing failed: %w", err)
-		txn.NoticeError(err)
+		txn.NoticeError(newrelic.Error{
+			Message: err.Error(),
+			Class:   "CredentialsPersistError",
+		})
 
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, err)
 	}
@@ -102,8 +105,11 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 
 	validateCredsSeg := txn.StartSegment("credentials-validate")
 	if err = credentials.Verify(ctx, configDir); err != nil {
-		txn.NoticeError(err)
-		return ctrl.Result{}, err
+		txn.NoticeError(newrelic.Error{
+			Message: err.Error(),
+			Class:   "CredentialsValidateError",
+		})
+		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, err)
 	}
 	validateCredsSeg.End()
 
@@ -112,7 +118,10 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	allocStart := time.Now()
 	addr, err := c.pool.Get(ctx, obj.ObjectKey().String())
 	if err != nil {
-		txn.NoticeError(err)
+		txn.NoticeError(newrelic.Error{
+			Message: err.Error(),
+			Class:   "WorkerLeaseError",
+		})
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkit service lookup failed: %w", err))
 	}
 	leaseSeg.End()
@@ -141,7 +150,10 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 
 	bk, err := bldr.Build(context.Background())
 	if err != nil {
-		txn.NoticeError(err)
+		txn.NoticeError(newrelic.Error{
+			Message: err.Error(),
+			Class:   "WorkerClientInitError",
+		})
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, err)
 	}
 	clientInitSeg.End()
@@ -171,7 +183,10 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 			return ctrl.Result{}, nil
 		}
 
-		txn.NoticeError(err)
+		txn.NoticeError(newrelic.Error{
+			Message: err.Error(),
+			Class:   "ImageBuildError",
+		})
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("build failed: %w", err))
 	}
 	obj.Status.BuildTime = time.Since(start).Truncate(time.Millisecond).String()
