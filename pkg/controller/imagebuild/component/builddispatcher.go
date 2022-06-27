@@ -64,7 +64,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	log := ctx.Log
 	obj := ctx.Object.(*hephv1.ImageBuild)
 
-	txn := c.newRelic.StartTransaction("buildDispatcher.reconcile")
+	txn := c.newRelic.StartTransaction("BuildDispatcherComponent.Reconcile")
 	txn.AddAttribute("imagebuild", obj.ObjectKey().String())
 	defer txn.End()
 
@@ -77,16 +77,22 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 
 	if obj.Status.Phase != hephv1.PhaseCreated {
 		log.Info("Aborting reconcile, status phase in not blank", "phase", obj.Status.Phase)
+		txn.Ignore()
+
 		return ctrl.Result{}, nil
 	}
-
 	c.phase.SetInitializing(ctx, obj)
 
 	log.Info("Processing and persisting registry credentials")
+	persistCredsSeg := txn.StartSegment("credentials-persist")
 	configDir, err := credentials.Persist(ctx, ctx.Config, obj.Spec.RegistryAuth)
 	if err != nil {
-		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("registry credentials processing failed: %w", err))
+		err = fmt.Errorf("registry credentials processing failed: %w", err)
+		txn.NoticeError(err)
+
+		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, err)
 	}
+	persistCredsSeg.End()
 
 	defer func(path string) {
 		if err := os.RemoveAll(path); err != nil {
@@ -94,13 +100,22 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		}
 	}(configDir)
 
-	allocStart := time.Now()
+	validateCredsSeg := txn.StartSegment("credentials-validate")
+	if err = credentials.Verify(ctx, configDir); err != nil {
+		txn.NoticeError(err)
+		return ctrl.Result{}, err
+	}
+	validateCredsSeg.End()
 
 	log.Info("Leasing buildkit worker")
+	leaseSeg := txn.StartSegment("worker-lease")
+	allocStart := time.Now()
 	addr, err := c.pool.Get(ctx, obj.ObjectKey().String())
 	if err != nil {
+		txn.NoticeError(err)
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkit service lookup failed: %w", err))
 	}
+	leaseSeg.End()
 
 	obj.Status.BuilderAddr = addr
 	obj.Status.AllocationTime = time.Since(allocStart).Truncate(time.Millisecond).String()
@@ -115,6 +130,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	}(c.pool, addr)
 
 	log.Info("Building new buildkit client", "addr", addr)
+	clientInitSeg := txn.StartSegment("worker-client-init")
 	bldr := buildkit.
 		ClientBuilder(addr).
 		WithLogger(ctx.Log.WithName("buildkit").WithValues("addr", addr, "logKey", obj.Spec.LogKey)).
@@ -125,10 +141,10 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 
 	bk, err := bldr.Build(context.Background())
 	if err != nil {
+		txn.NoticeError(err)
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, err)
 	}
-
-	c.phase.SetRunning(ctx, obj)
+	clientInitSeg.End()
 
 	buildOpts := buildkit.BuildOptions{
 		Context:                  obj.Spec.Context,
@@ -139,8 +155,10 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		DisableInlineCacheExport: obj.Spec.DisableCacheLayerExport,
 		Secrets:                  c.cfg.Secrets,
 	}
-
 	log.Info("Dispatching image build", "images", buildOpts.Images)
+
+	c.phase.SetRunning(ctx, obj)
+	buildSeg := txn.StartSegment("image-build")
 	start := time.Now()
 	if err = bk.Build(buildCtx, buildOpts); err != nil {
 		// if the underlying buildkit pod is terminated via resource delete, then buildCtx will be closed and there will
@@ -148,15 +166,18 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		// mark the build as failed.
 		if buildCtx.Err() != nil {
 			log.Info("Build cancelled via resource delete")
+			txn.AddAttribute("cancelled", true)
+
 			return ctrl.Result{}, nil
 		}
 
+		txn.NoticeError(err)
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("build failed: %w", err))
 	}
-
 	obj.Status.BuildTime = time.Since(start).Truncate(time.Millisecond).String()
-	c.phase.SetSucceeded(ctx, obj)
+	buildSeg.End()
 
+	c.phase.SetSucceeded(ctx, obj)
 	return ctrl.Result{}, nil
 }
 

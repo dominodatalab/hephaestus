@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/registry"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -118,6 +119,35 @@ func Persist(ctx context.Context, cfg *rest.Config, credentials []hephv1.Registr
 	}
 
 	return dir, err
+}
+
+func Verify(ctx context.Context, configDir string) error {
+	filename := filepath.Join(configDir, "config.json")
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+
+	configJSON := DockerConfigJSON{}
+	if err = json.Unmarshal(data, &configJSON); err != nil {
+		return err
+	}
+
+	svc, err := registry.NewService(registry.ServiceOptions{})
+	if err != nil {
+		return err
+	}
+
+	var errs []error
+	for server, auth := range configJSON.Auths {
+		auth.ServerAddress = server
+
+		if _, _, err = svc.Auth(ctx, &auth, "DominoDataLab_Hephaestus/1.0"); err != nil {
+			errs = append(errs, fmt.Errorf("%q client credentials are invalid: %w", server, err))
+		}
+	}
+
+	return nil
 }
 
 // LoadCloudProviders adds all cloud authentication providers to the CloudAuthRegistry.
