@@ -186,7 +186,7 @@ func registerControllers(log logr.Logger, mgr ctrl.Manager, pool worker.Pool, nr
 	}
 
 	log.Info("Registering ImageBuildStatus controller")
-	if err := imagebuild.RegisterImageBuildStatus(mgr, cfg); err != nil {
+	if err := imagebuild.RegisterImageBuildStatus(mgr, cfg, nr); err != nil {
 		return err
 	}
 
