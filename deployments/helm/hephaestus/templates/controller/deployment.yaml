@@ -92,7 +92,7 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
         {{- if .Values.controller.vector.enabled }}
-        - name: log-processor
+        - name: vector
           securityContext:
             runAsUser: 65532
             runAsGroup: 65532
