@@ -101,6 +101,14 @@ spec:
           args:
             - --config
             - /etc/vector/vector.yaml
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8686
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8686
           resources:
             {{- toYaml .Values.controller.vector.resources | nindent 12 }}
           volumeMounts:

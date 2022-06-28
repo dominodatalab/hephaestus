@@ -42,6 +42,7 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 
 	txn := c.newRelic.StartTransaction("StatusMessengerComponent.Reconcile")
 	txn.AddAttribute("imagebuild", obj.ObjectKey().String())
+	txn.AddAttribute("url", c.cfg.AMQP.URL)
 	defer txn.End()
 
 	if !c.cfg.Enabled {
@@ -53,9 +54,6 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 
 	log.Info("Creating AMQP message publisher")
 	connectSeg := txn.StartSegment("broker-connect")
-	connectSeg.AddAttribute("url", c.cfg.AMQP.URL)
-	connectSeg.AddAttribute("queue", c.cfg.AMQP.Queue)
-	connectSeg.AddAttribute("exchange", c.cfg.AMQP.Exchange)
 	publisher, err := amqp.NewPublisher(ctx.Log, c.cfg.AMQP.URL)
 	if err != nil {
 		txn.NoticeError(newrelic.Error{
@@ -92,6 +90,8 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 			publishOpts.QueueName = ov.QueueName
 		}
 	}
+	txn.AddAttribute("queue", publishOpts.QueueName)
+	txn.AddAttribute("exchange", publishOpts.ExchangeName)
 
 	for idx, transition := range obj.Status.Transitions {
 		if transition.Processed {
