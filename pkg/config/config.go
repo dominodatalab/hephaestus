@@ -16,6 +16,7 @@ type Controller struct {
 	Manager   Manager   `json:"manager" yaml:"manager"`
 	Buildkit  Buildkit  `json:"buildkit" yaml:"buildkit"`
 	Messaging Messaging `json:"messaging" yaml:"messaging"`
+	NewRelic  NewRelic  `json:"newRelic" yaml:"newRelic"`
 
 	ImageBuildMaxConcurrency int `json:"imageBuildMaxConcurrency" yaml:"imageBuildMaxConcurrency"`
 }
@@ -44,6 +45,10 @@ func (c Controller) Validate() error {
 	}
 	if err := validatePort(int(c.Buildkit.DaemonPort)); err != nil {
 		errs = append(errs, fmt.Sprintf("buildkit.daemonPort is invalid: %s", err.Error()))
+	}
+
+	if c.NewRelic.Enabled && c.NewRelic.LicenseKey == "" {
+		errs = append(errs, "newRelic.licenseKey cannot be blank")
 	}
 
 	if len(errs) != 0 {
@@ -75,7 +80,7 @@ type Manager struct {
 	HealthProbeAddr      string   `json:"healthProbeAddr" yaml:"healthProbeAddr"`
 	MetricsAddr          string   `json:"metricsAddr" yaml:"metricsAddr"`
 	WebhookPort          int      `json:"webhookPort" yaml:"webhookPort"`
-	WatchNamespaces      []string `json:"watchNamespaces" yaml:"watchNamespaces"`
+	WatchNamespaces      []string `json:"watchNamespaces" yaml:"watchNamespaces,omitempty"`
 	EnableLeaderElection bool     `json:"enableLeaderElection" yaml:"enableLeaderElection"`
 }
 
@@ -86,7 +91,7 @@ type Buildkit struct {
 	ServiceName     string            `json:"serviceName" yaml:"serviceName"`
 	StatefulSetName string            `json:"statefulSetName" yaml:"statefulSetName"`
 
-	Secrets map[string]string `json:"secrets" yaml:"secrets"`
+	Secrets map[string]string `json:"secrets" yaml:"secrets,omitempty"`
 
 	PoolSyncWaitTime *time.Duration `json:"poolSyncWaitTime" yaml:"poolSyncWaitTime"`
 	PoolMaxIdleTime  *time.Duration `json:"poolMaxIdleTime" yaml:"poolMaxIdleTime"`
@@ -119,6 +124,13 @@ type KafkaMessaging struct {
 	Partition string   `json:"partition" yaml:"partition"`
 }
 
+type NewRelic struct {
+	Enabled    bool              `json:"enabled" yaml:"enabled"`
+	AppName    string            `json:"appName" yaml:"appName"`
+	Labels     map[string]string `json:"labels" yaml:"labels,omitempty"`
+	LicenseKey string            `json:"licenseKey" yaml:"licenseKey"`
+}
+
 func LoadFromFile(filename string) (Controller, error) {
 	bs, err := os.ReadFile(filename)
 	if err != nil {
@@ -132,7 +144,7 @@ func LoadFromFile(filename string) (Controller, error) {
 	case ".json":
 		err = json.Unmarshal(bs, &cfg)
 	default:
-		return Controller{}, fmt.Errorf("file extensions %q is not allowed", ext)
+		return Controller{}, fmt.Errorf("file extension %q is not allowed", ext)
 	}
 
 	return cfg, err

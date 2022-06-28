@@ -2,6 +2,7 @@ package imagebuild
 
 import (
 	"github.com/dominodatalab/controller-util/core"
+	"github.com/newrelic/go-agent/v3/newrelic"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -16,20 +17,20 @@ import (
 
 var ch = make(chan client.ObjectKey)
 
-func Register(mgr ctrl.Manager, cfg config.Controller, pool worker.Pool) error {
+func Register(mgr ctrl.Manager, cfg config.Controller, pool worker.Pool, nr *newrelic.Application) error {
 	return core.NewReconciler(mgr).
 		For(&hephv1.ImageBuild{}).
-		Component("build-dispatcher", component.BuildDispatcher(cfg.Buildkit, pool, ch)).
+		Component("build-dispatcher", component.BuildDispatcher(cfg.Buildkit, pool, nr, ch)).
 		WithControllerOptions(controller.Options{MaxConcurrentReconciles: cfg.ImageBuildMaxConcurrency}).
 		WithWebhooks().
 		Complete()
 }
 
-func RegisterImageBuildStatus(mgr ctrl.Manager, cfg config.Controller) error {
+func RegisterImageBuildStatus(mgr ctrl.Manager, cfg config.Controller, nr *newrelic.Application) error {
 	return core.NewReconciler(mgr).
 		For(&hephv1.ImageBuild{}, builder.WithPredicates(predicate.UnprocessedTransitionsPredicate{})).
 		Named("imagebuildstatus").
-		Component("status-messenger", component.StatusMessenger(cfg.Messaging)).
+		Component("status-messenger", component.StatusMessenger(cfg.Messaging, nr)).
 		Complete()
 }
 

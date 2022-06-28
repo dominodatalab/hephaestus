@@ -9,6 +9,7 @@ import (
 
 	"github.com/docker/distribution/reference"
 	"github.com/dominodatalab/controller-util/core"
+	"github.com/newrelic/go-agent/v3/newrelic"
 	"gomodules.xyz/jsonpatch/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -24,12 +25,14 @@ import (
 var publishContentType = "application/json"
 
 type StatusMessengerComponent struct {
-	cfg config.Messaging
+	cfg      config.Messaging
+	newRelic *newrelic.Application
 }
 
-func StatusMessenger(cfg config.Messaging) *StatusMessengerComponent {
+func StatusMessenger(cfg config.Messaging, nr *newrelic.Application) *StatusMessengerComponent {
 	return &StatusMessengerComponent{
-		cfg: cfg,
+		cfg:      cfg,
+		newRelic: nr,
 	}
 }
 
@@ -37,16 +40,29 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	log := ctx.Log
 	obj := ctx.Object.(*hephv1.ImageBuild)
 
+	txn := c.newRelic.StartTransaction("StatusMessengerComponent.Reconcile")
+	txn.AddAttribute("imagebuild", obj.ObjectKey().String())
+	txn.AddAttribute("url", c.cfg.AMQP.URL)
+	defer txn.End()
+
 	if !c.cfg.Enabled {
 		log.V(1).Info("Aborting reconcile, messaging is not enabled")
+		txn.Ignore()
+
 		return ctrl.Result{}, nil
 	}
 
 	log.Info("Creating AMQP message publisher")
+	connectSeg := txn.StartSegment("broker-connect")
 	publisher, err := amqp.NewPublisher(ctx.Log, c.cfg.AMQP.URL)
 	if err != nil {
+		txn.NoticeError(newrelic.Error{
+			Message: err.Error(),
+			Class:   "BrokerConnectError",
+		})
 		return ctrl.Result{}, err
 	}
+	connectSeg.End()
 
 	defer func() {
 		log.V(1).Info("Closing message publisher")
@@ -74,18 +90,27 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 			publishOpts.QueueName = ov.QueueName
 		}
 	}
+	txn.AddAttribute("queue", publishOpts.QueueName)
+	txn.AddAttribute("exchange", publishOpts.ExchangeName)
 
 	for idx, transition := range obj.Status.Transitions {
 		if transition.Processed {
 			log.V(1).Info("Transition has been processed, skipping", "transition", transition)
 			continue
 		}
-
 		log.Info("Processing phase transition", "from", transition.PreviousPhase, "to", transition.Phase)
+
+		transitionSeg := txn.StartSegment(fmt.Sprintf("transition-to-%s", strings.ToLower(string(transition.Phase))))
+		transitionSeg.AddAttribute("previous-phase", string(transition.PreviousPhase))
 
 		log.V(1).Info("Building object link")
 		objLink, err := BuildObjectLink(ctx)
 		if err != nil {
+			txn.NoticeError(newrelic.Error{
+				Message: err.Error(),
+				Class:   "ObjectLinkError",
+			})
+
 			return ctrl.Result{}, err
 		}
 
@@ -110,6 +135,11 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 				// parse the image name and tag
 				named, err := reference.ParseNormalizedNamed(image)
 				if err != nil {
+					txn.NoticeError(newrelic.Error{
+						Message: err.Error(),
+						Class:   "ParseImageError",
+					})
+
 					return ctrl.Result{}, fmt.Errorf("parsing image name %q failed: %w", image, err)
 				}
 
@@ -123,6 +153,11 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		log.V(1).Info("Marshalling StatusMessage into JSON", "message", message)
 		content, err := json.Marshal(message)
 		if err != nil {
+			txn.NoticeError(newrelic.Error{
+				Message: err.Error(),
+				Class:   "StatusMessageMarshalError",
+			})
+
 			return ctrl.Result{}, err
 		}
 
@@ -130,6 +165,11 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 
 		log.Info("Publishing transition message")
 		if err = publisher.Publish(publishOpts); err != nil {
+			txn.NoticeError(newrelic.Error{
+				Message: err.Error(),
+				Class:   "MessagePublishError",
+			})
+
 			return ctrl.Result{}, err
 		}
 
@@ -145,14 +185,26 @@ func (c *StatusMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 
 		patch, err := json.Marshal(ops)
 		if err != nil {
+			txn.NoticeError(newrelic.Error{
+				Message: err.Error(),
+				Class:   "GeneratePatchError",
+			})
+
 			return ctrl.Result{}, fmt.Errorf("could not generate transition patch: %w", err)
 		}
 		log.V(1).Info("Generated JSON", "patch", string(patch))
 
 		log.Info("Patching processed status transition", "phase", transition.Phase)
 		if err := ctx.Client.Status().Patch(ctx, obj, client.RawPatch(types.JSONPatchType, patch)); err != nil {
+			txn.NoticeError(newrelic.Error{
+				Message: err.Error(),
+				Class:   "ApplyPatchError",
+			})
+
 			return ctrl.Result{}, err
 		}
+
+		transitionSeg.End()
 	}
 
 	return ctrl.Result{}, nil

@@ -92,7 +92,7 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
         {{- if .Values.controller.vector.enabled }}
-        - name: log-processor
+        - name: vector
           securityContext:
             runAsUser: 65532
             runAsGroup: 65532
@@ -101,6 +101,14 @@ spec:
           args:
             - --config
             - /etc/vector/vector.yaml
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8686
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8686
           resources:
             {{- toYaml .Values.controller.vector.resources | nindent 12 }}
           volumeMounts:

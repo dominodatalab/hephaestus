@@ -1,13 +1,59 @@
 package config
 
 import (
+	"encoding/json"
+	"fmt"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v2"
 )
 
 func TestLoadFromFile(t *testing.T) {
-	t.Skip("please write me")
+	t.Run("valid", func(t *testing.T) {
+		expected := genConfig()
+
+		jbs, err := json.Marshal(expected)
+		require.NoError(t, err)
+
+		ybs, err := yaml.Marshal(expected)
+		require.NoError(t, err)
+
+		for ext, bs := range map[string][]byte{"yaml": ybs, "yml": ybs, "json": jbs} {
+			file := createTempFile(t, bs, ext)
+			actual, err := LoadFromFile(file.Name())
+			require.NoError(t, err)
+
+			assert.Equal(t, expected, actual)
+		}
+	})
+
+	t.Run("bad_format", func(t *testing.T) {
+		for _, ext := range []string{"yaml", "yml", "json"} {
+			file := createTempFile(t, []byte("01010101010101"), ext)
+
+			_, err := LoadFromFile(file.Name())
+			assert.Error(t, err)
+		}
+	})
+
+	t.Run("bad_extension", func(t *testing.T) {
+		config := genConfig()
+		bs, err := yaml.Marshal(config)
+		require.NoError(t, err)
+
+		file := createTempFile(t, bs, "foo")
+
+		_, err = LoadFromFile(file.Name())
+		assert.Error(t, err)
+	})
+
+	t.Run("missing_file", func(t *testing.T) {
+		_, err := LoadFromFile("missing")
+		assert.Error(t, err)
+	})
 }
 
 func TestControllerValidate(t *testing.T) {
@@ -56,15 +102,37 @@ func TestControllerValidate(t *testing.T) {
 			assert.Error(t, config.Validate())
 		}
 	})
+
+	t.Run("bad_new_relic", func(t *testing.T) {
+		config := genConfig()
+
+		config.NewRelic.Enabled = true
+		assert.Error(t, config.Validate())
+
+		config.NewRelic.LicenseKey = "0123456789012345678901234567890123456789"
+		assert.NoError(t, config.Validate())
+	})
+}
+
+func createTempFile(t *testing.T, contents []byte, ext string) *os.File {
+	t.Helper()
+
+	file, err := os.CreateTemp("", fmt.Sprintf("config.*.%s", ext))
+	require.NoError(t, err)
+
+	t.Cleanup(func() { os.Remove(file.Name()) })
+
+	_, err = file.Write(contents)
+	require.NoError(t, err)
+
+	require.NoError(t, file.Close())
+
+	return file
 }
 
 func genConfig() Controller {
 	return Controller{
-		Manager: Manager{
-			HealthProbeAddr: "5000",
-			MetricsAddr:     "6000",
-			WebhookPort:     8443,
-		},
+		ImageBuildMaxConcurrency: 1,
 		Buildkit: Buildkit{
 			PodLabels: map[string]string{
 				"app": "buildkit",
@@ -72,6 +140,10 @@ func genConfig() Controller {
 			Namespace:  "test-ns",
 			DaemonPort: 1234,
 		},
-		ImageBuildMaxConcurrency: 1,
+		Manager: Manager{
+			HealthProbeAddr: "5000",
+			MetricsAddr:     "6000",
+			WebhookPort:     8443,
+		},
 	}
 }

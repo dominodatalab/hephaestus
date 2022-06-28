@@ -34,14 +34,16 @@ releases:
       - installCRDs: false
         buildkit:
           debug: true
+          rootless: false
           mtls:
             enabled: false
         controller:
           replicaCount: 0
-          messaging:
-            enabled: true
-            amqp:
-              url: "amqp://user:roger-rabbit@rabbitmq.default:5672"
-        logProcessor:
-          enabled: false
+          manager:
+            messaging:
+              enabled: true
+              amqp:
+                url: "amqp://user:roger-rabbit@rabbitmq.default:5672"
+          vector:
+            enabled: false
     wait: true

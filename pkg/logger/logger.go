@@ -5,8 +5,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/go-logr/logr"
-	"github.com/go-logr/zapr"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -20,7 +18,7 @@ var (
 	jsonEncoder    zapcore.Encoder
 )
 
-func New(cfg config.Logging) (logr.Logger, error) {
+func NewZap(cfg config.Logging) (*zap.Logger, error) {
 	// container logging
 	var containerEncoder zapcore.Encoder
 	enc := strings.ToLower(cfg.Container.Encoder)
@@ -30,12 +28,12 @@ func New(cfg config.Logging) (logr.Logger, error) {
 	} else if enc == "json" {
 		containerEncoder = jsonEncoder
 	} else {
-		return logr.Logger{}, fmt.Errorf("%q is an invalid encoder", enc)
+		return nil, fmt.Errorf("%q is an invalid encoder", enc)
 	}
 
 	ll, err := parseLevel(cfg.Container.LogLevel)
 	if err != nil {
-		return logr.Logger{}, fmt.Errorf("invalid container log level: %w", err)
+		return nil, fmt.Errorf("invalid container log level: %w", err)
 	}
 
 	cores := []zapcore.Core{
@@ -46,12 +44,12 @@ func New(cfg config.Logging) (logr.Logger, error) {
 	if cfg.Logfile.Enabled {
 		file, err := os.Create(cfg.Logfile.Filepath)
 		if err != nil {
-			return logr.Logger{}, fmt.Errorf("cannot create logfile logger: %w", err)
+			return nil, fmt.Errorf("cannot create logfile logger: %w", err)
 		}
 
 		level, err := parseLevel(cfg.Logfile.LogLevel)
 		if err != nil {
-			return logr.Logger{}, fmt.Errorf("invalid logfile log level: %w", err)
+			return nil, fmt.Errorf("invalid logfile log level: %w", err)
 		}
 		fileCore := zapcore.NewCore(
 			&ctrlzap.KubeAwareEncoder{Encoder: jsonEncoder},
@@ -69,7 +67,7 @@ func New(cfg config.Logging) (logr.Logger, error) {
 	// process options, join cores and construct a logger
 	sl, err := parseLevel(cfg.StacktraceLevel)
 	if err != nil {
-		return logr.Logger{}, fmt.Errorf("invalid stacktrace log level: %w", err)
+		return nil, fmt.Errorf("invalid stacktrace log level: %w", err)
 	}
 
 	opts := []zap.Option{
@@ -79,8 +77,7 @@ func New(cfg config.Logging) (logr.Logger, error) {
 	}
 	log := zap.New(zapcore.NewTee(cores...), opts...)
 
-	// adapt interface
-	return zapr.NewLogger(log), nil
+	return log, nil
 }
 
 func parseLevel(name string) (zapcore.LevelEnabler, error) {
