@@ -2,9 +2,7 @@ package controller
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -45,7 +43,7 @@ func Start(cfg config.Controller) error {
 	log := ctrl.Log.WithName("setup")
 	log.V(1).Info("Using provided configuration", "config", cfg)
 
-	log.Info("Configuring new relic")
+	log.Info("Configuring NewRelic application")
 	nr, err := configureNewRelic(zapLogger, cfg.NewRelic)
 	if err != nil {
 		return err
@@ -85,19 +83,14 @@ func Start(cfg config.Controller) error {
 }
 
 func configureNewRelic(log *zap.Logger, cfg config.NewRelic) (*newrelic.Application, error) {
-	if len(cfg.Labels) != 0 {
-		var labels []string
-		for k, v := range cfg.Labels {
-			labels = append(labels, fmt.Sprintf("%s:%s", k, v))
-		}
-		_ = os.Setenv("NEW_RELIC_LABELS", strings.Join(labels, ","))
-	}
-
 	return newrelic.NewApplication(
 		newrelic.ConfigEnabled(cfg.Enabled),
 		newrelic.ConfigAppName(cfg.AppName),
 		newrelic.ConfigLicense(cfg.LicenseKey),
 		nrzap.ConfigLogger(log),
+		func(c *newrelic.Config) {
+			c.Labels = cfg.Labels
+		},
 	)
 }
 
