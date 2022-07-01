@@ -73,7 +73,9 @@ type workerPool struct {
 	namespace           string
 	podClient           corev1typed.PodInterface
 	endpointSliceClient discoveryv1beta1typed.EndpointSliceInterface
-	podListOptions      metav1.ListOptions
+
+	podListOptions           metav1.ListOptions
+	endpointSliceListOptions metav1.ListOptions
 
 	// endpoints discovery
 	serviceName string
@@ -91,27 +93,31 @@ func NewPool(ctx context.Context, clientset kubernetes.Interface, conf config.Bu
 		o = fn(o)
 	}
 
-	ls := labels.SelectorFromSet(conf.PodLabels)
-	podListOptions := metav1.ListOptions{LabelSelector: ls.String()}
+	pls := labels.SelectorFromSet(conf.PodLabels)
+	podListOptions := metav1.ListOptions{LabelSelector: pls.String()}
+
+	esls := labels.SelectorFromSet(map[string]string{"kubernetes.io/service-name": conf.ServiceName})
+	endpointSliceListOptions := metav1.ListOptions{LabelSelector: esls.String()}
 
 	ctx, cancel := context.WithCancel(ctx)
 	wp := &workerPool{
-		ctx:                 ctx,
-		cancel:              cancel,
-		log:                 o.Log,
-		poolSyncTime:        o.SyncWaitTime,
-		podMaxIdleTime:      o.MaxIdleTime,
-		uuid:                string(newUUID()),
-		requests:            NewRequestQueue(),
-		notifyReconcile:     make(chan struct{}, 1),
-		podClient:           clientset.CoreV1().Pods(conf.Namespace),
-		endpointSliceClient: clientset.DiscoveryV1beta1().EndpointSlices(conf.Namespace),
-		podListOptions:      podListOptions,
-		serviceName:         conf.ServiceName,
-		servicePort:         conf.DaemonPort,
-		statefulSetName:     conf.StatefulSetName,
-		statefulSetClient:   clientset.AppsV1().StatefulSets(conf.Namespace),
-		namespace:           conf.Namespace,
+		ctx:                      ctx,
+		cancel:                   cancel,
+		log:                      o.Log,
+		poolSyncTime:             o.SyncWaitTime,
+		podMaxIdleTime:           o.MaxIdleTime,
+		uuid:                     string(newUUID()),
+		requests:                 NewRequestQueue(),
+		notifyReconcile:          make(chan struct{}, 1),
+		podClient:                clientset.CoreV1().Pods(conf.Namespace),
+		endpointSliceClient:      clientset.DiscoveryV1beta1().EndpointSlices(conf.Namespace),
+		podListOptions:           podListOptions,
+		endpointSliceListOptions: endpointSliceListOptions,
+		serviceName:              conf.ServiceName,
+		servicePort:              conf.DaemonPort,
+		statefulSetName:          conf.StatefulSetName,
+		statefulSetClient:        clientset.AppsV1().StatefulSets(conf.Namespace),
+		namespace:                conf.Namespace,
 	}
 
 	wp.log.Info("Starting worker pod monitor", "syncTime", wp.poolSyncTime.String())
@@ -260,7 +266,10 @@ func (p *workerPool) releasePod(ctx context.Context, pod *corev1.Pod) error {
 func (p *workerPool) buildEndpointURL(ctx context.Context, podName string) (string, error) {
 	p.log.Info("Watching endpoints for new address", "podName", podName)
 
-	watchOpts := metav1.ListOptions{LabelSelector: p.podListOptions.LabelSelector, TimeoutSeconds: endpointSliceWatchTimeout}
+	watchOpts := metav1.ListOptions{
+		LabelSelector:  p.endpointSliceListOptions.LabelSelector,
+		TimeoutSeconds: endpointSliceWatchTimeout,
+	}
 	watcher, err := p.endpointSliceClient.Watch(ctx, watchOpts)
 	if err != nil {
 		return "", fmt.Errorf("failed to watch endpointslices: %w", err)
