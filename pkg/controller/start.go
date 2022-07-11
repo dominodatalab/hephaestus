@@ -141,7 +141,12 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 	return mgr, nil
 }
 
-func createWorkerPool(ctx context.Context, log logr.Logger, mgr ctrl.Manager, cfg config.Buildkit) (worker.Pool, error) {
+func createWorkerPool(
+	ctx context.Context,
+	log logr.Logger,
+	mgr ctrl.Manager,
+	cfg config.Buildkit,
+) (worker.Pool, error) {
 	log.Info("Initializing buildkit worker pool")
 	poolOpts := []worker.PoolOption{
 		worker.Logger(ctrl.Log.WithName("buildkit.worker-pool")),
@@ -167,7 +172,13 @@ func createWorkerPool(ctx context.Context, log logr.Logger, mgr ctrl.Manager, cf
 	return worker.NewPool(ctx, clientset, cfg, poolOpts...), nil
 }
 
-func registerControllers(log logr.Logger, mgr ctrl.Manager, pool worker.Pool, nr *newrelic.Application, cfg config.Controller) error {
+func registerControllers(
+	log logr.Logger,
+	mgr ctrl.Manager,
+	pool worker.Pool,
+	nr *newrelic.Application,
+	cfg config.Controller,
+) error {
 	log.Info("Registering ContainerImageBuild controller")
 	if err := containerimagebuild.Register(mgr); err != nil {
 		return err

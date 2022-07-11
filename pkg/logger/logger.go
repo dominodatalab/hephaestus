@@ -23,11 +23,12 @@ func NewZap(cfg config.Logging) (*zap.Logger, error) {
 	var containerEncoder zapcore.Encoder
 	enc := strings.ToLower(cfg.Container.Encoder)
 
-	if enc == "" || enc == "console" {
+	switch enc {
+	case "", "console":
 		containerEncoder = consoleEncoder
-	} else if enc == "json" {
+	case "json":
 		containerEncoder = jsonEncoder
-	} else {
+	default:
 		return nil, fmt.Errorf("%q is an invalid encoder", enc)
 	}
 

@@ -19,40 +19,21 @@ import (
 )
 
 // crdProcessor uses a CRD client to process the provided resource definition.
-type crdProcessor func(context.Context, apixv1client.CustomResourceDefinitionInterface, *apixv1.CustomResourceDefinition) error
+type crdProcessor func(
+	context.Context,
+	apixv1client.CustomResourceDefinitionInterface,
+	*apixv1.CustomResourceDefinition,
+) error
 
 var (
-	log = ctrlzap.New(ctrlzap.UseDevMode(true), ctrlzap.Encoder(zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())))
+	log = ctrlzap.New(
+		ctrlzap.UseDevMode(true),
+		ctrlzap.Encoder(zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())),
+	)
 
 	crdClientFn = crdClient
-
-	applyFn = func(ctx context.Context, client apixv1client.CustomResourceDefinitionInterface, crd *apixv1.CustomResourceDefinition) error {
-		log.Info("Fetching CRD", "Name", crd.Name)
-		found, err := client.Get(ctx, crd.Name, metav1.GetOptions{})
-
-		if apierrors.IsNotFound(err) {
-			log.Info("CRD not found, creating", "Name", crd.Name)
-			_, err = client.Create(ctx, crd, metav1.CreateOptions{})
-		} else if err == nil {
-			log.Info("CRD found, updating", "Name", crd.Name)
-			crd.SetResourceVersion(found.ResourceVersion)
-			_, err = client.Update(ctx, crd, metav1.UpdateOptions{})
-		}
-
-		return err
-	}
-
-	deleteFn = func(ctx context.Context, client apixv1client.CustomResourceDefinitionInterface, crd *apixv1.CustomResourceDefinition) error {
-		log.Info("Deleting CRD", "Name", crd.Name)
-		err := client.Delete(ctx, crd.Name, metav1.DeleteOptions{})
-
-		if apierrors.IsNotFound(err) {
-			log.Info("CRD not found, ignoring", "Name", crd.Name)
-			return nil
-		}
-
-		return err
-	}
+	applyFn     = createOrUpdate
+	deleteFn    = deleteWhenPresent
 )
 
 // Apply will create or update all project CRDs inside a Kubernetes cluster.
@@ -148,4 +129,42 @@ func crdClient() (apixv1client.CustomResourceDefinitionInterface, error) {
 	}
 
 	return client.CustomResourceDefinitions(), nil
+}
+
+// createOrUpdate provided CRD.
+func createOrUpdate(
+	ctx context.Context,
+	client apixv1client.CustomResourceDefinitionInterface,
+	crd *apixv1.CustomResourceDefinition,
+) error {
+	log.Info("Fetching CRD", "Name", crd.Name)
+	found, err := client.Get(ctx, crd.Name, metav1.GetOptions{})
+
+	if apierrors.IsNotFound(err) {
+		log.Info("CRD not found, creating", "Name", crd.Name)
+		_, err = client.Create(ctx, crd, metav1.CreateOptions{})
+	} else if err == nil {
+		log.Info("CRD found, updating", "Name", crd.Name)
+		crd.SetResourceVersion(found.ResourceVersion)
+		_, err = client.Update(ctx, crd, metav1.UpdateOptions{})
+	}
+
+	return err
+}
+
+// deleteWhenPresent will remove a CRD if it has been applied to the k8s API, otherwise it's a noop.
+func deleteWhenPresent(
+	ctx context.Context,
+	client apixv1client.CustomResourceDefinitionInterface,
+	crd *apixv1.CustomResourceDefinition,
+) error {
+	log.Info("Deleting CRD", "Name", crd.Name)
+	err := client.Delete(ctx, crd.Name, metav1.DeleteOptions{})
+
+	if apierrors.IsNotFound(err) {
+		log.Info("CRD not found, ignoring", "Name", crd.Name)
+		return nil
+	}
+
+	return err
 }

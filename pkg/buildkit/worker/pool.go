@@ -375,6 +375,7 @@ func (p *workerPool) updateWorkers(ctx context.Context) error {
 			if req := p.requests.Dequeue(); req != nil {
 				log.Info("Found pending pod request, processing")
 
+				pod := pod
 				if p.processPodRequest(ctx, req, &pod) {
 					leased = append(leased, pod.Name)
 				}

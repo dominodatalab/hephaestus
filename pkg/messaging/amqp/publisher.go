@@ -48,24 +48,24 @@ func IsNotFound(err error) bool {
 	return errors.As(err, &ae) && strings.HasPrefix(ae.Reason, "NOT_FOUND")
 }
 
-type publisher struct {
+type Client struct {
 	log     logr.Logger
 	manager ChannelManager
 }
 
-func NewPublisher(log logr.Logger, url string) (*publisher, error) {
+func NewPublisher(log logr.Logger, url string) (*Client, error) {
 	manager, err := NewChannelManager(log, url)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create channel manager: %w", err)
 	}
 
-	return &publisher{
+	return &Client{
 		log:     log.WithName("amqp.publisher"),
 		manager: manager,
 	}, nil
 }
 
-func (p *publisher) Publish(opts PublishOptions) error {
+func (p *Client) Publish(opts PublishOptions) error {
 	if err := p.ensureExchange(opts.ExchangeName); err != nil {
 		return err
 	}
@@ -90,11 +90,11 @@ func (p *publisher) Publish(opts PublishOptions) error {
 	return nil
 }
 
-func (p *publisher) Close() error {
+func (p *Client) Close() error {
 	return p.manager.Close()
 }
 
-func (p *publisher) ensureExchange(exchange string) error {
+func (p *Client) ensureExchange(exchange string) error {
 	if exchange != "" {
 		err := p.manager.Channel().ExchangeDeclarePassive(
 			exchange,
@@ -129,7 +129,7 @@ func (p *publisher) ensureExchange(exchange string) error {
 	return nil
 }
 
-func (p *publisher) ensureQueue(exchange, queue string) error {
+func (p *Client) ensureQueue(exchange, queue string) error {
 	if queue != "" {
 		_, err := p.manager.Channel().QueueDeclarePassive(
 			queue,

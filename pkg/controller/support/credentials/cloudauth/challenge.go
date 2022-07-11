@@ -3,10 +3,13 @@ package cloudauth
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/services/preview/containerregistry/runtime/2019-08-15-preview/containerregistry"
 )
+
+const authValueIndex = 2
 
 type AuthDirective struct {
 	Service string
@@ -17,7 +20,7 @@ func ChallengeLoginServer(ctx context.Context, loginServerURL string) (*AuthDire
 	v2Support := containerregistry.NewV2SupportClient(loginServerURL)
 	challenge, err := v2Support.Check(ctx)
 	// A 401 will also return an error so just check first
-	if !challenge.IsHTTPStatus(401) {
+	if !challenge.IsHTTPStatus(http.StatusUnauthorized) {
 		if err != nil {
 			return nil, err
 		}
@@ -37,7 +40,7 @@ func ChallengeLoginServer(ctx context.Context, loginServerURL string) (*AuthDire
 			strings.Join(authHeader, ", "))
 	}
 
-	authSections := strings.SplitN(authHeader[0], " ", 2)
+	authSections := strings.SplitN(authHeader[0], " ", authValueIndex)
 	if !strings.EqualFold("Bearer", authSections[0]) {
 		return nil, fmt.Errorf("Www-Authenticate: expected realm: Bearer, actual: %s", authSections[0])
 	}
@@ -45,7 +48,7 @@ func ChallengeLoginServer(ctx context.Context, loginServerURL string) (*AuthDire
 	authParams := map[string]string{}
 	params := strings.Split(authSections[1], ",")
 	for _, p := range params {
-		parts := strings.SplitN(strings.TrimSpace(p), "=", 2)
+		parts := strings.SplitN(strings.TrimSpace(p), "=", authValueIndex)
 		authParams[parts[0]] = strings.Trim(parts[1], `"`)
 	}
 

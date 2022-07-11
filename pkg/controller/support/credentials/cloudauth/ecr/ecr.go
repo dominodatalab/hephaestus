@@ -18,12 +18,18 @@ import (
 )
 
 type ecrClient interface {
-	GetAuthorizationToken(ctx context.Context, params *ecr.GetAuthorizationTokenInput, optFns ...func(*ecr.Options)) (*ecr.GetAuthorizationTokenOutput, error)
+	GetAuthorizationToken(
+		ctx context.Context,
+		params *ecr.GetAuthorizationTokenInput,
+		optFns ...func(*ecr.Options),
+	) (*ecr.GetAuthorizationTokenOutput, error)
 }
 
 var (
-	urlRegex = regexp.MustCompile(`^(?P<aws_account_id>[a-zA-Z0-9][a-zA-Z0-9-_]*)\.dkr\.ecr(-fips)?\.([a-zA-Z0-9][a-zA-Z0-9-_]*)\.amazonaws\.com(\.cn)?`)
 	client   ecrClient
+	urlRegex = regexp.MustCompile(
+		`^(?P<aws_account_id>[a-zA-Z\d][a-zA-Z\d-_]*)\.dkr\.ecr(-fips)?\.([a-zA-Z\d][a-zA-Z\d-_]*)\.amazonaws\.com(\.cn)?`,
+	)
 )
 
 func Register(logger logr.Logger, registry *cloudauth.Registry) error {

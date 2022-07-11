@@ -28,7 +28,9 @@ func validateImages(log logr.Logger, fp *field.Path, images []string) (errs fiel
 	return
 }
 
-func validateRegistryAuth(log logr.Logger, fp *field.Path, registryAuth []RegistryCredentials) (errs field.ErrorList) {
+func validateRegistryAuth(log logr.Logger, fp *field.Path, registryAuth []RegistryCredentials) field.ErrorList {
+	var errs field.ErrorList
+
 	for idx, auth := range registryAuth {
 		fp := fp.Index(idx)
 
@@ -75,7 +77,7 @@ func validateRegistryAuth(log logr.Logger, fp *field.Path, registryAuth []Regist
 		}
 	}
 
-	return
+	return errs
 }
 
 func invalidIfNotEmpty(kind, name string, errs field.ErrorList) error {

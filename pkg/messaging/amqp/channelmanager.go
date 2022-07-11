@@ -23,7 +23,7 @@ type ChannelManager interface {
 	Close() error
 }
 
-type channelManager struct {
+type Manager struct {
 	mu  sync.Mutex
 	log logr.Logger
 
@@ -34,7 +34,7 @@ type channelManager struct {
 	shutdown chan struct{}
 }
 
-func NewChannelManager(log logr.Logger, url string) (*channelManager, error) {
+func NewChannelManager(log logr.Logger, url string) (*Manager, error) {
 	log = log.WithName("amqp.channel-manager")
 
 	log.V(1).Info("Dialing server", "url", url)
@@ -43,7 +43,7 @@ func NewChannelManager(log logr.Logger, url string) (*channelManager, error) {
 		return nil, err
 	}
 
-	manager := &channelManager{
+	manager := &Manager{
 		log:      log,
 		url:      url,
 		conn:     conn,
@@ -55,7 +55,7 @@ func NewChannelManager(log logr.Logger, url string) (*channelManager, error) {
 	return manager, nil
 }
 
-func (m *channelManager) Channel() *amqp.Channel {
+func (m *Manager) Channel() *amqp.Channel {
 	for m.channel.IsClosed() {
 		time.Sleep(closedChannelLoopDelay)
 	}
@@ -63,7 +63,7 @@ func (m *channelManager) Channel() *amqp.Channel {
 	return m.channel
 }
 
-func (m *channelManager) Close() error {
+func (m *Manager) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -85,7 +85,7 @@ func (m *channelManager) Close() error {
 	return nil
 }
 
-func (m *channelManager) handleNotifications() {
+func (m *Manager) handleNotifications() {
 	connCloses := m.conn.NotifyClose(make(chan *amqp.Error, 1))
 	chanCloses := m.channel.NotifyClose(make(chan *amqp.Error, 1))
 	chanCancels := m.channel.NotifyCancel(make(chan string, 1))
@@ -114,7 +114,7 @@ func (m *channelManager) handleNotifications() {
 	m.log.Info("Successfully reconnected after close")
 }
 
-func (m *channelManager) reconnectWithRetry(full bool) {
+func (m *Manager) reconnectWithRetry(full bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -131,7 +131,7 @@ func (m *channelManager) reconnectWithRetry(full bool) {
 	)
 }
 
-func (m *channelManager) reconnect(full bool) error {
+func (m *Manager) reconnect(full bool) error {
 	if full {
 		conn, ch, err := Dial(m.url)
 		if err != nil {

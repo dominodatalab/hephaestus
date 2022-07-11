@@ -78,7 +78,11 @@ func newProvider(logger logr.Logger) (*acrProvider, error) {
 		}
 	}
 
-	return &acrProvider{logger: logger.WithName("acrProvider"), tenantID: settings.Values[auth.TenantID], servicePrincipalToken: spt}, nil
+	return &acrProvider{
+		logger:                logger.WithName("acrProvider"),
+		tenantID:              settings.Values[auth.TenantID],
+		servicePrincipalToken: spt,
+	}, nil
 }
 
 func (a *acrProvider) authenticate(ctx context.Context, server string) (*types.AuthConfig, error) {
@@ -103,7 +107,14 @@ func (a *acrProvider) authenticate(ctx context.Context, server string) (*types.A
 	}
 
 	refreshClient := containerregistry.NewRefreshTokensClient(loginServerURL)
-	refreshToken, err := refreshClient.GetFromExchange(ctx, "access_token", directive.Service, a.tenantID, "", armAccessToken)
+	refreshToken, err := refreshClient.GetFromExchange(
+		ctx,
+		"access_token",
+		directive.Service,
+		a.tenantID,
+		"",
+		armAccessToken,
+	)
 	if err != nil {
 		return nil, err
 	}
