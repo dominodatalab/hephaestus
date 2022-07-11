@@ -1,0 +1,21 @@
+repos:
+  - repo: local
+    hooks:
+      - id: build
+        name: build
+        entry: make
+        args: ["build"]
+        language: system
+        pass_filenames: false
+      - id: lint
+        name: lint
+        entry: make
+        args: ["lint"]
+        language: system
+        pass_filenames: false
+      - id: test
+        name: test
+        entry: make
+        args: ["test"]
+        language: system
+        pass_filenames: false
