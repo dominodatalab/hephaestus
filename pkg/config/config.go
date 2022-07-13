@@ -93,11 +93,18 @@ type Buildkit struct {
 
 	Secrets map[string]string `json:"secrets" yaml:"secrets,omitempty"`
 
+	Registries map[string]RegistryConfig `json:"registries,omitempty" yaml:"registries,omitempty"`
+
 	PoolSyncWaitTime *time.Duration `json:"poolSyncWaitTime" yaml:"poolSyncWaitTime"`
 	PoolMaxIdleTime  *time.Duration `json:"poolMaxIdleTime" yaml:"poolMaxIdleTime"`
 	PoolWatchTimeout *int64         `json:"poolWatchTimeout" yaml:"poolWatchTimeout"`
 
 	MTLS *BuildkitMTLS `json:"mtls,omitempty" yaml:"mtls,omitempty"`
+}
+
+type RegistryConfig struct {
+	Insecure bool `json:"insecure,omitempty" yaml:"insecure,omitempty"`
+	HTTP     bool `json:"http,omitempty" yaml:"http,omitempty"`
 }
 
 type BuildkitMTLS struct {

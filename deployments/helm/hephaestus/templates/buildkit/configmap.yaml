@@ -27,4 +27,15 @@ data:
         all = true
         keepBytes = {{ .gcKeepStorage | int64 }}
       {{- end }}
+
+    {{- range $domain, $opts := $.Values.registries }}
+    [registry."{{ $domain }}"]
+      {{- with $opts.http }}
+      http = {{ . }}
+      {{- end }}
+
+      {{- with $opts.insecure }}
+      insecure = {{ . }}
+      {{- end }}
+    {{- end }}
   {{- end }}
