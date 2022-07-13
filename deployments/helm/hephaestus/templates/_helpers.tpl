@@ -198,13 +198,11 @@ Return the buildkit mtls server secret name.
 Return the buildkit image name.
 */}}
 {{- define "hephaestus.buildkit.image" -}}
-{{- $imageRoot := .Values.buildkit.image }}
-{{- $tag := .Values.buildkit.image.tag | default .Chart.AppVersion }}
-{{- if not .Values.buildkit.rootless }}
-{{- $tag = trimSuffix "-rootless" $tag }}
+{{- if .Values.buildkit.rootless }}
+{{- include "common.images.image" (dict "imageRoot" .Values.buildkit.rootlessImage "global" $) }}
+{{- else }}
+{{- include "common.images.image" (dict "imageRoot" .Values.buildkit.image "global" $) }}
 {{- end }}
-{{- $_ := set $imageRoot "tag" $tag }}
-{{- include "common.images.image" (dict "imageRoot" $imageRoot "global" $) }}
 {{- end }}
 
 {{/*
