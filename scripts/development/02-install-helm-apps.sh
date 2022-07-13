@@ -12,6 +12,7 @@ make apply
 
 kubectl patch service hephaestus-webhook-server --type merge --patch '{
   "spec": {
+    "clusterIP": null,
     "externalName": "host.minikube.internal",
     "type": "ExternalName"
   }

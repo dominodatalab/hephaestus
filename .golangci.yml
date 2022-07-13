@@ -8,8 +8,6 @@ linters-settings:
   funlen: # NOTE: bring these values down
     lines: 200
     statements: 100
-  gocyclo:
-    min-complexity: 20
   gomnd:
     checks:
       - argument
@@ -31,6 +29,7 @@ linters:
    - containedctx
    - cyclop
    - errorlint
+   - exhaustive
    - exhaustivestruct
    - exhaustruct
    - forbidigo
@@ -48,6 +47,7 @@ linters:
    - gomoddirectives
    - interfacer
    - ireturn
+   - maintidx
    - maligned
    - nlreturn
    - nonamedreturns

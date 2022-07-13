@@ -1,5 +1,7 @@
 package v1
 
+import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 const (
 	ImageBuildKind = "ImageBuild"
 	ImageCacheKind = "ImageCache"
@@ -14,8 +16,6 @@ const (
 type Phase string
 
 const (
-	// PhaseCreated indicates a new resources that has not been reconciled
-	PhaseCreated Phase = "Created"
 	// PhaseInitializing indicates that an execution sequence is preparing to run.
 	PhaseInitializing Phase = "Initializing"
 	// PhaseRunning indicates that an execution sequence has begun.
@@ -42,4 +42,28 @@ type RegistryCredentials struct {
 	CloudProvided *bool                 `json:"cloudProvided,omitempty"`
 	BasicAuth     *BasicAuthCredentials `json:"basicAuth,omitempty"`
 	Secret        *SecretCredentials    `json:"secret,omitempty"`
+}
+
+// ImageBuildStatusTransitionMessage contains information about ImageBuild status transitions.
+//
+// This type is used to publish JSON-formatted messages to one or more configured messaging
+// endpoints when ImageBuild resources undergo phase changes during the build process.
+type ImageBuildStatusTransitionMessage struct {
+	// Name of the ImageBuild resource that underwent a transition.
+	Name string `json:"name"`
+	// Annotations present on the resource.
+	Annotations map[string]string `json:"annotations,omitempty"`
+	// ObjectLink points to the resource inside the Kubernetes API.
+	ObjectLink string `json:"objectLink"`
+	// PreviousPhase of the resource.
+	PreviousPhase Phase `json:"previousPhase"`
+	// CurrentPhase of the resource.
+	CurrentPhase Phase `json:"currentPhase"`
+	// OccurredAt indicates when the transition occurred.
+	OccurredAt metav1.Time `json:"occurredAt"`
+	// ImageURLs contains a list of fully-qualified registry images.
+	// This field is only populated when an ImageBuild transitions to PhaseSucceeded.
+	ImageURLs []string `json:"imageURLs,omitempty"`
+	// ErrorMessage contains the details of error when one occurs.
+	ErrorMessage string `json:"errorMessage,omitempty"`
 }

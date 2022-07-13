@@ -80,7 +80,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		c.cancels.Delete(obj.ObjectKey())
 	}()
 
-	if obj.Status.Phase != hephv1.PhaseCreated {
+	if obj.Status.Phase != "" {
 		log.Info("Aborting reconcile, status phase in not blank", "phase", obj.Status.Phase)
 		txn.Ignore()
 
