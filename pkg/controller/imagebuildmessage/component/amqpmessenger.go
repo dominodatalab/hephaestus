@@ -159,7 +159,7 @@ func (c *AMQPMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 
 	for _, trans := range ib.Status.Transitions {
 		if record, ok := recordMap[trans.Phase]; ok {
-			log.Info("Transition has been processed, skipping", "record", record)
+			log.Info("Transition has been processed, skipping", "phase", record.Message.CurrentPhase)
 			continue
 		}
 		log.Info("Processing phase transition", "from", trans.PreviousPhase, "to", trans.Phase)
