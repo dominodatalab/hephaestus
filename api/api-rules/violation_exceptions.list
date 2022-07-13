@@ -1,3 +1,4 @@
+API rule violation: list_type_missing,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,ImageBuildMessageStatus,AMQPSentMessages
 API rule violation: list_type_missing,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,ImageBuildSpec,BuildArgs
 API rule violation: list_type_missing,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,ImageBuildSpec,Images
 API rule violation: list_type_missing,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,ImageBuildSpec,ImportRemoteBuildCache
