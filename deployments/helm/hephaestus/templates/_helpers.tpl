@@ -45,7 +45,7 @@ Return the controller service account name.
 Returns a unified list of image pull secrets.
 */}}
 {{- define "hephaestus.imagePullSecrets" -}}
-{{- include "common.images.renderPullSecrets" (dict "images" (list .Values.controller.manager.image .Values.controller.vector.image .Values.buildkit.image) "global" .Values.global) }}
+{{- include "common.images.renderPullSecrets" (dict "images" (list .Values.controller.manager.image .Values.controller.vector.image .Values.buildkit.image) "context" $) }}
 {{- end }}
 
 {{/*
