@@ -106,7 +106,7 @@ func (c *AMQPMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 			return ctrl.Result{}, err
 		}
 
-		log.Info("Creating resource, ImageBuildMessage does not exit")
+		log.Info("Creating resource, ImageBuildMessage does not exist")
 		u, _ := url.Parse(c.cfg.AMQP.URL)
 		ibm = hephv1.ImageBuildMessage{
 			ObjectMeta: metav1.ObjectMeta{
