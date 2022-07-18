@@ -39,7 +39,17 @@ rules:
   - apiGroups:
       - hephaestus.dominodatalab.com
     resources:
+      - imagebuildmessages
+    verbs:
+      - create
+      - patch
+      - list
+      - watch
+  - apiGroups:
+      - hephaestus.dominodatalab.com
+    resources:
       - imagebuilds/status
+      - imagebuildmessages/status
       - imagecaches/status
     verbs:
       - patch
