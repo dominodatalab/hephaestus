@@ -22,23 +22,23 @@ type PodRequestResult struct {
 	err  error
 }
 
-type requestQueue struct {
+type Queue struct {
 	mu  sync.Mutex
 	dll *list.List
 }
 
-func NewRequestQueue() *requestQueue {
-	return &requestQueue{dll: list.New()}
+func NewRequestQueue() *Queue {
+	return &Queue{dll: list.New()}
 }
 
-func (q *requestQueue) Enqueue(req *PodRequest) {
+func (q *Queue) Enqueue(req *PodRequest) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	q.dll.PushBack(req)
 }
 
-func (q *requestQueue) Remove(req *PodRequest) bool {
+func (q *Queue) Remove(req *PodRequest) bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -52,7 +52,7 @@ func (q *requestQueue) Remove(req *PodRequest) bool {
 	return false
 }
 
-func (q *requestQueue) Dequeue() *PodRequest {
+func (q *Queue) Dequeue() *PodRequest {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -65,7 +65,7 @@ func (q *requestQueue) Dequeue() *PodRequest {
 	return e.Value.(*PodRequest)
 }
 
-func (q *requestQueue) Len() int {
+func (q *Queue) Len() int {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 

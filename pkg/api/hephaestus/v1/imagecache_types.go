@@ -1,11 +1,7 @@
 package v1
 
 import (
-	"fmt"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type ImageCacheSpec struct {
@@ -48,11 +44,6 @@ func (in *ImageCache) GetPhase() Phase {
 
 func (in *ImageCache) SetPhase(p Phase) {
 	in.Status.Phase = p
-}
-
-func (in *ImageCache) GetPatch() client.Patch {
-	patch := fmt.Sprintf(`[{"op": "replace", "path": "/status/phase", "value": %q}]`, in.Status.Phase)
-	return client.RawPatch(types.JSONPatchType, []byte(patch))
 }
 
 // +kubebuilder:object:root=true

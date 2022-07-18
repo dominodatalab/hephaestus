@@ -23,6 +23,7 @@ import (
 	"github.com/dominodatalab/hephaestus/pkg/config"
 	"github.com/dominodatalab/hephaestus/pkg/controller/containerimagebuild"
 	"github.com/dominodatalab/hephaestus/pkg/controller/imagebuild"
+	"github.com/dominodatalab/hephaestus/pkg/controller/imagebuildmessage"
 	"github.com/dominodatalab/hephaestus/pkg/controller/imagecache"
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials"
 	"github.com/dominodatalab/hephaestus/pkg/kubernetes"
@@ -141,7 +142,12 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 	return mgr, nil
 }
 
-func createWorkerPool(ctx context.Context, log logr.Logger, mgr ctrl.Manager, cfg config.Buildkit) (worker.Pool, error) {
+func createWorkerPool(
+	ctx context.Context,
+	log logr.Logger,
+	mgr ctrl.Manager,
+	cfg config.Buildkit,
+) (worker.Pool, error) {
 	log.Info("Initializing buildkit worker pool")
 	poolOpts := []worker.PoolOption{
 		worker.Logger(ctrl.Log.WithName("buildkit.worker-pool")),
@@ -167,7 +173,13 @@ func createWorkerPool(ctx context.Context, log logr.Logger, mgr ctrl.Manager, cf
 	return worker.NewPool(ctx, clientset, cfg, poolOpts...), nil
 }
 
-func registerControllers(log logr.Logger, mgr ctrl.Manager, pool worker.Pool, nr *newrelic.Application, cfg config.Controller) error {
+func registerControllers(
+	log logr.Logger,
+	mgr ctrl.Manager,
+	pool worker.Pool,
+	nr *newrelic.Application,
+	cfg config.Controller,
+) error {
 	log.Info("Registering ContainerImageBuild controller")
 	if err := containerimagebuild.Register(mgr); err != nil {
 		return err
@@ -178,8 +190,8 @@ func registerControllers(log logr.Logger, mgr ctrl.Manager, pool worker.Pool, nr
 		return err
 	}
 
-	log.Info("Registering ImageBuildStatus controller")
-	if err := imagebuild.RegisterImageBuildStatus(mgr, cfg, nr); err != nil {
+	log.Info("Registering ImageBuildMessage controller")
+	if err := imagebuildmessage.Register(mgr, cfg, nr); err != nil {
 		return err
 	}
 

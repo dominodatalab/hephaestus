@@ -119,12 +119,6 @@ spec:
                 type: array
             type: object
           status:
-            default:
-              phase: Created
-              transitions:
-              - phase: Created
-                previousPhase: ""
-                processed: true
             properties:
               allocationTime:
                 description: AllocationTime is the total time spent allocating a build
@@ -223,12 +217,9 @@ spec:
                       description: Phase represents a step in a resource processing
                         lifecycle.
                       type: string
-                    processed:
-                      type: boolean
                   required:
                   - phase
                   - previousPhase
-                  - processed
                   type: object
                 type: array
             type: object

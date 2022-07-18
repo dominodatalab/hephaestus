@@ -18,6 +18,12 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuild":                        schema_pkg_api_hephaestus_v1_ImageBuild(ref),
 		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildAMQPOverrides":           schema_pkg_api_hephaestus_v1_ImageBuildAMQPOverrides(ref),
 		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildList":                    schema_pkg_api_hephaestus_v1_ImageBuildList(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildMessage":                 schema_pkg_api_hephaestus_v1_ImageBuildMessage(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildMessageAMQPConnection":   schema_pkg_api_hephaestus_v1_ImageBuildMessageAMQPConnection(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildMessageList":             schema_pkg_api_hephaestus_v1_ImageBuildMessageList(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildMessageRecord":           schema_pkg_api_hephaestus_v1_ImageBuildMessageRecord(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildMessageSpec":             schema_pkg_api_hephaestus_v1_ImageBuildMessageSpec(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildMessageStatus":           schema_pkg_api_hephaestus_v1_ImageBuildMessageStatus(ref),
 		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildSpec":                    schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref),
 		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildStatus":                  schema_pkg_api_hephaestus_v1_ImageBuildStatus(ref),
 		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildStatusTransitionMessage": schema_pkg_api_hephaestus_v1_ImageBuildStatusTransitionMessage(ref),
@@ -170,6 +176,209 @@ func schema_pkg_api_hephaestus_v1_ImageBuildList(ref common.ReferenceCallback) c
 		},
 		Dependencies: []string{
 			"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuild", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_api_hephaestus_v1_ImageBuildMessage(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildMessageSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildMessageStatus"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildMessageSpec", "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildMessageStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_api_hephaestus_v1_ImageBuildMessageAMQPConnection(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"uri": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"queue": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"exchange": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+				},
+				Required: []string{"uri", "queue", "exchange"},
+			},
+		},
+	}
+}
+
+func schema_pkg_api_hephaestus_v1_ImageBuildMessageList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildMessage"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildMessage", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_api_hephaestus_v1_ImageBuildMessageRecord(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"sentAt": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"message": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildStatusTransitionMessage"),
+						},
+					},
+				},
+				Required: []string{"sentAt", "message"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildStatusTransitionMessage", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+	}
+}
+
+func schema_pkg_api_hephaestus_v1_ImageBuildMessageSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"amqp": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildMessageAMQPConnection"),
+						},
+					},
+				},
+				Required: []string{"amqp"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildMessageAMQPConnection"},
+	}
+}
+
+func schema_pkg_api_hephaestus_v1_ImageBuildMessageStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"amqpSentMessages": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildMessageRecord"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildMessageRecord"},
 	}
 }
 
@@ -403,6 +612,13 @@ func schema_pkg_api_hephaestus_v1_ImageBuildStatusTransitionMessage(ref common.R
 							Format:      "",
 						},
 					},
+					"occurredAt": {
+						SchemaProps: spec.SchemaProps{
+							Description: "OccurredAt indicates when the transition occurred.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
 					"imageURLs": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ImageURLs contains a list of fully-qualified registry images. This field is only populated when an ImageBuild transitions to PhaseSucceeded.",
@@ -418,10 +634,19 @@ func schema_pkg_api_hephaestus_v1_ImageBuildStatusTransitionMessage(ref common.R
 							},
 						},
 					},
+					"errorMessage": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ErrorMessage contains the details of error when one occurs.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
-				Required: []string{"name", "annotations", "objectLink", "previousPhase", "currentPhase"},
+				Required: []string{"name", "objectLink", "previousPhase", "currentPhase", "occurredAt"},
 			},
 		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
 	}
 }
 
@@ -447,18 +672,12 @@ func schema_pkg_api_hephaestus_v1_ImageBuildTransition(ref common.ReferenceCallb
 					},
 					"occurredAt": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
-						},
-					},
-					"processed": {
-						SchemaProps: spec.SchemaProps{
-							Default: false,
-							Type:    []string{"boolean"},
-							Format:  "",
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
 				},
-				Required: []string{"previousPhase", "phase", "processed"},
+				Required: []string{"previousPhase", "phase"},
 			},
 		},
 		Dependencies: []string{

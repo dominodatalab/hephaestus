@@ -1,5 +1,68 @@
 run:
   timeout: 5m
+  tests: false
   skip-files:
     - cribbed.go
     - "zz_generated.*"
+linters-settings:
+  funlen: # NOTE: bring these values down
+    lines: 200
+    statements: 100
+  gomnd:
+    checks:
+      - argument
+      - case
+      - condition
+      - operation
+      - return
+  gosec:
+    excludes:
+      - G306
+  lll:
+    line-length: 120
+  nakedret:
+    max-func-lines: 35
+linters:
+  enable-all: true
+  disable:
+   - asciicheck
+   - containedctx
+   - cyclop
+   - errorlint
+   - exhaustive
+   - exhaustivestruct
+   - exhaustruct
+   - forbidigo
+   - forcetypeassert
+   - gci
+   - gochecknoinits
+   - gochecknoglobals
+   - gocognit
+   - godot
+   - godox
+   - goerr113
+   - gofumpt
+   - golint
+   - gomnd
+   - gomoddirectives
+   - interfacer
+   - ireturn
+   - maintidx
+   - maligned
+   - nlreturn
+   - nonamedreturns
+   - nosprintfhostport
+   - nestif
+   - prealloc
+   - tagliatelle
+   - testpackage
+   - scopelint
+   - varnamelen
+   - wrapcheck
+   - wsl
+issues:
+  exclude-rules:
+    - path: pkg/buildkit/worker/pool.go
+      text: "ifElseChain: rewrite if-else to switch statement"
+      linters:
+        - gocritic

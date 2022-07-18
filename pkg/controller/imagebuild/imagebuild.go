@@ -26,14 +26,6 @@ func Register(mgr ctrl.Manager, cfg config.Controller, pool worker.Pool, nr *new
 		Complete()
 }
 
-func RegisterImageBuildStatus(mgr ctrl.Manager, cfg config.Controller, nr *newrelic.Application) error {
-	return core.NewReconciler(mgr).
-		For(&hephv1.ImageBuild{}, builder.WithPredicates(predicate.UnprocessedTransitionsPredicate{})).
-		Named("imagebuildstatus").
-		Component("status-messenger", component.StatusMessenger(cfg.Messaging, nr)).
-		Complete()
-}
-
 func RegisterImageBuildDelete(mgr ctrl.Manager) error {
 	return core.NewReconciler(mgr).
 		For(&hephv1.ImageBuild{}, builder.WithPredicates(predicate.BlindDeletePredicate{})).

@@ -8,17 +8,14 @@
 set -e
 
 minikube start \
-  --kubernetes-version=v1.20.15 \
+  --kubernetes-version=v1.19.16 \
   --extra-config=apiserver.service-node-port-range=1-65535 \
   --cpus=4 \
   --memory=16g \
   --disk-size=100g \
   --driver=hyperkit \
+  --addons=kong,ingress-dns,metrics-server \
   --wait=true
-
-minikube addons enable kong
-minikube addons enable ingress-dns
-minikube addons enable metrics-server
 
 cat <<EOF | sudo tee /etc/resolver/minikube-default
 domain default

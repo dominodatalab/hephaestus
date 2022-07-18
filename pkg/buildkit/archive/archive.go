@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -39,7 +40,7 @@ type fileDownloader interface {
 	Get(string) (*http.Response, error)
 }
 
-type Extractor func(logr.Logger, context.Context, string, string, time.Duration) (*Extraction, error)
+type Extractor func(context.Context, logr.Logger, string, string, time.Duration) (*Extraction, error)
 
 type Extraction struct {
 	Archive     string
@@ -58,7 +59,7 @@ func AssertDir(path string) error {
 	return nil
 }
 
-func FetchAndExtract(log logr.Logger, ctx context.Context, url, wd string, timeout time.Duration) (*Extraction, error) {
+func FetchAndExtract(ctx context.Context, log logr.Logger, url, wd string, timeout time.Duration) (*Extraction, error) {
 	if timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, timeout)
@@ -108,12 +109,15 @@ func retryable(err *url.Error) bool {
 
 // downloadFile takes a file URL and local location to download it to.
 // It returns "done" (retryable or not) and an error.
-func downloadFile(log logr.Logger, c fileDownloader, fileUrl, fp string) (bool, error) {
-	resp, err := c.Get(fileUrl)
+func downloadFile(log logr.Logger, c fileDownloader, fileURL, fp string) (bool, error) {
+	resp, err := c.Get(fileURL)
 	if err != nil {
 		var urlError *url.Error
 		if errors.As(err, &urlError) && retryable(urlError) {
-			log.Error(urlError, "Received temporary or transient error while fetching context, will attempt to retry", "url", fileUrl, "file", fp)
+			log.Error(
+				urlError, "Received temporary or transient error while fetching context, will attempt to retry",
+				"url", fileURL, "file", fp,
+			)
 			return false, nil
 		}
 
@@ -123,7 +127,10 @@ func downloadFile(log logr.Logger, c fileDownloader, fileUrl, fp string) (bool, 
 
 	switch resp.StatusCode {
 	case http.StatusBadGateway, http.StatusGatewayTimeout, http.StatusServiceUnavailable:
-		log.Info("Received transient status code while fetching context, will attempt to retry", "url", fileUrl, "file", fp, "code", resp.StatusCode)
+		log.Info(
+			"Received transient status code while fetching context, will attempt to retry",
+			"url", fileURL, "file", fp, "code", resp.StatusCode,
+		)
 		return false, nil
 	case http.StatusOK:
 	default:
@@ -194,7 +201,10 @@ func extract(fp string, ct mimeType, dst string) error {
 			continue
 		}
 
-		target := filepath.Join(dst, header.Name)
+		target, err := sanitizeExtractPath(dst, header.Name)
+		if err != nil {
+			return err
+		}
 
 		switch header.Typeflag {
 		case tar.TypeDir:
@@ -202,17 +212,38 @@ func extract(fp string, ct mimeType, dst string) error {
 				return err
 			}
 		case tar.TypeReg:
-			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
-			if err != nil {
-				return err
-			}
-
-			_, err = io.Copy(f, tr)
-			f.Close()
-
-			if err != nil {
+			if err = copyRegularFile(target, tr, header.Mode); err != nil {
 				return err
 			}
 		}
 	}
+}
+
+func sanitizeExtractPath(destination, filename string) (string, error) {
+	destPath := filepath.Join(destination, filename)
+	if !strings.HasPrefix(destPath, filepath.Clean(destination)) {
+		return "", fmt.Errorf("content filepath tainted: %s", destPath)
+	}
+
+	return destPath, nil
+}
+
+func copyRegularFile(target string, tr *tar.Reader, mode int64) error {
+	f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(mode))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	for {
+		if _, err = io.CopyN(f, tr, 1024); err != nil {
+			if err == io.EOF {
+				break
+			}
+
+			return fmt.Errorf("error reading tar regular file: %w", err)
+		}
+	}
+
+	return nil
 }

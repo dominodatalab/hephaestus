@@ -26,10 +26,10 @@ var (
 	gcrRegex      = regexp.MustCompile(`.*-docker\.pkg\.dev|(?:.*\.)?gcr\.io`)
 	defaultClient = &http.Client{
 		Transport: &http.Transport{
-			Dial: (&net.Dialer{
+			DialContext: (&net.Dialer{
 				Timeout:   2 * time.Second,
 				KeepAlive: 30 * time.Second,
-			}).Dial,
+			}).DialContext,
 		},
 	}
 )

@@ -141,6 +141,7 @@ func Verify(ctx context.Context, configDir string) error {
 
 	var errs []error
 	for server, auth := range configJSON.Auths {
+		auth := auth
 		auth.ServerAddress = server
 
 		if _, _, err = svc.Auth(ctx, &auth, "DominoDataLab_Hephaestus/1.0"); err != nil {

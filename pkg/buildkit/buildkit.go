@@ -23,6 +23,8 @@ import (
 	"github.com/dominodatalab/hephaestus/pkg/buildkit/archive"
 )
 
+const defaultExtractionTimeout = 5 * time.Minute
+
 var clientCheckBackoff = wait.Backoff{ // retries after 500ms 1s 2s 4s 8s 16s 32s 64s with jitter
 	Steps:    8,
 	Duration: 500 * time.Millisecond,
@@ -30,23 +32,23 @@ var clientCheckBackoff = wait.Backoff{ // retries after 500ms 1s 2s 4s 8s 16s 32
 	Jitter:   0.1,
 }
 
-type clientBuilder struct {
+type ClientBuilder struct {
 	addr             string
 	dockerAuthConfig string
 	log              logr.Logger
 	bkOpts           []bkclient.ClientOpt
 }
 
-func ClientBuilder(addr string) *clientBuilder {
-	return &clientBuilder{addr: addr, log: logr.Discard()}
+func NewClientBuilder(addr string) *ClientBuilder {
+	return &ClientBuilder{addr: addr, log: logr.Discard()}
 }
 
-func (b *clientBuilder) WithDockerAuthConfig(configDir string) *clientBuilder {
+func (b *ClientBuilder) WithDockerAuthConfig(configDir string) *ClientBuilder {
 	b.dockerAuthConfig = configDir
 	return b
 }
 
-func (b *clientBuilder) WithMTLSAuth(caPath, certPath, keyPath string) *clientBuilder {
+func (b *ClientBuilder) WithMTLSAuth(caPath, certPath, keyPath string) *ClientBuilder {
 	u, err := url.Parse(b.addr)
 	if err != nil {
 		b.log.Error(err, "Cannot parse hostname, skipping mTLS auth", "addr", b.addr)
@@ -57,12 +59,12 @@ func (b *clientBuilder) WithMTLSAuth(caPath, certPath, keyPath string) *clientBu
 	return b
 }
 
-func (b *clientBuilder) WithLogger(log logr.Logger) *clientBuilder {
+func (b *ClientBuilder) WithLogger(log logr.Logger) *ClientBuilder {
 	b.log = log
 	return b
 }
 
-func (b *clientBuilder) Build(ctx context.Context) (*Client, error) {
+func (b *ClientBuilder) Build(ctx context.Context) (*Client, error) {
 	bk, err := bkclient.New(ctx, b.addr, append(b.bkOpts, bkclient.WithFailFast())...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create buildkit client: %w", err)
@@ -134,7 +136,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
 		contentsDir = opts.ContextDir
 	} else {
 		c.log.Info("Fetching remote context", "url", opts.Context)
-		extract, err := archive.FetchAndExtract(c.log, ctx, opts.Context, buildDir, 5*time.Minute)
+		extract, err := archive.FetchAndExtract(ctx, c.log, opts.Context, buildDir, defaultExtractionTimeout)
 		if err != nil {
 			return fmt.Errorf("cannot fetch remote context: %w", err)
 		}
@@ -153,7 +155,6 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
 		bs, err := os.ReadFile(dockerfile)
 		if err != nil {
 			return fmt.Errorf("cannot read Dockerfile: %w", err)
-
 		}
 		l.Info("Dockerfile contents:\n" + string(bs))
 	}

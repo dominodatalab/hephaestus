@@ -31,7 +31,12 @@ type BuildDispatcherComponent struct {
 	cancels sync.Map
 }
 
-func BuildDispatcher(cfg config.Buildkit, pool worker.Pool, nr *newrelic.Application, ch <-chan client.ObjectKey) *BuildDispatcherComponent {
+func BuildDispatcher(
+	cfg config.Buildkit,
+	pool worker.Pool,
+	nr *newrelic.Application,
+	ch <-chan client.ObjectKey,
+) *BuildDispatcherComponent {
 	return &BuildDispatcherComponent{
 		cfg:      cfg,
 		pool:     pool,
@@ -75,7 +80,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		c.cancels.Delete(obj.ObjectKey())
 	}()
 
-	if obj.Status.Phase != hephv1.PhaseCreated {
+	if obj.Status.Phase != "" {
 		log.Info("Aborting reconcile, status phase in not blank", "phase", obj.Status.Phase)
 		txn.Ignore()
 
@@ -141,7 +146,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	log.Info("Building new buildkit client", "addr", addr)
 	clientInitSeg := txn.StartSegment("worker-client-init")
 	bldr := buildkit.
-		ClientBuilder(addr).
+		NewClientBuilder(addr).
 		WithLogger(ctx.Log.WithName("buildkit").WithValues("addr", addr, "logKey", obj.Spec.LogKey)).
 		WithDockerAuthConfig(configDir)
 	if mtls := c.cfg.MTLS; mtls != nil {

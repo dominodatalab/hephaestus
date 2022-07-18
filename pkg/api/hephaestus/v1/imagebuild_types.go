@@ -1,42 +1,11 @@
 package v1
 
 import (
-	"encoding/json"
 	"time"
 
-	"gomodules.xyz/jsonpatch/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-// ImageBuildStatusTransitionMessage contains information about ImageBuild status transitions.
-//
-// This type is used to publish JSON-formatted messages to one or more configured messaging
-// endpoints when ImageBuild resources undergo phase changes during the build process.
-type ImageBuildStatusTransitionMessage struct {
-	// Name of the ImageBuild resource that underwent a transition.
-	Name string `json:"name"`
-	// Annotations present on the resource.
-	Annotations map[string]string `json:"annotations"`
-	// ObjectLink points to the resource inside the Kubernetes API.
-	ObjectLink string `json:"objectLink"`
-	// PreviousPhase of the resource.
-	PreviousPhase Phase `json:"previousPhase"`
-	// CurrentPhase of the resource.
-	CurrentPhase Phase `json:"currentPhase"`
-	// OccurredAt indicates when the transition occurred.
-	OccurredAt metav1.Time `json:"-"`
-	// ImageURLs contains a list of fully-qualified registry images.
-	// This field is only populated when an ImageBuild transitions to PhaseSucceeded.
-	ImageURLs []string `json:"imageURLs,omitempty"`
-
-	// NOTE: think about adding ErrorMessage
-}
-
-// ImageBuildStatusPhaseTransitionMessage
-// ImageBuildTransitionMessage
-// ImageBuildStatusMessage
 
 type ImageBuildAMQPOverrides struct {
 	ExchangeName string `json:"exchangeName,omitempty"`
@@ -66,10 +35,9 @@ type ImageBuildSpec struct {
 }
 
 type ImageBuildTransition struct {
-	PreviousPhase Phase        `json:"previousPhase"`
-	Phase         Phase        `json:"phase"`
-	OccurredAt    *metav1.Time `json:"occurredAt,omitempty"`
-	Processed     bool         `json:"processed"`
+	PreviousPhase Phase       `json:"previousPhase"`
+	Phase         Phase       `json:"phase"`
+	OccurredAt    metav1.Time `json:"occurredAt,omitempty"`
 }
 
 type ImageBuildStatus struct {
@@ -101,8 +69,7 @@ type ImageBuild struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec ImageBuildSpec `json:"spec,omitempty"`
-	// +kubebuilder:default={phase: "Created", transitions: {{previousPhase: "", phase: "Created", processed: true}}}
+	Spec   ImageBuildSpec   `json:"spec,omitempty"`
 	Status ImageBuildStatus `json:"status,omitempty"`
 }
 
@@ -122,57 +89,12 @@ func (in *ImageBuild) SetPhase(p Phase) {
 	ibt := ImageBuildTransition{
 		PreviousPhase: in.Status.Phase,
 		Phase:         p,
-		OccurredAt:    &metav1.Time{Time: time.Now()},
-		Processed:     false,
+		OccurredAt:    metav1.Time{Time: time.Now()},
 	}
 
 	in.Status.unappliedTransition = ibt
 	in.Status.Transitions = append(in.Status.Transitions, ibt)
 	in.Status.Phase = p
-}
-
-func (in *ImageBuild) GetPatch() client.Patch {
-	ops := []jsonpatch.Operation{
-		{
-			Operation: "replace",
-			Path:      "/status/phase",
-			Value:     in.Status.Phase,
-		},
-		{
-			Operation: "add",
-			Path:      "/status/transitions/-",
-			Value:     in.Status.unappliedTransition,
-		},
-	}
-
-	if in.Status.AllocationTime != "" {
-		ops = append(ops, jsonpatch.Operation{
-			Operation: "add",
-			Path:      "/status/allocationTime",
-			Value:     in.Status.AllocationTime,
-		})
-	}
-	if in.Status.BuildTime != "" {
-		ops = append(ops, jsonpatch.Operation{
-			Operation: "add",
-			Path:      "/status/buildTime",
-			Value:     in.Status.BuildTime,
-		})
-	}
-	if in.Status.BuilderAddr != "" {
-		ops = append(ops, jsonpatch.Operation{
-			Operation: "add",
-			Path:      "/status/builderAddr",
-			Value:     in.Status.BuilderAddr,
-		})
-	}
-
-	patch, err := json.Marshal(ops)
-	if err != nil {
-		panic(err)
-	}
-
-	return client.RawPatch(types.JSONPatchType, patch)
 }
 
 // +kubebuilder:object:root=true
