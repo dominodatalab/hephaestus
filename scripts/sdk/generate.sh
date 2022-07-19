@@ -83,10 +83,6 @@ if [[ -z ${GOPATH:-} ]]; then
   export GOPATH
 fi
 
-info "Installing openapi-gen"
-OPENAPI_VERSION="$(go list -m k8s.io/kube-openapi | awk '{print $2}')"
-go install k8s.io/kube-openapi/cmd/openapi-gen@"$OPENAPI_VERSION"
-
 info "Generating OpenAPI definitions for API types"
 openapi-gen \
   --go-header-file "$(mktemp)" \
@@ -119,7 +115,7 @@ docker run --user "$(id -u):$(id -g)" --rm -v "$PROJECT_DIR:/wd" --workdir /wd \
     --import-mappings v1.Patch=io.kubernetes.client.custom.V1Patch \
     --import-mappings v1.DeleteOptions=io.kubernetes.client.openapi.models.V1DeleteOptions \
     --import-mappings v1.Status=io.kubernetes.client.openapi.models.V1Status \
-    --import-mappings v1.Time=java.time.Instant \
+    --import-mappings v1.Time=java.time.OffsetDateTime \
     --http-user-agent "Hephaestus Java Client/$VERSION" \
     --generate-alias-as-model
 
