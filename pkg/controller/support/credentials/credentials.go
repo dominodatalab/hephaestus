@@ -122,7 +122,7 @@ func Persist(ctx context.Context, cfg *rest.Config, credentials []hephv1.Registr
 	return dir, err
 }
 
-func Verify(ctx context.Context, configDir string) error {
+func Verify(ctx context.Context, configDir string, insecureRegistries []string) error {
 	filename := filepath.Join(configDir, "config.json")
 	data, err := os.ReadFile(filename)
 	if err != nil {
@@ -134,7 +134,7 @@ func Verify(ctx context.Context, configDir string) error {
 		return err
 	}
 
-	svc, err := registry.NewService(registry.ServiceOptions{})
+	svc, err := registry.NewService(registry.ServiceOptions{InsecureRegistries: insecureRegistries})
 	if err != nil {
 		return err
 	}

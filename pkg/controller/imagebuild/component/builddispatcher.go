@@ -66,8 +66,11 @@ func (c *BuildDispatcherComponent) Initialize(ctx *core.Context, _ *ctrl.Builder
 }
 
 func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, error) {
-	log := ctx.Log
 	obj := ctx.Object.(*hephv1.ImageBuild)
+
+	log := ctx.Log
+
+	buildLog := log.WithValues("logKey", obj.Spec.LogKey)
 
 	txn := c.newRelic.StartTransaction("BuildDispatcherComponent.Reconcile")
 	txn.AddAttribute("imagebuild", obj.ObjectKey().String())
@@ -109,24 +112,39 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	}(configDir)
 
 	validateCredsSeg := txn.StartSegment("credentials-validate")
-	if err = credentials.Verify(ctx, configDir); err != nil {
+
+	insecureRegistries := make([]string, 0)
+	for reg, opts := range c.cfg.Registries {
+		if opts.Insecure || opts.HTTP {
+			insecureRegistries = append(insecureRegistries, reg)
+		}
+	}
+
+	buildLog.Info("Validating registry credentials")
+	if err = credentials.Verify(ctx, configDir, insecureRegistries); err != nil {
 		txn.NoticeError(newrelic.Error{
 			Message: err.Error(),
 			Class:   "CredentialsValidateError",
 		})
+
+		buildLog.Error(err, fmt.Sprintf("Failed to validate registry credentials: %s", err.Error()))
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, err)
 	}
 	validateCredsSeg.End()
 
 	log.Info("Leasing buildkit worker")
+	buildLog.Info("Leasing buildkit worker")
+
 	leaseSeg := txn.StartSegment("worker-lease")
 	allocStart := time.Now()
 	addr, err := c.pool.Get(ctx, obj.ObjectKey().String())
 	if err != nil {
+		buildLog.Error(err, fmt.Sprintf("Failed to acquire buildkit worker: %s", err.Error()))
 		txn.NoticeError(newrelic.Error{
 			Message: err.Error(),
 			Class:   "WorkerLeaseError",
 		})
+
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkit service lookup failed: %w", err))
 	}
 	leaseSeg.End()
@@ -187,6 +205,8 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 
 			return ctrl.Result{}, nil
 		}
+
+		buildLog.Error(err, fmt.Sprintf("Failed to build image: %s", err.Error()))
 
 		txn.NoticeError(newrelic.Error{
 			Message: err.Error(),

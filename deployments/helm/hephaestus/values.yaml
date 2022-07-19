@@ -43,6 +43,13 @@ newRelic:
   # Tag metadata added to metrics
   labels: {}
 
+# Configuration for buildkit and controller that adds the ability to pull/push images
+# from/to insecure (self-signed TLS) and http registries.
+registries: {}
+  # myserver:
+  #   insecure: true
+  #   http: true
+
 # Controller configuration
 controller:
   # Number of instances to run. Leader election will be enabled whenever this
