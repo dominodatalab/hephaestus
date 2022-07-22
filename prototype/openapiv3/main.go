@@ -33,10 +33,12 @@ func main() {
 
 	bs, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
-		log.Fatalln(err)
+		log.Println(err)
+		return
 	}
 	if err = os.WriteFile(swaggerPath, bs, 0644); err != nil {
-		log.Fatalln(err)
+		log.Println(err)
+		return
 	}
 
 	generate()
