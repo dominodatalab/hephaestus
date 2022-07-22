@@ -1,0 +1,16 @@
+validateSpec: false
+globalProperties:
+  skipFormModel: true
+
+generatorName: java
+apiPackage: com.dominodatalab.hephaestus.v1.apis
+modelPackage: com.dominodatalab.hephaestus.v1.models
+invokerPackage: io.kubernetes.client.openapi
+#importMappings:
+#  IoK8sApimachineryPkgApisMetaV1Status: io.kubernetes.client.openapi.models.V1Status
+#  IoK8sApimachineryPkgApisMetaV1ObjectMeta: io.kubernetes.client.openapi.models.V1ObjectMeta
+#  IoK8sApimachineryPkgApisMetaV1Condition: io.kubernetes.client.openapi.models.V1Condition
+#  IoK8sApimachineryPkgApisMetaV1ListMeta: io.kubernetes.client.openapi.models.V1ListMeta
+#  IoK8sApimachineryPkgApisMetaV1Patch: io.kubernetes.client.openapi.models.V1Patch
+#  IoK8sApimachineryPkgApisMetaV1DeleteOptions: io.kubernetes.client.openapi.models.V1DeleteOptions
+#  IoK8sApimachineryPkgApisMetaV1Time: java.time.OffsetDateTime
