@@ -19,12 +19,8 @@ SDKS_DIR=$(cd "$PROJECT_DIR"/sdks && pwd)
 GEN_DIR="$SDKS_DIR/gen"
 JAVA_DIR="$SDKS_DIR/java"
 
-PROJECT_NAME=github.com/dominodatalab/hephaestus
-API_PACKAGE_PATH=pkg/api/hephaestus/v1
-OPENAPI_GEN_PATH=$PROJECT_NAME/$API_PACKAGE_PATH
 KUBERNETES_SWAGGER_FILE=/tmp/dist.swagger.json
 SWAGGER_FILE=api/openapi-spec/swagger.json
-REPORT_FILE=api/api-rules/violation_exceptions.list
 
 OPENAPI_GENERATOR_CLI_VERSION=v5.2.1
 
@@ -82,14 +78,6 @@ if [[ -z ${GOPATH:-} ]]; then
   GOPATH=$(go env GOPATH)
   export GOPATH
 fi
-
-info "Generating OpenAPI definitions for API types"
-openapi-gen \
-  --go-header-file "$(mktemp)" \
-  --input-dirs $OPENAPI_GEN_PATH \
-  --output-package $OPENAPI_GEN_PATH \
-  --output-file-base zz_generated.openapi \
-  --report-filename $REPORT_FILE
 
 generate_kubernetes_swagger
 

@@ -164,6 +164,4 @@ func modifyProperties(swagger *spec.Swagger, version string) {
 			Version: version,
 		},
 	}
-	swagger.Security = nil
-	swagger.SecurityDefinitions = nil
 }
