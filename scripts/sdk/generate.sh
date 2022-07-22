@@ -66,7 +66,7 @@ generate_kubernetes_swagger () {
 
 GIT_TAG=$(git describe --tags --candidates=0 --abbrev=0 2> /dev/null || echo untagged)
 if [[ $GIT_TAG == "untagged" ]]; then
-  VERSION=0.0.0-SNAPSHOT
+  VERSION=$(git branch --show-current)-SNAPSHOT
 else
   VERSION="${GIT_TAG#v}"
 fi
