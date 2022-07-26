@@ -232,7 +232,17 @@ jobs:
           path: sdks/java/target/*.jar
           if-no-files-found: error
 
-      - name: Publish Java JAR
+      - name: Publish JAR to GitHub
+        run: |
+          docker run --rm \
+          --workdir /wd \
+          --volume $HOME/.m2:/root/.m2 \
+          --volume $(pwd)/sdks/java:/wd \
+          --env GITHUB_USERNAME=${{ github.actor }} \
+          --env GITHUB_PASSWORD=${{ secrets.GITHUB_TOKEN }} \
+          $MAVEN_DOCKER_IMAGE mvn --settings settings.xml -DskipTests -P github deploy
+
+      - name: Publish Jar to Artifactory
         run: |
           docker run --rm \
             --workdir /wd \
@@ -240,6 +250,4 @@ jobs:
             --volume $(pwd)/sdks/java:/wd \
             --env ARTIFACTORY_USERNAME=${{ secrets.ARTIFACTORY_USERNAME }} \
             --env ARTIFACTORY_PASSWORD=${{ secrets.ARTIFACTORY_PASSWORD }} \
-            --env GITHUB_USERNAME=${{ github.actor }} \
-            --env GITHUB_PASSWORD=${{ secrets.GITHUB_TOKEN }} \
-            $MAVEN_DOCKER_IMAGE mvn --settings settings.xml -DskipTests deploy
+            $MAVEN_DOCKER_IMAGE mvn --settings settings.xml -DskipTests -P artifactory deploy
