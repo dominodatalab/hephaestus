@@ -262,7 +262,7 @@ jobs:
           --env ARTIFACTORY_PASSWORD=${{ secrets.ARTIFACTORY_PASSWORD }} \
           --env GITHUB_USERNAME=${{ github.actor }} \
           --env GITHUB_PASSWORD=${{ secrets.GITHUB_TOKEN }} \
-          $MAVEN_DOCKER_IMAGE mvn --settings settings.xml -DskipTests deploy
+          $MAVEN_DOCKER_IMAGE mvn --settings settings.xml --activate-profiles github -DskipTests deploy
 
       - name: Publish Jar to Artifactory
         run: |
