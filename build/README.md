@@ -5,6 +5,6 @@ the GitHub workflow, and pushed to the appropriate location.
 
 ## Buildkit
 
-All buildkit images have had their APKdependencies upgraded, and the rootless
+All buildkit images have had their APK dependencies upgraded, and the rootless
 image has been modified to expand the uid/gid map range and accommodate
 environments where Istio is running.
