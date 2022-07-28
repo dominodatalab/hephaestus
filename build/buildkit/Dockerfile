@@ -1,6 +1,11 @@
-ARG BUILDKIT_TAG=master-rootless
+ARG BUILDKIT_TAG
 
-FROM moby/buildkit:${BUILDKIT_TAG}
+FROM moby/buildkit:${BUILDKIT_TAG} AS root
+RUN apk update && \
+    apk upgrade && \
+    rm -rf /var/cache/apk
+
+FROM moby/buildkit:${BUILDKIT_TAG} AS rootless
 ARG ISTIO_GID=1337
 USER root
 RUN apk update && \

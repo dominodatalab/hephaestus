@@ -46,7 +46,16 @@ client: tools ## Generate Go client API library
 
 compiled: api crds client ## Generate all compiled code
 
-sdks: crds ## Generate non-GO client libraries
+openapi: ## Generate OpenAPI definitions for API types
+	go install k8s.io/kube-openapi/cmd/openapi-gen@$(shell go list -m k8s.io/kube-openapi | awk '{print $$2}')
+	openapi-gen \
+		--go-header-file "$(shell mktemp)" \
+		--input-dirs github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1 \
+		--output-package github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1 \
+		--output-file-base zz_generated.openapi \
+		--report-filename api/api-rules/violation_exceptions.list
+
+sdks: crds openapi ## Generate non-GO client libraries
 	scripts/sdk/generate.sh
 
 ##@ Misc

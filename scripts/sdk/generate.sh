@@ -19,12 +19,8 @@ SDKS_DIR=$(cd "$PROJECT_DIR"/sdks && pwd)
 GEN_DIR="$SDKS_DIR/gen"
 JAVA_DIR="$SDKS_DIR/java"
 
-PROJECT_NAME=github.com/dominodatalab/hephaestus
-API_PACKAGE_PATH=pkg/api/hephaestus/v1
-OPENAPI_GEN_PATH=$PROJECT_NAME/$API_PACKAGE_PATH
 KUBERNETES_SWAGGER_FILE=/tmp/dist.swagger.json
 SWAGGER_FILE=api/openapi-spec/swagger.json
-REPORT_FILE=api/api-rules/violation_exceptions.list
 
 OPENAPI_GENERATOR_CLI_VERSION=v5.2.1
 
@@ -70,7 +66,7 @@ generate_kubernetes_swagger () {
 
 GIT_TAG=$(git describe --tags --candidates=0 --abbrev=0 2> /dev/null || echo untagged)
 if [[ $GIT_TAG == "untagged" ]]; then
-  VERSION=0.0.0-SNAPSHOT
+  VERSION="${BRANCH_NAME:-0.0.0}-SNAPSHOT"
 else
   VERSION="${GIT_TAG#v}"
 fi
@@ -82,18 +78,6 @@ if [[ -z ${GOPATH:-} ]]; then
   GOPATH=$(go env GOPATH)
   export GOPATH
 fi
-
-info "Installing openapi-gen"
-OPENAPI_VERSION="$(go list -m k8s.io/kube-openapi | awk '{print $2}')"
-go install k8s.io/kube-openapi/cmd/openapi-gen@"$OPENAPI_VERSION"
-
-info "Generating OpenAPI definitions for API types"
-openapi-gen \
-  --go-header-file "$(mktemp)" \
-  --input-dirs $OPENAPI_GEN_PATH \
-  --output-package $OPENAPI_GEN_PATH \
-  --output-file-base zz_generated.openapi \
-  --report-filename $REPORT_FILE
 
 generate_kubernetes_swagger
 
@@ -119,7 +103,7 @@ docker run --user "$(id -u):$(id -g)" --rm -v "$PROJECT_DIR:/wd" --workdir /wd \
     --import-mappings v1.Patch=io.kubernetes.client.custom.V1Patch \
     --import-mappings v1.DeleteOptions=io.kubernetes.client.openapi.models.V1DeleteOptions \
     --import-mappings v1.Status=io.kubernetes.client.openapi.models.V1Status \
-    --import-mappings v1.Time=java.time.Instant \
+    --import-mappings v1.Time=java.time.OffsetDateTime \
     --http-user-agent "Hephaestus Java Client/$VERSION" \
     --generate-alias-as-model
 
