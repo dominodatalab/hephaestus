@@ -269,6 +269,7 @@ jobs:
         with:
           retry_on: error
           max_attempts: 10
+          timeout_minutes: 1
           retry_wait_seconds: 5
           command: |
             docker run --rm \
