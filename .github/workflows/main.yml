@@ -265,13 +265,18 @@ jobs:
             $MAVEN_DOCKER_IMAGE mvn --settings settings.xml --activate-profiles github -DskipTests deploy
 
       - name: Publish Jar to Artifactory
-        run: |
-          docker run --rm \
-            --workdir /wd \
-            --volume $HOME/.m2:/root/.m2 \
-            --volume $(pwd)/sdks/java:/wd \
-            --env ARTIFACTORY_USERNAME=${{ secrets.ARTIFACTORY_USERNAME }} \
-            --env ARTIFACTORY_PASSWORD=${{ secrets.ARTIFACTORY_PASSWORD }} \
-            --env GITHUB_USERNAME=${{ github.actor }} \
-            --env GITHUB_PASSWORD=${{ secrets.GITHUB_TOKEN }} \
-            $MAVEN_DOCKER_IMAGE mvn --settings settings.xml --activate-profiles artifactory -DskipTests deploy
+        uses: nick-fields/retry@v2
+        with:
+          retry_on: error
+          max_attempts: 10
+          retry_wait_seconds: 5
+          command: |
+            docker run --rm \
+              --workdir /wd \
+              --volume $HOME/.m2:/root/.m2 \
+              --volume $(pwd)/sdks/java:/wd \
+              --env ARTIFACTORY_USERNAME=${{ secrets.ARTIFACTORY_USERNAME }} \
+              --env ARTIFACTORY_PASSWORD=${{ secrets.ARTIFACTORY_PASSWORD }} \
+              --env GITHUB_USERNAME=${{ github.actor }} \
+              --env GITHUB_PASSWORD=${{ secrets.GITHUB_TOKEN }} \
+              $MAVEN_DOCKER_IMAGE mvn --settings settings.xml --activate-profiles artifactory -DskipTests deploy
