@@ -7,17 +7,17 @@ import (
 )
 
 var defaultOpts = Options{
-	Log:                 logr.Discard(),
-	SyncWaitTime:        30 * time.Second,
-	MaxIdleTime:         10 * time.Minute,
-	WatchTimeoutSeconds: 60,
+	Log:                         logr.Discard(),
+	SyncWaitTime:                30 * time.Second,
+	MaxIdleTime:                 10 * time.Minute,
+	EndpointWatchTimeoutSeconds: 180,
 }
 
 type Options struct {
-	Log                 logr.Logger
-	MaxIdleTime         time.Duration
-	SyncWaitTime        time.Duration
-	WatchTimeoutSeconds int64
+	Log                         logr.Logger
+	MaxIdleTime                 time.Duration
+	SyncWaitTime                time.Duration
+	EndpointWatchTimeoutSeconds int64
 }
 
 type PoolOption func(o Options) Options
@@ -36,9 +36,9 @@ func MaxIdleTime(d time.Duration) PoolOption {
 	}
 }
 
-func WatchTimeoutSeconds(s int64) PoolOption {
+func EndpointWatchTimeoutSeconds(s int64) PoolOption {
 	return func(o Options) Options {
-		o.WatchTimeoutSeconds = s
+		o.EndpointWatchTimeoutSeconds = s
 		return o
 	}
 }

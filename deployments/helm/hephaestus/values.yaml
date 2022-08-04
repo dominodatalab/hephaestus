@@ -137,9 +137,9 @@ controller:
     # Defaults to "10m"
     poolMaxIdleTime: null
 
-    # Duration after which buildkit statefulset scale watch will be terminated
-    # Defaults to "60s"
-    poolWatchTimeout: null
+    # Duration the worker pool will wait for a buildkit pod to become ready for traffic
+    # Defaults to "180s"
+    poolEndpointWatchTimeout: null
 
     # Secrets (name: path) to expose into builds that request it
     secrets: {}

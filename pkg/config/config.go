@@ -84,29 +84,41 @@ type Manager struct {
 	EnableLeaderElection bool     `json:"enableLeaderElection" yaml:"enableLeaderElection"`
 }
 
+// Buildkit communication and discovery configuration.
 type Buildkit struct {
-	Namespace       string            `json:"namespace" yaml:"namespace"`
-	PodLabels       map[string]string `json:"podLabels" yaml:"podLabels"`
-	DaemonPort      int32             `json:"daemonPort" yaml:"daemonPort"`
-	ServiceName     string            `json:"serviceName" yaml:"serviceName"`
-	StatefulSetName string            `json:"statefulSetName" yaml:"statefulSetName"`
-
-	Secrets map[string]string `json:"secrets" yaml:"secrets,omitempty"`
-
-	Registries map[string]RegistryConfig `json:"registries,omitempty" yaml:"registries,omitempty"`
-
+	// Namespace where the StatefulSet is deployed.
+	Namespace string `json:"namespace" yaml:"namespace"`
+	// PodLabels assigned to pods by the StatefulSet.
+	PodLabels map[string]string `json:"podLabels" yaml:"podLabels"`
+	// DaemonPort used to communicate with buildkitd over gRPC.
+	DaemonPort int32 `json:"daemonPort" yaml:"daemonPort"`
+	// ServiceName for the headless service.
+	ServiceName string `json:"serviceName" yaml:"serviceName"`
+	// StatefulSetName for the supervising workload.
+	StatefulSetName string `json:"statefulSetName" yaml:"statefulSetName"`
+	// PoolSyncWaitTime controls how often the worker pool is reconciled.
 	PoolSyncWaitTime *time.Duration `json:"poolSyncWaitTime" yaml:"poolSyncWaitTime"`
-	PoolMaxIdleTime  *time.Duration `json:"poolMaxIdleTime" yaml:"poolMaxIdleTime"`
-	PoolWatchTimeout *int64         `json:"poolWatchTimeout" yaml:"poolWatchTimeout"`
-
+	// PoolMaxIdleTime controls how long a pod will be allowed to remain unleased before it's terminated.
+	PoolMaxIdleTime *time.Duration `json:"poolMaxIdleTime" yaml:"poolMaxIdleTime"`
+	// PoolEndpointWatchTimeout is the time limit used when waiting for new pods to become "ready" for traffic.
+	PoolEndpointWatchTimeout *int64 `json:"poolEndpointWatchTimeout" yaml:"poolEndpointWatchTimeout"`
+	// MTLS parameters.
 	MTLS *BuildkitMTLS `json:"mtls,omitempty" yaml:"mtls,omitempty"`
+	// Secrets provided to buildkitd during the build process.
+	Secrets map[string]string `json:"secrets" yaml:"secrets,omitempty"`
+	// Registries parameters.
+	Registries map[string]RegistryConfig `json:"registries,omitempty" yaml:"registries,omitempty"`
 }
 
+// RegistryConfig options used to relax registry push/pull restrictions.
 type RegistryConfig struct {
+	// Insecure will allow self-signed certificates.
 	Insecure bool `json:"insecure,omitempty" yaml:"insecure,omitempty"`
-	HTTP     bool `json:"http,omitempty" yaml:"http,omitempty"`
+	// HTTP will allow non-TLS connections.
+	HTTP bool `json:"http,omitempty" yaml:"http,omitempty"`
 }
 
+// BuildkitMTLS server configuration.
 type BuildkitMTLS struct {
 	CACertPath string `json:"caCertPath" yaml:"caCertPath"`
 	CertPath   string `json:"certPath" yaml:"certPath"`

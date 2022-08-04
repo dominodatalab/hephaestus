@@ -10,10 +10,10 @@ import (
 
 func TestPoolOptions(t *testing.T) {
 	opts := Options{
-		Log:                 logr.Logger{},
-		MaxIdleTime:         0,
-		SyncWaitTime:        0,
-		WatchTimeoutSeconds: 0,
+		Log:                         logr.Logger{},
+		MaxIdleTime:                 0,
+		SyncWaitTime:                0,
+		EndpointWatchTimeoutSeconds: 0,
 	}
 
 	opts = SyncWaitTime(10 * time.Minute)(opts)
@@ -22,8 +22,8 @@ func TestPoolOptions(t *testing.T) {
 	opts = MaxIdleTime(30 * time.Minute)(opts)
 	assert.Equal(t, 30*time.Minute, opts.MaxIdleTime)
 
-	opts = WatchTimeoutSeconds(300)(opts)
-	assert.Equal(t, int64(300), opts.WatchTimeoutSeconds)
+	opts = EndpointWatchTimeoutSeconds(300)(opts)
+	assert.Equal(t, int64(300), opts.EndpointWatchTimeoutSeconds)
 
 	opts = Logger(logr.Discard())(opts)
 	assert.Equal(t, logr.Discard(), opts.Log)
