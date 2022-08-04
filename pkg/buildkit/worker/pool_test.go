@@ -351,7 +351,7 @@ func TestPoolGet(t *testing.T) {
 		select {
 		case res := <-leaseChannel:
 			assert.Empty(t, res.res.(string), "expected an empty lease address")
-			assert.EqualError(t, res.err, "failed to extract hostname after 90 seconds")
+			assert.EqualError(t, res.err, "failed to extract hostname after 180 seconds")
 		case <-time.After(3 * time.Second):
 			assert.Fail(t, "could not acquire a buildkit endpoint within 3s")
 		}
