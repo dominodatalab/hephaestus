@@ -138,7 +138,7 @@ controller:
     poolMaxIdleTime: null
 
     # Duration the worker pool will wait for a buildkit pod to become ready for traffic
-    # Defaults to "180s"
+    # Defaults to 180
     poolEndpointWatchTimeout: null
 
     # Secrets (name: path) to expose into builds that request it
