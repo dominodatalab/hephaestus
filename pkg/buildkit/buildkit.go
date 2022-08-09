@@ -76,6 +76,8 @@ func (b *ClientBuilder) Build(ctx context.Context) (*Client, error) {
 	err = wait.ExponentialBackoffWithContext(ctx, clientCheckBackoff, func() (done bool, err error) {
 		if _, lastErr = bk.ListWorkers(ctx); lastErr != nil {
 			b.log.V(1).Info("Buildkitd is not ready")
+
+			//nolint:nilerr // returning and err here will stop the loop immediately
 			return false, nil
 		}
 
