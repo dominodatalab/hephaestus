@@ -37,6 +37,7 @@ type DockerConfigJSON struct {
 func Extract(host string, data []byte) (string, string, error) {
 	var conf DockerConfigJSON
 	if err := json.Unmarshal(data, &conf); err != nil {
+		//nolint:nilerr // TODO: should we return an error here?
 		return "", "", nil
 	}
 

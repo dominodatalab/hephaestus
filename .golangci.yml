@@ -66,3 +66,6 @@ issues:
       text: "ifElseChain: rewrite if-else to switch statement"
       linters:
         - gocritic
+    - text: "O_WRONLY|O_RDWR|O_CREATE|O_TRUNC|O_APPEND"
+      linters:
+        - nosnakecase

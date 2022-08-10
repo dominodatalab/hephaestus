@@ -203,6 +203,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 			log.Info("Build cancelled via resource delete")
 			txn.AddAttribute("cancelled", true)
 
+			//nolint:nilerr // we want reconciliation to pass and end her
 			return ctrl.Result{}, nil
 		}
 
