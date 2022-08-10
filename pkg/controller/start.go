@@ -161,8 +161,8 @@ func createWorkerPool(
 		poolOpts = append(poolOpts, worker.SyncWaitTime(*swt))
 	}
 
-	if wt := cfg.PoolWatchTimeout; wt != nil {
-		poolOpts = append(poolOpts, worker.WatchTimeoutSeconds(*wt))
+	if wt := cfg.PoolEndpointWatchTimeout; wt != nil {
+		poolOpts = append(poolOpts, worker.EndpointWatchTimeoutSeconds(*wt))
 	}
 
 	clientset, err := kubernetes.Clientset(mgr.GetConfig())

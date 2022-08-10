@@ -189,6 +189,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		ImportCache:              obj.Spec.ImportRemoteBuildCache,
 		DisableInlineCacheExport: obj.Spec.DisableCacheLayerExport,
 		Secrets:                  c.cfg.Secrets,
+		FetchAndExtractTimeout:   c.cfg.FetchAndExtractTimeout,
 	}
 	log.Info("Dispatching image build", "images", buildOpts.Images)
 
@@ -203,6 +204,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 			log.Info("Build cancelled via resource delete")
 			txn.AddAttribute("cancelled", true)
 
+			//nolint:nilerr // we want reconciliation to pass and end her
 			return ctrl.Result{}, nil
 		}
 

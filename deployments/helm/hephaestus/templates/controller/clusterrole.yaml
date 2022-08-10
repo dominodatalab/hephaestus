@@ -75,11 +75,13 @@ rules:
     resources:
       - events
     verbs:
+      - get
       - create
       - patch
   - apiGroups:
       - ""
     resources:
+      - nodes
       - secrets
     verbs:
       - get
@@ -94,6 +96,7 @@ rules:
     resources:
       - endpointslices
     verbs:
+      - list
       - watch
   {{- if or (include "hephaestus.pspRequired" .) (include "hephaestus.istioWithoutCNI" .) }}
   - apiGroups:

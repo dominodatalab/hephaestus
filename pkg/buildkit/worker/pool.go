@@ -39,9 +39,8 @@ type Pool interface {
 var (
 	ErrNoUnleasedPods = errors.New("no unleased pods found")
 
-	newUUID                   = uuid.NewUUID
-	statefulPodRegex          = regexp.MustCompile(`^.*-(\d+)$`)
-	endpointSliceWatchTimeout = pointer.Int64(90)
+	newUUID          = uuid.NewUUID
+	statefulPodRegex = regexp.MustCompile(`^.*-(\d+)$`)
 )
 
 const (
@@ -72,10 +71,13 @@ type workerPool struct {
 	uuid                string
 	namespace           string
 	podClient           corev1typed.PodInterface
+	nodeClient          corev1typed.NodeInterface
+	eventClient         corev1typed.EventInterface
 	endpointSliceClient discoveryv1beta1typed.EndpointSliceInterface
 
-	podListOptions           metav1.ListOptions
-	endpointSliceListOptions metav1.ListOptions
+	podListOptions            metav1.ListOptions
+	endpointSliceListOptions  metav1.ListOptions
+	endpointSliceWatchTimeout int64
 
 	// endpoints discovery
 	serviceName string
@@ -101,23 +103,26 @@ func NewPool(ctx context.Context, clientset kubernetes.Interface, conf config.Bu
 
 	ctx, cancel := context.WithCancel(ctx)
 	wp := &workerPool{
-		ctx:                      ctx,
-		cancel:                   cancel,
-		log:                      o.Log,
-		poolSyncTime:             o.SyncWaitTime,
-		podMaxIdleTime:           o.MaxIdleTime,
-		uuid:                     string(newUUID()),
-		requests:                 NewRequestQueue(),
-		notifyReconcile:          make(chan struct{}, 1),
-		podClient:                clientset.CoreV1().Pods(conf.Namespace),
-		endpointSliceClient:      clientset.DiscoveryV1beta1().EndpointSlices(conf.Namespace),
-		podListOptions:           podListOptions,
-		endpointSliceListOptions: endpointSliceListOptions,
-		serviceName:              conf.ServiceName,
-		servicePort:              conf.DaemonPort,
-		statefulSetName:          conf.StatefulSetName,
-		statefulSetClient:        clientset.AppsV1().StatefulSets(conf.Namespace),
-		namespace:                conf.Namespace,
+		ctx:                       ctx,
+		cancel:                    cancel,
+		log:                       o.Log,
+		poolSyncTime:              o.SyncWaitTime,
+		podMaxIdleTime:            o.MaxIdleTime,
+		endpointSliceWatchTimeout: o.EndpointWatchTimeoutSeconds,
+		uuid:                      string(newUUID()),
+		requests:                  NewRequestQueue(),
+		notifyReconcile:           make(chan struct{}, 1),
+		podClient:                 clientset.CoreV1().Pods(conf.Namespace),
+		nodeClient:                clientset.CoreV1().Nodes(),
+		eventClient:               clientset.CoreV1().Events(conf.Namespace),
+		endpointSliceClient:       clientset.DiscoveryV1beta1().EndpointSlices(conf.Namespace),
+		podListOptions:            podListOptions,
+		endpointSliceListOptions:  endpointSliceListOptions,
+		serviceName:               conf.ServiceName,
+		servicePort:               conf.DaemonPort,
+		statefulSetName:           conf.StatefulSetName,
+		statefulSetClient:         clientset.AppsV1().StatefulSets(conf.Namespace),
+		namespace:                 conf.Namespace,
 	}
 
 	wp.log.Info("Starting worker pod monitor", "syncTime", wp.poolSyncTime.String())
@@ -268,7 +273,7 @@ func (p *workerPool) buildEndpointURL(ctx context.Context, podName string) (stri
 
 	watchOpts := metav1.ListOptions{
 		LabelSelector:  p.endpointSliceListOptions.LabelSelector,
-		TimeoutSeconds: endpointSliceWatchTimeout,
+		TimeoutSeconds: &p.endpointSliceWatchTimeout,
 	}
 	watcher, err := p.endpointSliceClient.Watch(ctx, watchOpts)
 	if err != nil {
@@ -286,10 +291,16 @@ func (p *workerPool) buildEndpointURL(ctx context.Context, podName string) (stri
 			break
 		}
 	}
-	p.log.Info("Finished watching endpoints", "podName", podName, "duration", time.Since(start))
+
+	if end := time.Since(start); end < time.Duration(p.endpointSliceWatchTimeout)*time.Second {
+		p.log.Info("Finished watching endpoints", "podName", podName, "duration", end)
+	} else {
+		p.log.Info("Endpoint watch timed out")
+	}
 
 	if hostname == "" {
-		return "", fmt.Errorf("failed to extract hostname after %d seconds", *endpointSliceWatchTimeout)
+		p.diagnoseFailure(ctx, podName)
+		return "", fmt.Errorf("failed to extract hostname after %d seconds", p.endpointSliceWatchTimeout)
 	}
 
 	u, err := url.ParseRequestURI(fmt.Sprintf("tcp://%s:%d", hostname, p.servicePort))
@@ -375,8 +386,7 @@ func (p *workerPool) updateWorkers(ctx context.Context) error {
 			if req := p.requests.Dequeue(); req != nil {
 				log.Info("Found pending pod request, processing")
 
-				pod := pod
-				if p.processPodRequest(ctx, req, &pod) {
+				if p.processPodRequest(ctx, req, pod) {
 					leased = append(leased, pod.Name)
 				}
 				continue
@@ -449,11 +459,11 @@ func (p *workerPool) updateWorkers(ctx context.Context) error {
 }
 
 // attempts to lease a pod, build and endpoint url, and provide a request result
-func (p *workerPool) processPodRequest(ctx context.Context, req *PodRequest, pod *corev1.Pod) (success bool) {
+func (p *workerPool) processPodRequest(ctx context.Context, req *PodRequest, pod corev1.Pod) (success bool) {
 	log := p.log.WithValues("podName", pod.Name)
 
 	log.Info("Attempting to lease pod")
-	if err := p.leasePod(ctx, pod, req.owner); err != nil {
+	if err := p.leasePod(ctx, &pod, req.owner); err != nil {
 		log.Error(err, "Failed to lease pod")
 
 		req.result <- PodRequestResult{err: err}
@@ -466,8 +476,8 @@ func (p *workerPool) processPodRequest(ctx context.Context, req *PodRequest, pod
 	if err != nil {
 		log.Error(err, "Failed to build routable URL")
 
-		if rErr := p.releasePod(ctx, pod); rErr != nil {
-			log.Error(err, "Failed to release pod")
+		if rErr := p.releasePod(ctx, &pod); rErr != nil {
+			log.Error(rErr, "Failed to release pod")
 		}
 
 		req.result <- PodRequestResult{err: err}
@@ -481,7 +491,6 @@ func (p *workerPool) processPodRequest(ctx context.Context, req *PodRequest, pod
 }
 
 // trigger a pool reconciliation
-// if there's already a notification pending, continue
 func (p *workerPool) triggerReconcile() {
 	p.log.Info("Attempting to notify reconciliation")
 
@@ -490,6 +499,121 @@ func (p *workerPool) triggerReconcile() {
 		p.log.Info("Notification sent")
 	default:
 		p.log.Info("Aborting notify, notification already present")
+	}
+}
+
+// diagnose elements that could lead to a failure
+func (p *workerPool) diagnoseFailure(ctx context.Context, podName string) {
+	log := p.log.WithName("diagnosis").WithValues("podName", podName)
+
+	log.Info("Beginning failure diagnosis")
+	p.diagnosePod(ctx, podName)
+	p.diagnoseEvents(ctx, podName)
+	p.diagnoseEndpointSlices(ctx, podName)
+	log.Info("Failure diagnosis completed")
+}
+
+// diagnose issues with endpoint slices
+func (p *workerPool) diagnoseEndpointSlices(ctx context.Context, podName string) {
+	log := p.log.WithName("diagnosis").WithName("endpointslice").WithValues("podName", podName)
+
+	listOpts := metav1.ListOptions{LabelSelector: p.endpointSliceListOptions.LabelSelector}
+	endpointSliceList, err := p.endpointSliceClient.List(ctx, listOpts)
+	if err != nil {
+		log.Error(err, "Failed to list endpoint slices during diagnosis")
+		return
+	}
+	log.Info("Found endpoint slices", "list", endpointSliceList.Items)
+
+	for _, endpointSlice := range endpointSliceList.Items {
+		for _, endpoint := range endpointSlice.Endpoints {
+			if endpoint.TargetRef.Name == podName {
+				log.Info("Found endpoint for pod", "endpoint", endpoint)
+
+				if !pointer.BoolDeref(endpoint.Conditions.Ready, false) {
+					log.Info("Endpoint IS NOT ready")
+				}
+				if !pointer.BoolDeref(endpoint.Conditions.Serving, false) {
+					log.Info("Endpoint IS NOT serving")
+				}
+				if pointer.BoolDeref(endpoint.Conditions.Terminating, false) {
+					log.Info("Endpoint IS terminating")
+				}
+
+				return
+			}
+		}
+	}
+	log.Info("Unable to find endpoint for pod")
+}
+
+// diagnose issues with pods
+func (p *workerPool) diagnosePod(ctx context.Context, podName string) {
+	log := p.log.WithName("diagnosis").WithName("pod").WithValues("podName", podName)
+
+	pod, err := p.podClient.Get(ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			log.Error(err, "Failed to get pod during diagnosis")
+		}
+
+		log.Info("Pod not found")
+		return
+	}
+	log.Info("Pod details", "spec", pod.Spec, "status", pod.Status)
+
+	for _, condition := range pod.Status.Conditions {
+		switch condition.Type {
+		case corev1.PodScheduled:
+			log.Info("Pod was scheduled", "condition", condition)
+		case corev1.PodInitialized:
+			log.Info("Pod finished initializing", "condition", condition)
+		case corev1.ContainersReady:
+			log.Info("All pod containers became ready", "condition", condition)
+		case corev1.PodReady:
+			log.Info("Pod became ready to serve requests", "condition", condition)
+		default:
+			log.Info("Unexpected pod state", "condition", condition)
+		}
+	}
+
+	if pod.Status.Phase != corev1.PodRunning {
+		log.Info("Pod is NOT running", "phase", pod.Status.Phase)
+	}
+
+	node, err := p.nodeClient.Get(ctx, pod.Spec.NodeName, metav1.GetOptions{})
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			log.Error(err, "Failed to node during diagnosis")
+		}
+
+		log.Info("Node NOT found")
+		return
+	}
+	log.Info("Node details", "conditions", node.Status.Conditions)
+}
+
+// inspect events related to pod
+func (p *workerPool) diagnoseEvents(ctx context.Context, podName string) {
+	log := p.log.WithName("diagnosis").WithName("event").WithValues("podName", podName)
+
+	eventList, err := p.eventClient.List(ctx, metav1.ListOptions{})
+	if err != nil {
+		log.Error(err, "Failed to list events during diagnosis")
+	}
+
+	timeLimit := time.Now().Add(-5 * time.Minute)
+	for _, event := range eventList.Items {
+		target := event.InvolvedObject
+		if target.Kind == "Pod" && target.Name == podName && event.LastTimestamp.After(timeLimit) {
+			log.Info(
+				"Event found",
+				"lastSeen", event.LastTimestamp,
+				"reason", event.Reason,
+				"message", event.Message,
+				"count", event.Count,
+			)
+		}
 	}
 }
 

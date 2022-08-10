@@ -137,9 +137,13 @@ controller:
     # Defaults to "10m"
     poolMaxIdleTime: null
 
-    # Duration after which buildkit statefulset scale watch will be terminated
-    # Defaults to "60s"
-    poolWatchTimeout: null
+    # Duration the worker pool will wait for a buildkit pod to become ready for traffic
+    # Defaults to 180
+    poolEndpointWatchTimeout: null
+
+    # Duration the build will wait to fetch and extract the remote Docker context.
+    # Defaults to 4.25 mins for fetch retries and an unlimited amount of time to extract.
+    fetchAndExtractTimeout: null
 
     # Secrets (name: path) to expose into builds that request it
     secrets: {}
@@ -193,7 +197,7 @@ controller:
     image:
       registry: ""
       repository: timberio/vector
-      tag: 0.22.X-distroless-static
+      tag: 0.23.X-distroless-static
       pullPolicy: IfNotPresent
       pullSecrets: []
 

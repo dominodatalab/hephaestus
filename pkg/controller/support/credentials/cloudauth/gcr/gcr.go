@@ -87,7 +87,7 @@ func (g *gcrProvider) authenticate(ctx context.Context, server string) (*types.A
 	}
 
 	// obtain the registry token
-	req, err := http.NewRequestWithContext(ctx, "GET", directive.Realm, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, directive.Realm, nil)
 	if err != nil {
 		return nil, err
 	}
