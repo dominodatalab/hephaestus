@@ -141,6 +141,10 @@ controller:
     # Defaults to 180
     poolEndpointWatchTimeout: null
 
+    # Duration the build will wait to fetch and extract the remote Docker context.
+    # Defaults to 4.25 mins for fetch retries and an unlimited amount of time to extract.
+    fetchAndExtractTimeout: null
+
     # Secrets (name: path) to expose into builds that request it
     secrets: {}
 

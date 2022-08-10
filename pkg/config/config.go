@@ -108,6 +108,9 @@ type Buildkit struct {
 	Secrets map[string]string `json:"secrets" yaml:"secrets,omitempty"`
 	// Registries parameters.
 	Registries map[string]RegistryConfig `json:"registries,omitempty" yaml:"registries,omitempty"`
+	// FetchAndExtractTimeout used when processing the remote Docker context tarball.
+	// Fetch retries have a hard timeout limit of 4.25 mins because, come on, don't be ridiculous.
+	FetchAndExtractTimeout time.Duration `json:"fetchAndExtractTimeout" yaml:"fetchAndExtractTimeout"`
 }
 
 // RegistryConfig options used to relax registry push/pull restrictions.

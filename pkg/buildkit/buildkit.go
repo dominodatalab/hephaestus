@@ -23,12 +23,10 @@ import (
 	"github.com/dominodatalab/hephaestus/pkg/buildkit/archive"
 )
 
-const defaultExtractionTimeout = 5 * time.Minute
-
 var clientCheckBackoff = wait.Backoff{ // retries after 500ms 1s 2s 4s 8s 16s 32s 64s with jitter
-	Steps:    8,
 	Duration: 500 * time.Millisecond,
 	Factor:   2.0,
+	Steps:    8,
 	Jitter:   0.1,
 }
 
@@ -104,6 +102,7 @@ type BuildOptions struct {
 	ImportCache              []string
 	DisableInlineCacheExport bool
 	Secrets                  map[string]string
+	FetchAndExtractTimeout   time.Duration
 }
 
 type Buildkit interface {
@@ -138,7 +137,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
 		contentsDir = opts.ContextDir
 	} else {
 		c.log.Info("Fetching remote context", "url", opts.Context)
-		extract, err := archive.FetchAndExtract(ctx, c.log, opts.Context, buildDir, defaultExtractionTimeout)
+		extract, err := archive.FetchAndExtract(ctx, c.log, opts.Context, buildDir, opts.FetchAndExtractTimeout)
 		if err != nil {
 			return fmt.Errorf("cannot fetch remote context: %w", err)
 		}

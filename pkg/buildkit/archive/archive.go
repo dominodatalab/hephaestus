@@ -28,12 +28,11 @@ const (
 	mimeTypeGzip = mimeType("application/gzip")
 )
 
-var defaultBackoff = wait.Backoff{
+var defaultBackoff = wait.Backoff{ // retries after 1s 2s 4s 8s 16s 32s 64s 128s with jitter
 	Duration: time.Second,
 	Factor:   2,
-	Steps:    10,
 	Jitter:   0.1,
-	Cap:      30 * time.Second,
+	Steps:    8,
 }
 
 type fileDownloader interface {
