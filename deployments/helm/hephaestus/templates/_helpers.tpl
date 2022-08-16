@@ -1,4 +1,11 @@
 {{/*
+Return the controller manager name.
+*/}}
+{{- define "hephaestus.manager.name" -}}
+{{ include "common.names.fullname" . }}-manager
+{{- end }}
+
+{{/*
 Return the controller manager image name.
 */}}
 {{- define "hephaestus.manager.image" -}}

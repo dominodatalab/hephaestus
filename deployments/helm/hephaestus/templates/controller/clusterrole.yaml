@@ -98,11 +98,13 @@ rules:
     verbs:
       - list
       - watch
-  {{- if or (include "hephaestus.pspRequired" .) (include "hephaestus.istioWithoutCNI" .) }}
+  {{- if include "hephaestus.pspRequired" . }}
   - apiGroups:
       - policy
     resources:
       - podsecuritypolicies
+    resourceNames:
+      - {{ include "hephaestus.manager.name" . }}
     verbs:
       - use
   {{- end }}

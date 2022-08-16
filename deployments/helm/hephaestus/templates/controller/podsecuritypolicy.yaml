@@ -1,0 +1,39 @@
+{{- if include "hephaestus.pspRequired" . }}
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: {{ include "hephaestus.manager.name" . }}
+  labels:
+    {{- include "hephaestus.controller.labels.standard" . | nindent 4 }}
+spec:
+  allowPrivilegeEscalation: false
+  fsGroup:
+    ranges:
+      - max: 65535
+        min: 1
+    rule: MustRunAs
+  {{- if include "hephaestus.istioWithoutCNI" . }}
+  allowedCapabilities:
+    - NET_ADMIN
+    - NET_RAW
+  {{- else }}
+  requiredDropCapabilities:
+    - ALL
+  {{- end }}
+  runAsUser:
+    rule: {{ if include "hephaestus.istioWithoutCNI" . }}RunAsAny{{ else }}MustRunAsNonRoot{{ end }}
+  seLinux:
+    rule: RunAsAny
+  supplementalGroups:
+    ranges:
+      - max: 65535
+        min: 1
+    rule: MustRunAs
+  volumes:
+    - configMap
+    - emptyDir
+    - projected
+    - secret
+    - downwardAPI
+    - persistentVolumeClaim
+{{- end }}
