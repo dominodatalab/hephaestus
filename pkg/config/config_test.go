@@ -114,6 +114,25 @@ func TestControllerValidate(t *testing.T) {
 	})
 }
 
+func TestSensitiveDataRedaction(t *testing.T) {
+	config := Controller{
+		Messaging: Messaging{
+			AMQP: &AMQPMessaging{
+				URL: "amqp://username:password@server:5672",
+			},
+		},
+	}
+
+	data, err := json.Marshal(config)
+	assert.NoError(t, err)
+
+	var actual Controller
+	require.NoError(t, json.Unmarshal(data, &actual))
+
+	assert.Equal(t, "amqp://username:password@server:5672", config.Messaging.AMQP.URL)
+	assert.Equal(t, "amqp://username:xxxxx@server:5672", actual.Messaging.AMQP.URL)
+}
+
 func createTempFile(t *testing.T, contents []byte, ext string) *os.File {
 	t.Helper()
 

@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -138,6 +139,17 @@ type AMQPMessaging struct {
 	URL      string `json:"url" yaml:"url"`
 	Exchange string `json:"exchange" yaml:"exchange"`
 	Queue    string `json:"queue" yaml:"queue"`
+}
+
+func (m *AMQPMessaging) MarshalJSON() ([]byte, error) {
+	amqpMessaging := *m
+	u, err := url.Parse(amqpMessaging.URL)
+	if err != nil {
+		return nil, err
+	}
+
+	amqpMessaging.URL = u.Redacted()
+	return json.Marshal(amqpMessaging)
 }
 
 type KafkaMessaging struct {

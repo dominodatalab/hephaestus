@@ -42,7 +42,7 @@ func Start(cfg config.Controller) error {
 	ctrl.SetLogger(zapr.NewLogger(zapLogger))
 
 	log := ctrl.Log.WithName("setup")
-	log.V(1).Info("Using provided configuration", "config", cfg)
+	log.Info("Using provided configuration", "config", cfg)
 
 	log.Info("Configuring NewRelic application")
 	nr, err := configureNewRelic(zapLogger, cfg.NewRelic)

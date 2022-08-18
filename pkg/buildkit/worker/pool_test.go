@@ -68,6 +68,24 @@ var (
 		Spec: corev1.PodSpec{},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodRunning,
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   corev1.PodScheduled,
+					Status: corev1.ConditionTrue,
+				},
+				{
+					Type:   corev1.PodInitialized,
+					Status: corev1.ConditionTrue,
+				},
+				{
+					Type:   corev1.ContainersReady,
+					Status: corev1.ConditionTrue,
+				},
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				},
+			},
 		},
 	}
 
@@ -138,8 +156,9 @@ func assertLeasedPod(t *testing.T, action k8stesting.Action, ret *corev1.Pod) {
 }
 
 // NOTE: this set of assertions is fine, but it's not great. we need a better way of asserting the patching. ideally, we
-//  would make assertions against the API object after the event but client-go doesn't support SSA right now, which
-//  means we have to override the "patch" action with a reactor.
+//
+//	would make assertions against the API object after the event but client-go doesn't support SSA right now, which
+//	means we have to override the "patch" action with a reactor.
 func assertUnleasedPod(t *testing.T, action k8stesting.Action) {
 	t.Helper()
 
@@ -243,8 +262,11 @@ func TestPoolGet(t *testing.T) {
 			// deliver running pod a few reconciliations after get is executed
 			if countDown {
 				if reactionCount == 2 {
+					delivered = validPod.DeepCopy()
+					fakeClient.PrependReactor("get", "pods", func(k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+						return true, delivered, nil
+					})
 					fakeClient.PrependReactor("list", "pods", func(k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-						delivered = validPod.DeepCopy()
 						return true, &corev1.PodList{Items: []corev1.Pod{*delivered}}, nil
 					})
 				}
@@ -674,6 +696,7 @@ func TestPoolPodReconciliation(t *testing.T) {
 	tests := []struct {
 		name     string
 		objects  func() []runtime.Object
+		requests int
 		expected int32
 	}{
 		{
@@ -732,6 +755,7 @@ func TestPoolPodReconciliation(t *testing.T) {
 				return []runtime.Object{p}
 			},
 			expected: 1,
+			requests: 1,
 		},
 		{
 			name: "expiry_upcoming",
@@ -887,6 +911,54 @@ func TestPoolPodReconciliation(t *testing.T) {
 			},
 			expected: 0,
 		},
+		{
+			name: "combination_embedded_failure_no_growth",
+			objects: func() []runtime.Object {
+				p0 := validPod.DeepCopy()
+				p0.Name = "buildkit-0"
+				p0.Status.Phase = corev1.PodPending
+
+				p1 := validPod.DeepCopy()
+				p1.Name = "buildkit-1"
+				p1.Status.Phase = corev1.PodReasonUnschedulable
+
+				p2 := validPod.DeepCopy()
+				p2.Name = "buildkit-2"
+				p2.Status.Phase = corev1.PodFailed
+
+				p3 := validPod.DeepCopy()
+				p3.Name = "buildkit-3"
+				p3.Status.Phase = corev1.PodPending
+
+				return []runtime.Object{p0, p1, p2, p3}
+			},
+			requests: 4,
+			expected: 4,
+		},
+		{
+			name: "combination_embedded_failure_trim",
+			objects: func() []runtime.Object {
+				p0 := validPod.DeepCopy()
+				p0.Name = "buildkit-0"
+				p0.Status.Phase = corev1.PodPending
+
+				p1 := validPod.DeepCopy()
+				p1.Name = "buildkit-1"
+				p1.Status.Phase = corev1.PodReasonUnschedulable
+
+				p2 := validPod.DeepCopy()
+				p2.Name = "buildkit-2"
+				p2.Status.Phase = corev1.PodFailed
+
+				p3 := validPod.DeepCopy()
+				p3.Name = "buildkit-3"
+				p3.Status.Phase = corev1.PodPending
+
+				return []runtime.Object{p0, p1, p2, p3}
+			},
+			requests: 1,
+			expected: 1,
+		},
 	}
 
 	for _, tc := range tests {
@@ -907,6 +979,9 @@ func TestPoolPodReconciliation(t *testing.T) {
 			})
 
 			wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond), MaxIdleTime(10*time.Minute))
+			for i := 0; i < tc.requests; i++ {
+				wp.requests.Enqueue(&PodRequest{result: make(chan PodRequestResult, 1)})
+			}
 			defer wp.Close()
 
 			select {
