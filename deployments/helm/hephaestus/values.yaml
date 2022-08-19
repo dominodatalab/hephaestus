@@ -148,6 +148,19 @@ controller:
     # Secrets (name: path) to expose into builds that request it
     secrets: {}
 
+    # Cloud-based registry credentials configuration
+    cloudRegistryAuth:
+      # Azure credentials required to access ACR
+      azure:
+        enabled: false
+        tenantID: ""
+        clientID: ""
+        clientSecret: ""
+      # GCP credentials required to access GCR
+      gcp:
+        enabled: false
+        serviceAccount: ""
+
     # Build status messaging configuration
     messaging:
       # Enable message publisher
