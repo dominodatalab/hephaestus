@@ -42,9 +42,23 @@ spec:
           args:
             - start
             - --config=/etc/hephaestus/config.yaml
-          {{- with .Values.controller.manager.extraEnvVars }}
+          {{- with .Values.controller.manager }}
+          {{- if or .extraEnvVars .cloudRegistryAuth.azure.enabled }}
           env:
+            {{- with .extraEnvVars }}
             {{- include "common.tplvalues.render" (dict "value" . "context" $) | nindent 12 }}
+            {{- end }}
+            {{- if .cloudRegistryAuth.azure.enabled }}
+            - name: AZURE_TENANT_ID
+              value: {{ required "Azure tenantID is required when enabled!" .cloudRegistryAuth.azure.tenantID | quote }}
+            - name: AZURE_CLIENT_ID
+              value: {{ required "Azure clientID is required when enabled!" .cloudRegistryAuth.azure.clientID | quote }}
+            {{- with .cloudRegistryAuth.azure.clientSecret }}
+            - name: AZURE_CLIENT_SECRET
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
+          {{- end }}
           {{- end }}
           ports:
             {{- with .Values.controller.manager }}
