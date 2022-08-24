@@ -37,6 +37,11 @@ type SecretCredentials struct {
 }
 
 type RegistryCredentials struct {
+	// NOTE: this field was previously used to assert the presence of an auth entry inside of secret credentials. if the
+	//  the Server was missing, then an error was raised. this design is limiting because it requires users to create
+	//  several `registryAuth` items with the same secret if they want to verify the presence. in a future api version,
+	//  we may remove the Server field from this type and replace it with one or more fields that service the needs all
+	//  credential types.
 	Server string `json:"server,omitempty"`
 
 	CloudProvided *bool                 `json:"cloudProvided,omitempty"`
