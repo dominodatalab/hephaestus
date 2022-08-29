@@ -276,6 +276,22 @@ buildkit:
     size: 20Gi
     annotations: {}
 
+  # Buildkitd liveness probe
+  livenessProbe:
+    initialDelaySeconds: 5
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+    successThreshold: 1
+
+  # Buildkitd readiness probe
+  readinessProbe:
+    initialDelaySeconds: 5
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+    successThreshold: 1
+
   # Resource requests and limits
   resources:
     requests: {}
