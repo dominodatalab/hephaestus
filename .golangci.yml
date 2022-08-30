@@ -28,6 +28,7 @@ linters:
    - asciicheck
    - containedctx
    - cyclop
+   - deadcode
    - errorlint
    - exhaustive
    - exhaustivestruct
@@ -45,18 +46,22 @@ linters:
    - golint
    - gomnd
    - gomoddirectives
+   - ifshort
    - interfacer
    - ireturn
    - maintidx
    - maligned
    - nlreturn
    - nonamedreturns
+   - nosnakecase
    - nosprintfhostport
    - nestif
    - prealloc
    - tagliatelle
    - testpackage
    - scopelint
+   - structcheck
+   - varcheck
    - varnamelen
    - wrapcheck
    - wsl
@@ -66,6 +71,7 @@ issues:
       text: "ifElseChain: rewrite if-else to switch statement"
       linters:
         - gocritic
-    - text: "O_WRONLY|O_RDWR|O_CREATE|O_TRUNC|O_APPEND"
+    - path: pkg/crd/crd.go
+      text: "waitForIstioSidecar"
       linters:
-        - nosnakecase
+        - contextcheck

@@ -108,7 +108,7 @@ func (g *gcrProvider) authenticate(ctx context.Context, server string) (*types.A
 		return nil, err
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to obtain token:\n %s", content)
 	}
 

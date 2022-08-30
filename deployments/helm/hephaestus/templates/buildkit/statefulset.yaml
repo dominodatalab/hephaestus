@@ -66,14 +66,26 @@ spec:
                 - buildctl
                 - debug
                 - workers
-            periodSeconds: 30
+            {{- with .Values.buildkit.livenessProbe }}
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+            successThreshold: {{ .successThreshold }}
+            {{- end }}
           readinessProbe:
             exec:
               command:
                 - buildctl
                 - debug
                 - workers
-            periodSeconds: 30
+            {{- with .Values.buildkit.readinessProbe }}
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+            failureThreshold: {{ .failureThreshold }}
+            successThreshold: {{ .successThreshold }}
+            {{- end }}
           resources:
             {{- toYaml .Values.buildkit.resources | nindent 12 }}
           volumeMounts:
