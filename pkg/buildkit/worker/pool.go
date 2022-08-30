@@ -18,6 +18,7 @@ import (
 	discoveryv1beta1 "k8s.io/api/discovery/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
@@ -170,6 +171,7 @@ func (p *AutoscalingPool) Get(ctx context.Context, owner string) (string, error)
 		result: make(chan PodRequestResult, 1),
 	}
 
+	p.log.Info("Enqueuing new pod request")
 	p.requests.Enqueue(request)
 	defer p.requests.Remove(request)
 
@@ -218,7 +220,7 @@ func (p *AutoscalingPool) Release(ctx context.Context, addr string) error {
 		return err
 	}
 
-	return p.releasePod(ctx, pod)
+	return p.releasePod(ctx, *pod)
 }
 
 // Close shuts down the pool by terminating all background routines used to manage requests and garbage collection.
@@ -227,8 +229,8 @@ func (p *AutoscalingPool) Close() {
 }
 
 // applies lease metadata to given pod
-func (p *AutoscalingPool) leasePod(ctx context.Context, pod *corev1.Pod, owner string) error {
-	pac, err := corev1ac.ExtractPod(pod, fieldManagerName)
+func (p *AutoscalingPool) leasePod(ctx context.Context, pod corev1.Pod, owner string) error {
+	pac, err := corev1ac.ExtractPod(&pod, fieldManagerName)
 	if err != nil {
 		return fmt.Errorf("cannot extract pod config: %w", err)
 	}
@@ -249,8 +251,8 @@ func (p *AutoscalingPool) leasePod(ctx context.Context, pod *corev1.Pod, owner s
 }
 
 // removes lease metadata from given pod and adds expiry
-func (p *AutoscalingPool) releasePod(ctx context.Context, pod *corev1.Pod) error {
-	pac, err := corev1ac.ExtractPod(pod, fieldManagerName)
+func (p *AutoscalingPool) releasePod(ctx context.Context, pod corev1.Pod) error {
+	pac, err := corev1ac.ExtractPod(&pod, fieldManagerName)
 	if err != nil {
 		return fmt.Errorf("cannot extract pod config: %w", err)
 	}
@@ -273,8 +275,8 @@ func (p *AutoscalingPool) releasePod(ctx context.Context, pod *corev1.Pod) error
 }
 
 // builds routable url for buildkit pod with protocol and port
-func (p *AutoscalingPool) buildEndpointURL(ctx context.Context, podName string) (string, error) {
-	p.log.Info("Watching endpoints for new address", "podName", podName)
+func (p *AutoscalingPool) buildEndpointURL(ctx context.Context, pod corev1.Pod) (string, error) {
+	p.log.Info("Watching endpoints for new pod address", "podName", pod.Name)
 
 	watchOpts := metav1.ListOptions{
 		LabelSelector:  p.endpointSliceListOptions.LabelSelector,
@@ -292,19 +294,19 @@ func (p *AutoscalingPool) buildEndpointURL(ctx context.Context, podName string) 
 	for event := range watcher.ResultChan() {
 		endpointSlice := event.Object.(*discoveryv1beta1.EndpointSlice)
 
-		if hostname = p.extractHostname(endpointSlice, podName); hostname != "" {
+		if hostname = p.extractHostname(endpointSlice, pod.Name); hostname != "" {
 			break
 		}
 	}
 
 	if end := time.Since(start); end < time.Duration(p.endpointSliceWatchTimeout)*time.Second {
-		p.log.Info("Finished watching endpoints", "podName", podName, "duration", end)
+		p.log.Info("Finished watching endpoints", "podName", pod.Name, "duration", end)
 	} else {
 		p.log.Info("Endpoint watch timed out")
 	}
 
 	if hostname == "" {
-		p.diagnoseFailure(ctx, podName)
+		p.diagnoseFailure(ctx, pod)
 		return "", fmt.Errorf("failed to extract hostname after %d seconds", p.endpointSliceWatchTimeout)
 	}
 
@@ -356,7 +358,7 @@ func (p *AutoscalingPool) updateWorkers(ctx context.Context) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	p.log.Info("Querying for pods", "namespace", p.namespace, "opts", p.podListOptions)
+	p.log.Info("Querying for available buildkit pods", "namespace", p.namespace, "opts", p.podListOptions)
 	podList, err := p.podClient.List(ctx, p.podListOptions)
 	if err != nil {
 		return err
@@ -375,8 +377,10 @@ func (p *AutoscalingPool) updateWorkers(ctx context.Context) error {
 
 	// mark pods for removal based on state and lease pods when requests exist
 	for _, pod := range podList.Items {
-		log := p.log.WithValues("podName", pod.Name)
 		allPods = append(allPods, pod.Name)
+
+		log := p.log.WithValues("podName", pod.Name)
+		log.Info("Evaluating pod metadata and status")
 
 		if id, ok := pod.Annotations[managerIDAnnotation]; ok && id != p.uuid { // mark unmanaged pods
 			log.Info("Eligible for termination, manager id mismatch", "expected", p.uuid, "actual", id)
@@ -389,9 +393,10 @@ func (p *AutoscalingPool) updateWorkers(ctx context.Context) error {
 		} else if pod.Status.Phase == corev1.PodPending { // mark pending pods
 			pending = append(pending, pod.Name)
 		} else if p.isOperationalPod(ctx, pod.Name) { // dispatch builds/check expiry/check age on operation pods
-			if req := p.requests.Dequeue(); req != nil {
-				log.Info("Found pending pod request, processing")
+			log.Info("Pod is operational")
 
+			if req := p.requests.Dequeue(); req != nil {
+				log.Info("Processing dequeued pod request with operational pod")
 				if p.processPodRequest(ctx, req, pod) {
 					leased = append(leased, pod.Name)
 				}
@@ -460,7 +465,7 @@ func (p *AutoscalingPool) updateWorkers(ctx context.Context) error {
 		"podRequests", requestCount,
 	)
 
-	p.log.Info("Setting statefulset scale", "replicas", replicas)
+	p.log.Info("Using statefulset scale", "replicas", replicas)
 	_, err = p.statefulSetClient.UpdateScale(
 		ctx,
 		p.statefulSetName,
@@ -481,7 +486,7 @@ func (p *AutoscalingPool) processPodRequest(ctx context.Context, req *PodRequest
 	log := p.log.WithValues("podName", pod.Name)
 
 	log.Info("Attempting to lease pod")
-	if err := p.leasePod(ctx, &pod, req.owner); err != nil {
+	if err := p.leasePod(ctx, pod, req.owner); err != nil {
 		log.Error(err, "Failed to lease pod")
 
 		req.result <- PodRequestResult{err: err}
@@ -489,12 +494,12 @@ func (p *AutoscalingPool) processPodRequest(ctx context.Context, req *PodRequest
 	}
 
 	log.Info("Building endpoint URL")
-	addr, err := p.buildEndpointURL(ctx, pod.Name)
+	addr, err := p.buildEndpointURL(ctx, pod)
 
 	if err != nil {
 		log.Error(err, "Failed to build routable URL")
 
-		if rErr := p.releasePod(ctx, &pod); rErr != nil {
+		if rErr := p.releasePod(ctx, pod); rErr != nil {
 			log.Error(rErr, "Failed to release pod")
 		}
 
@@ -514,7 +519,7 @@ func (p *AutoscalingPool) triggerReconcile() {
 
 	select {
 	case p.notifyReconcile <- struct{}{}:
-		p.log.Info("Notification sent")
+		p.log.Info("Reconciliation notification sent")
 	default:
 		p.log.Info("Aborting notify, notification already present")
 	}
@@ -529,7 +534,7 @@ func (p *AutoscalingPool) isOperationalPod(ctx context.Context, podName string) 
 		return
 	}
 
-	// this does not mean the pod is usable but is a good first check
+	// this does not mean the pod is usable but is a good sanity check
 	if pod.Status.Phase != corev1.PodRunning {
 		return
 	}
@@ -553,17 +558,21 @@ func (p *AutoscalingPool) isOperationalPod(ctx context.Context, podName string) 
 		}
 	}
 
-	return scheduled && initialized && containersReady && podReady
+	// lastly, the status fields are not updated when a pod is terminated, so we have to check the metadata to determine
+	// if the pod was deleted by a scale-down event and the process is taking longer than expected to exit
+	notDeleted := pod.DeletionTimestamp == nil
+
+	return scheduled && initialized && containersReady && podReady && notDeleted
 }
 
 // diagnose elements that could lead to a failure
-func (p *AutoscalingPool) diagnoseFailure(ctx context.Context, podName string) {
-	log := p.log.WithName("diagnosis").WithValues("podName", podName)
+func (p *AutoscalingPool) diagnoseFailure(ctx context.Context, pod corev1.Pod) {
+	log := p.log.WithName("diagnosis").WithValues("podName", pod.Name)
 
 	log.Info("Beginning failure diagnosis")
-	p.diagnosePod(ctx, podName)
-	p.diagnoseEvents(ctx, podName)
-	p.diagnoseEndpointSlices(ctx, podName)
+	p.diagnosePod(ctx, pod.Name)
+	p.diagnoseEvents(ctx, pod)
+	p.diagnoseEndpointSlices(ctx, pod.Name)
 	log.Info("Failure diagnosis completed")
 }
 
@@ -660,26 +669,34 @@ func (p *AutoscalingPool) diagnosePod(ctx context.Context, podName string) {
 }
 
 // inspect events related to pod
-func (p *AutoscalingPool) diagnoseEvents(ctx context.Context, podName string) {
-	log := p.log.WithName("diagnosis").WithName("event").WithValues("podName", podName)
+func (p *AutoscalingPool) diagnoseEvents(ctx context.Context, pod corev1.Pod) {
+	log := p.log.WithName("diagnosis").WithName("event").WithValues("podName", pod.Name)
 
-	eventList, err := p.eventClient.List(ctx, metav1.ListOptions{})
+	listOpts := metav1.ListOptions{
+		FieldSelector: fields.Set{
+			"involvedObject.kind":            "Pod",
+			"involvedObject.name":            pod.Name,
+			"involvedObject.resourceVersion": pod.ResourceVersion,
+		}.String(),
+	}
+
+	eventList, err := p.eventClient.List(ctx, listOpts)
 	if err != nil {
 		log.Error(err, "Failed to list events during diagnosis")
 	}
 
-	timeLimit := time.Now().Add(-5 * time.Minute)
 	for _, event := range eventList.Items {
-		target := event.InvolvedObject
-		if target.Kind == "Pod" && target.Name == podName && event.LastTimestamp.After(timeLimit) {
-			log.Info(
-				"Event found",
-				"lastSeen", event.LastTimestamp,
-				"reason", event.Reason,
-				"message", event.Message,
-				"count", event.Count,
-			)
-		}
+		log.Info(
+			"Event found",
+			"firstSeen", event.FirstTimestamp,
+			"lastSeen", event.LastTimestamp,
+			"type", event.Type,
+			"reason", event.Reason,
+			"subject", event.InvolvedObject.FieldPath,
+			"source", event.Source.String(),
+			"message", event.Message,
+			"count", event.Count,
+		)
 	}
 }
 
