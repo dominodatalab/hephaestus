@@ -75,8 +75,15 @@ metadata:
 spec:
   template:
     metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       labels:
         {{- include "common.labels.matchLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       {{- include "hephaestus.imagePullSecrets" . | nindent 6 }}
       serviceAccountName: {{ $serviceAccountName }}
@@ -94,6 +101,10 @@ spec:
             {{- if .Values.istio.enabled }}
             - --istio-enabled
             {{- end }}
+          {{- with .Values.podEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
       {{- with .Values.controller.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -120,8 +131,15 @@ metadata:
 spec:
   template:
     metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       labels:
         {{- include "common.labels.matchLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       {{- include "hephaestus.imagePullSecrets" . | nindent 6 }}
       serviceAccountName: {{ $serviceAccountName }}
@@ -139,6 +157,10 @@ spec:
             {{- if .Values.istio.enabled }}
             - --istio-enabled
             {{- end }}
+          {{- with .Values.podEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
       {{- with .Values.controller.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

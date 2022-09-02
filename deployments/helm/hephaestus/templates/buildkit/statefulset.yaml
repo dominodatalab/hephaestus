@@ -24,10 +24,16 @@ spec:
         {{- with .Values.buildkit.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+        {{- with .Values.podAnnotations }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
       labels:
         {{- include "hephaestus.buildkit.labels.matchLabels" . | nindent 8 }}
         {{- with .Values.buildkit.podLabels }}
         {{- toYaml . | trimSuffix "\n" | nindent 8 }}
+        {{- end }}
+        {{- with .Values.podLabels }}
+          {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
       {{- include "hephaestus.imagePullSecrets" . | nindent 6 }}
@@ -57,6 +63,10 @@ spec:
             {{- if .Values.buildkit.debug }}
             - --debug
             {{- end }}
+          {{- with .Values.podEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - name: {{ .Values.buildkit.service.portName }}
               protocol: TCP
