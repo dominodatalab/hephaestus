@@ -32,8 +32,9 @@ spec:
     spec:
       {{- include "hephaestus.imagePullSecrets" . | nindent 6 }}
       serviceAccountName: {{ include "hephaestus.buildkit.fullname" . }}
-      {{- if .Values.buildkit.rootless }}
       securityContext:
+        fsGroupChangePolicy: "OnRootMismatch"
+      {{- if .Values.buildkit.rootless }}
         fsGroup: 1000
       {{- end }}
       containers:
