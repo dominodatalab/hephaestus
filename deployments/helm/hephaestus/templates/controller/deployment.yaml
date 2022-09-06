@@ -22,10 +22,16 @@ spec:
         {{- with .Values.controller.podAnnotations }}
         {{- toYaml . | trimSuffix "\n" | nindent 8 }}
         {{- end }}
+        {{- with .Values.podAnnotations }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
       labels:
         {{- include "hephaestus.controller.labels.matchLabels" . | nindent 8 }}
         {{- with .Values.controller.podLabels }}
         {{- toYaml . | trimSuffix "\n" | nindent 8 }}
+        {{- end }}
+        {{- with .Values.podLabels }}
+          {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
       {{- include "hephaestus.imagePullSecrets" . | nindent 6 }}
@@ -43,7 +49,7 @@ spec:
             - start
             - --config=/etc/hephaestus/config.yaml
           {{- with .Values.controller.manager }}
-          {{- if or .extraEnvVars .cloudRegistryAuth.azure.enabled }}
+          {{- if or .extraEnvVars .cloudRegistryAuth.azure.enabled $.Values.podEnv }}
           env:
             {{- with .extraEnvVars }}
             {{- include "common.tplvalues.render" (dict "value" . "context" $) | nindent 12 }}
@@ -57,6 +63,9 @@ spec:
             - name: AZURE_CLIENT_SECRET
               value: {{ . | quote }}
             {{- end }}
+            {{- end }}
+            {{- with $.Values.podEnv }}
+              {{- toYaml . | nindent 12 }}
             {{- end }}
           {{- end }}
           {{- end }}
@@ -115,6 +124,10 @@ spec:
           args:
             - --config
             - /etc/vector/vector.yaml
+          {{- with $.Values.podEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           livenessProbe:
             httpGet:
               path: /health

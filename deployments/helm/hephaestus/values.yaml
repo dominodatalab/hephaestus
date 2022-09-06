@@ -24,6 +24,11 @@ enablePodSecurityPolicies: false
 # https://cert-manager.io/docs/faq/cluster-resource/
 certManagerNamespace: cert-manager
 
+# Applied to all pods
+podAnnotations: {}
+podLabels: {}
+podEnv: {}
+
 # Istio configuration
 istio:
   # Enable support for environments with Istio installed

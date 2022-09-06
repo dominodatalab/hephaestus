@@ -111,8 +111,8 @@ jobs:
           context: build/buildkit
           build-args: BUILDKIT_TAG=${{ steps.image_tag.outputs.result }}
           tags: quay.io/domino/buildkit:${{ steps.image_tag.outputs.result }}
-          cache-from: type=gha, scope=${{ github.job }}
-          cache-to: type=gha, scope=${{ github.job }}
+#          cache-from: type=gha, scope=${{ github.job }}
+#          cache-to: type=gha, scope=${{ github.job }}
 
   vendor-buildkit:
     runs-on: ubuntu-latest
