@@ -117,6 +117,10 @@ spec:
         {{- if .Values.controller.vector.enabled }}
         - name: vector
           securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
             runAsUser: 65532
             runAsGroup: 65532
           image: {{ include "hephaestus.vector.image" . }}

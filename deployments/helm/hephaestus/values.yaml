@@ -83,7 +83,8 @@ controller:
     namespaceLabels: {}
 
   # Configure controller pod security context
-  podSecurityContext: {}
+  podSecurityContext:
+    runAsNonRoot: true
 
   # Annotations for controller pods
   podAnnotations: {}
@@ -193,7 +194,11 @@ controller:
         level: info
 
     # Configure manager container security context
-    containerSecurityContext: {}
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+          drop:
+          - ALL
 
     # Extra environment variables provided to the manager container
     extraEnvVars: []
