@@ -69,7 +69,7 @@ func Start(cfg config.Controller) error {
 	}
 
 	log.Info("Registering cloud auth providers")
-	if err = credentials.LoadCloudProviders(log); err != nil {
+	if err = credentials.LoadCloudProviders(ctx, log); err != nil {
 		return err
 	}
 

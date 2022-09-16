@@ -2,8 +2,8 @@ package acr
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"time"
 
@@ -15,18 +15,14 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/go-logr/logr"
 
-	cloudauth2 "github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
 )
 
 // https://github.com/Azure/acr/blob/main/docs/AAD-OAuth.md
 
 const acrUserForRefreshToken = "00000000-0000-0000-0000-000000000000"
 
-var (
-	acrRegex = regexp.MustCompile(`.*\.azurecr\.io|.*\.azurecr\.cn|.*\.azurecr\.de|.*\.azurecr\.us`)
-
-	ErrNoCredentials = errors.New("no Azure Credentials")
-)
+var acrRegex = regexp.MustCompile(`.*\.azurecr\.io|.*\.azurecr\.cn|.*\.azurecr\.de|.*\.azurecr\.us`)
 
 type acrProvider struct {
 	logger                logr.Logger
@@ -34,61 +30,65 @@ type acrProvider struct {
 	servicePrincipalToken *adal.ServicePrincipalToken
 }
 
-func Register(logger logr.Logger, registry *cloudauth2.Registry) error {
-	provider, err := newProvider(logger)
+// Register will instantiate a new authentication provider whenever the AZURE_TENANT_ID or AZURE_CLIENT_ID envvars are
+// present, otherwise it will result in a no-op. An error will be returned whenever the envvar settings are invalid.
+func Register(ctx context.Context, logger logr.Logger, registry *cloudauth.Registry) error {
+	_, tenantIDDefined := os.LookupEnv(auth.TenantID)
+	_, clientIDDefined := os.LookupEnv(auth.ClientID)
+	if !(tenantIDDefined && clientIDDefined) {
+		logger.Info(fmt.Sprintf(
+			"ACR authentication provider not registered, %s or %s is absent", auth.TenantID, auth.ClientID,
+		))
+
+		return nil
+	}
+
+	provider, err := newProvider(ctx, logger)
 	if err != nil {
-		logger.Info("ACR not registered", "error", err)
-		if err == ErrNoCredentials {
-			return nil
-		}
-		return err
+		return fmt.Errorf("failed to create authentication provider: %w", err)
 	}
 
 	registry.Register(acrRegex, provider.authenticate)
-	logger.Info("ACR registered")
+	logger.Info("ACR authentication provider registered")
+
 	return nil
 }
 
-func newProvider(logger logr.Logger) (*acrProvider, error) {
+func newProvider(ctx context.Context, logger logr.Logger) (*acrProvider, error) {
 	settings, err := auth.GetSettingsFromEnvironment()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot get settings from env: %w", err)
 	}
 
-	// the minimum set of required values
-	if settings.Values[auth.TenantID] == "" || settings.Values[auth.ClientID] == "" {
-		return nil, ErrNoCredentials
-	}
+	var token *adal.ServicePrincipalToken
 
-	var spt *adal.ServicePrincipalToken
 	if cc, err := settings.GetClientCredentials(); err == nil {
-		if spt, err = cc.ServicePrincipalToken(); err != nil {
-			return nil, err
+		if token, err = cc.ServicePrincipalToken(); err != nil {
+			return nil, fmt.Errorf("retrieving service principal token failed: %w", err)
 		}
 	} else {
-		ctx := context.Background()
 		err = retry(ctx, logger, 3, func() error {
-			spt, err = settings.GetMSI().ServicePrincipalToken()
+			token, err = settings.GetMSI().ServicePrincipalToken()
 			return err
 		})
 
 		if err != nil {
-			// IMDS can take some time to setup, restart the process
-			return nil, fmt.Errorf("retreiving Service Principal Token from MSI failed: %w", err)
+			// IMDS can take some time to set up, restart the process
+			return nil, fmt.Errorf("retreiving service principal token from MSI failed: %w", err)
 		}
 	}
 
 	return &acrProvider{
-		logger:                logger.WithName("acrProvider"),
+		logger:                logger.WithName("acr-auth-provider"),
 		tenantID:              settings.Values[auth.TenantID],
-		servicePrincipalToken: spt,
+		servicePrincipalToken: token,
 	}, nil
 }
 
 func (a *acrProvider) authenticate(ctx context.Context, server string) (*types.AuthConfig, error) {
 	match := acrRegex.FindAllString(server, -1)
 	if len(match) != 1 {
-		return nil, fmt.Errorf("invalid acr url: %q should match %v", server, acrRegex)
+		return nil, fmt.Errorf("invalid ACR url: %q should match %v", server, acrRegex)
 	}
 
 	loginServer := match[0]
@@ -96,12 +96,12 @@ func (a *acrProvider) authenticate(ctx context.Context, server string) (*types.A
 		return a.servicePrincipalToken.EnsureFreshWithContext(ctx)
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to refresh AAD token: %w", err)
 	}
 
 	armAccessToken := a.servicePrincipalToken.OAuthToken()
 	loginServerURL := "https://" + loginServer
-	directive, err := cloudauth2.ChallengeLoginServer(ctx, loginServerURL)
+	directive, err := cloudauth.ChallengeLoginServer(ctx, loginServerURL)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func (a *acrProvider) authenticate(ctx context.Context, server string) (*types.A
 		armAccessToken,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to generate ACR refresh token: %w", err)
 	}
 
 	return &types.AuthConfig{
