@@ -45,8 +45,8 @@ type gcrProvider struct {
 	tokenSource oauth2.TokenSource
 }
 
-func Register(logger logr.Logger, registry *cloudauth2.Registry) error {
-	provider, err := newProvider(context.Background(), logger)
+func Register(ctx context.Context, logger logr.Logger, registry *cloudauth2.Registry) error {
+	provider, err := newProvider(ctx, logger)
 	if err != nil {
 		logger.Info("GCR not registered", "error", err)
 		if strings.Contains(err.Error(), "could not find default credentials") {
@@ -66,7 +66,7 @@ func newProvider(ctx context.Context, logger logr.Logger) (*gcrProvider, error) 
 		return nil, err
 	}
 
-	return &gcrProvider{logger: logger.WithName("gcrProvider"), tokenSource: creds.TokenSource}, nil
+	return &gcrProvider{logger: logger.WithName("gcr-auth-provider"), tokenSource: creds.TokenSource}, nil
 }
 
 func (g *gcrProvider) authenticate(ctx context.Context, server string) (*types.AuthConfig, error) {

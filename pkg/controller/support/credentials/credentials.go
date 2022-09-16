@@ -83,7 +83,7 @@ func Persist(ctx context.Context, cfg *rest.Config, credentials []hephv1.Registr
 		case pointer.BoolDeref(cred.CloudProvided, false):
 			pac, err := CloudAuthRegistry.RetrieveAuthorization(ctx, cred.Server)
 			if err != nil {
-				return "", err
+				return "", fmt.Errorf("cloud registry authorization failed: %w", err)
 			}
 
 			ac = *pac
@@ -142,14 +142,14 @@ func Verify(ctx context.Context, configDir string, insecureRegistries []string) 
 }
 
 // LoadCloudProviders adds all cloud authentication providers to the CloudAuthRegistry.
-func LoadCloudProviders(log logr.Logger) error {
-	if err := acr.Register(log, CloudAuthRegistry); err != nil {
+func LoadCloudProviders(ctx context.Context, log logr.Logger) error {
+	if err := acr.Register(ctx, log, CloudAuthRegistry); err != nil {
 		return fmt.Errorf("ACR registration failed: %w", err)
 	}
-	if err := ecr.Register(log, CloudAuthRegistry); err != nil {
+	if err := ecr.Register(ctx, log, CloudAuthRegistry); err != nil {
 		return fmt.Errorf("ECR registration failed: %w", err)
 	}
-	if err := gcr.Register(log, CloudAuthRegistry); err != nil {
+	if err := gcr.Register(ctx, log, CloudAuthRegistry); err != nil {
 		return fmt.Errorf("GCR registration failed: %w", err)
 	}
 

@@ -17,7 +17,7 @@ import (
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
 )
 
-func TestRegister(t *testing.T) {
+func TestRegisterIntegration(t *testing.T) {
 	if os.Getenv(auth.ClientSecret) == "" {
 		t.Skip("Skipping, azure not setup")
 	}
@@ -30,7 +30,7 @@ func TestRegister(t *testing.T) {
 	}
 }
 
-func TestRegisterNoSecret(t *testing.T) {
+func TestRegisterNoSecretIntegration(t *testing.T) {
 	secret := os.Getenv(auth.ClientSecret)
 	os.Unsetenv(auth.ClientSecret)
 	t.Cleanup(func() {
@@ -46,7 +46,7 @@ func TestRegisterNoSecret(t *testing.T) {
 	}
 }
 
-func TestAuthenticate(t *testing.T) {
+func TestAuthenticateIntegration(t *testing.T) {
 	if os.Getenv(auth.ClientSecret) == "" {
 		t.Skip("Skipping, azure not setup")
 	}

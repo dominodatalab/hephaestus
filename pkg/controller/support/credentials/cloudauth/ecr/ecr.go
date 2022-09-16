@@ -32,8 +32,8 @@ var (
 	)
 )
 
-func Register(logger logr.Logger, registry *cloudauth.Registry) error {
-	config, err := config.LoadDefaultConfig(context.Background(), config.WithEC2IMDSRegion())
+func Register(ctx context.Context, logger logr.Logger, registry *cloudauth.Registry) error {
+	config, err := config.LoadDefaultConfig(ctx, config.WithEC2IMDSRegion())
 	if err != nil {
 		logger.Info("ECR not registered", "error", err)
 		return nil
