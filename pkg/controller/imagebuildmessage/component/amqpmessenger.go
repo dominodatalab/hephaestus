@@ -226,7 +226,7 @@ func (c *AMQPMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 		publishOpts.Body = content
 
 		log.Info("Publishing transition message")
-		if err = publisher.Publish(publishOpts); err != nil {
+		if err = publisher.Publish(ctx, publishOpts); err != nil {
 			txn.NoticeError(newrelic.Error{
 				Message: err.Error(),
 				Class:   "MessagePublishError",
