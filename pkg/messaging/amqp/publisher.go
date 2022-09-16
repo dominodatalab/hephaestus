@@ -1,6 +1,7 @@
 package amqp
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -65,7 +66,7 @@ func NewPublisher(log logr.Logger, url string) (*Client, error) {
 	}, nil
 }
 
-func (p *Client) Publish(opts PublishOptions) error {
+func (p *Client) Publish(ctx context.Context, opts PublishOptions) error {
 	if err := p.ensureExchange(opts.ExchangeName); err != nil {
 		return err
 	}
@@ -82,7 +83,7 @@ func (p *Client) Publish(opts PublishOptions) error {
 	}
 
 	p.log.V(1).Info("Sending message to server", "exchange", opts.ExchangeName, "queue", opts.QueueName)
-	err := p.manager.Channel().Publish(opts.ExchangeName, opts.QueueName, MandatoryDelivery, ImmediateDelivery, message)
+	err := p.manager.Channel().PublishWithContext(ctx, opts.ExchangeName, opts.QueueName, MandatoryDelivery, ImmediateDelivery, message)
 	if err != nil {
 		return fmt.Errorf("message publishing failed: %w", err)
 	}
