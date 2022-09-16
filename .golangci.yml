@@ -75,3 +75,7 @@ issues:
       text: "waitForIstioSidecar"
       linters:
         - contextcheck
+    - path: pkg/controller/support/credentials/cloudauth/ecr/ecr.go
+      text: "NewFromConfig"
+      linters:
+        - contextcheck
