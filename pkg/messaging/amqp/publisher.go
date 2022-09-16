@@ -83,7 +83,14 @@ func (p *Client) Publish(ctx context.Context, opts PublishOptions) error {
 	}
 
 	p.log.V(1).Info("Sending message to server", "exchange", opts.ExchangeName, "queue", opts.QueueName)
-	err := p.manager.Channel().PublishWithContext(ctx, opts.ExchangeName, opts.QueueName, MandatoryDelivery, ImmediateDelivery, message)
+	err := p.manager.Channel().PublishWithContext(
+		ctx,
+		opts.ExchangeName,
+		opts.QueueName,
+		MandatoryDelivery,
+		ImmediateDelivery,
+		message,
+	)
 	if err != nil {
 		return fmt.Errorf("message publishing failed: %w", err)
 	}
