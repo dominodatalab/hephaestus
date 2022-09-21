@@ -7,8 +7,8 @@
 
 set -e
 
+# TODO: we should be able to select and test against different versions of k8s
 minikube start \
-  --kubernetes-version=v1.19.16 \
   --extra-config=apiserver.service-node-port-range=1-65535 \
   --cpus=4 \
   --memory=16g \

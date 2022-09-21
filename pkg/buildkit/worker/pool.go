@@ -15,7 +15,7 @@ import (
 	"github.com/go-logr/logr"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
-	discoveryv1beta1 "k8s.io/api/discovery/v1beta1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -25,7 +25,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	appsv1typed "k8s.io/client-go/kubernetes/typed/apps/v1"
 	corev1typed "k8s.io/client-go/kubernetes/typed/core/v1"
-	discoveryv1beta1typed "k8s.io/client-go/kubernetes/typed/discovery/v1beta1"
+	discoveryv1typed "k8s.io/client-go/kubernetes/typed/discovery/v1"
 	"k8s.io/utils/pointer"
 
 	"github.com/dominodatalab/hephaestus/pkg/config"
@@ -74,7 +74,7 @@ type AutoscalingPool struct {
 	podClient           corev1typed.PodInterface
 	nodeClient          corev1typed.NodeInterface
 	eventClient         corev1typed.EventInterface
-	endpointSliceClient discoveryv1beta1typed.EndpointSliceInterface
+	endpointSliceClient discoveryv1typed.EndpointSliceInterface
 
 	podListOptions            metav1.ListOptions
 	endpointSliceListOptions  metav1.ListOptions
@@ -121,7 +121,7 @@ func NewPool(
 		podClient:                 clientset.CoreV1().Pods(conf.Namespace),
 		nodeClient:                clientset.CoreV1().Nodes(),
 		eventClient:               clientset.CoreV1().Events(conf.Namespace),
-		endpointSliceClient:       clientset.DiscoveryV1beta1().EndpointSlices(conf.Namespace),
+		endpointSliceClient:       clientset.DiscoveryV1().EndpointSlices(conf.Namespace),
 		podListOptions:            podListOptions,
 		endpointSliceListOptions:  endpointSliceListOptions,
 		serviceName:               conf.ServiceName,
@@ -292,7 +292,7 @@ func (p *AutoscalingPool) buildEndpointURL(ctx context.Context, pod corev1.Pod) 
 
 	start := time.Now()
 	for event := range watcher.ResultChan() {
-		endpointSlice := event.Object.(*discoveryv1beta1.EndpointSlice)
+		endpointSlice := event.Object.(*discoveryv1.EndpointSlice)
 
 		if hostname = p.extractHostname(endpointSlice, pod.Name); hostname != "" {
 			break
@@ -319,7 +319,7 @@ func (p *AutoscalingPool) buildEndpointURL(ctx context.Context, pod corev1.Pod) 
 }
 
 // generates internal hostname for pod using an endpoint slice
-func (p *AutoscalingPool) extractHostname(epSlice *discoveryv1beta1.EndpointSlice, podName string) (hostname string) {
+func (p *AutoscalingPool) extractHostname(epSlice *discoveryv1.EndpointSlice, podName string) (hostname string) {
 	var portPresent bool
 	for _, port := range epSlice.Ports {
 		if pointer.Int32Deref(port.Port, 0) == p.servicePort {
