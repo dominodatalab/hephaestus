@@ -87,7 +87,7 @@ func (a *acrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 	logger.WithName("acr-auth-provider")
 	match := acrRegex.FindAllString(server, -1)
 	if len(match) != 1 {
-		logger.V(2).Info("Invalid ACR url. ", server, "should match", acrRegex)
+		logger.V(2).Info(fmt.Sprintf("Invalid ACR url. %s should match %s", server, acrRegex))
 		return nil, fmt.Errorf("invalid ACR url: %q should match %v", server, acrRegex)
 	}
 

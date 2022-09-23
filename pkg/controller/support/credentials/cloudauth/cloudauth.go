@@ -19,7 +19,11 @@ type Registry struct {
 
 // RetrieveAuthorization will multiplex registered auth loaders based on url pattern and use the appropriate one to
 // make an authorization request. The returned value can be marshalled into the contents of a Docker config.json file.
-func (r *Registry) RetrieveAuthorization(ctx context.Context, logger logr.Logger, server string) (*types.AuthConfig, error) {
+func (r *Registry) RetrieveAuthorization(
+	ctx context.Context,
+	logger logr.Logger,
+	server string,
+) (*types.AuthConfig, error) {
 	for r, loader := range r.loaders {
 		if r.MatchString(server) {
 			return loader(ctx, logger, server)

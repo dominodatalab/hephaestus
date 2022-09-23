@@ -38,7 +38,12 @@ type DockerConfigJSON struct {
 	Auths AuthConfigs `json:"auths"`
 }
 
-func Persist(ctx context.Context, logger logr.Logger, cfg *rest.Config, credentials []hephv1.RegistryCredentials) (string, error) {
+func Persist(
+	ctx context.Context,
+	logger logr.Logger,
+	cfg *rest.Config,
+	credentials []hephv1.RegistryCredentials,
+) (string, error) {
 	dir, err := os.MkdirTemp("", "docker-config-")
 	if err != nil {
 		return "", err

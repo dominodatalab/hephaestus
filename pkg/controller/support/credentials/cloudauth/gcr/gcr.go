@@ -74,7 +74,7 @@ func (g *gcrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 
 	match := gcrRegex.FindAllString(server, -1)
 	if len(match) != 1 {
-		logger.V(2).Info("Invalid gcr url ", server, " should match ", gcrRegex)
+		logger.V(2).Info(fmt.Sprintf("Invalid gcr url %s should match %s", server, gcrRegex))
 		return nil, fmt.Errorf("invalid gcr url: %q should match %v", server, gcrRegex)
 	}
 
@@ -105,7 +105,7 @@ func (g *gcrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 	req.URL.User = url.UserPassword("oauth2accesstoken", token.AccessToken)
 	resp, err := defaultClient.Do(req)
 	if err != nil {
-		logger.Error(err, "Unable to make a request to: ", req.URL)
+		logger.Error(err, fmt.Sprintf("Unable to make a request to: %s", req.URL))
 		return nil, err
 	}
 
@@ -117,7 +117,7 @@ func (g *gcrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		logger.Info("Failed to obtain token. Received status code: ", resp.StatusCode)
+		logger.Info(fmt.Sprintf("Failed to obtain token. Received status code: %d", resp.StatusCode))
 		return nil, fmt.Errorf("failed to obtain token:\n %s", content)
 	}
 
@@ -139,7 +139,7 @@ func (g *gcrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 		return nil, fmt.Errorf("no token in bearer response:\n%s", content)
 	}
 
-	logger.Info("Sucessfully authenticated with gcr.")
+	logger.Info("Successfully authenticated with gcr.")
 	// buildkit only supports username/password
 	return &types.AuthConfig{
 		Username: "oauth2accesstoken",
