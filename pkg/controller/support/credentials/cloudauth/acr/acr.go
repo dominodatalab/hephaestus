@@ -25,7 +25,6 @@ const acrUserForRefreshToken = "00000000-0000-0000-0000-000000000000"
 var acrRegex = regexp.MustCompile(`.*\.azurecr\.io|.*\.azurecr\.cn|.*\.azurecr\.de|.*\.azurecr\.us`)
 
 type acrProvider struct {
-	logger                logr.Logger
 	tenantID              string
 	servicePrincipalToken *adal.ServicePrincipalToken
 }
@@ -79,23 +78,25 @@ func newProvider(ctx context.Context, logger logr.Logger) (*acrProvider, error) 
 	}
 
 	return &acrProvider{
-		logger:                logger.WithName("acr-auth-provider"),
 		tenantID:              settings.Values[auth.TenantID],
 		servicePrincipalToken: token,
 	}, nil
 }
 
-func (a *acrProvider) authenticate(ctx context.Context, server string) (*types.AuthConfig, error) {
+func (a *acrProvider) authenticate(ctx context.Context, logger logr.Logger, server string) (*types.AuthConfig, error) {
+	logger.WithName("acr-auth-provider")
 	match := acrRegex.FindAllString(server, -1)
 	if len(match) != 1 {
+		logger.V(2).Info("Invalid ACR url. ", server, "should match", acrRegex)
 		return nil, fmt.Errorf("invalid ACR url: %q should match %v", server, acrRegex)
 	}
 
 	loginServer := match[0]
-	err := retry(ctx, a.logger, 3, func() error {
+	err := retry(ctx, logger, 3, func() error {
 		return a.servicePrincipalToken.EnsureFreshWithContext(ctx)
 	})
 	if err != nil {
+		logger.Error(err, "Failed to refresh AAD token.")
 		return nil, fmt.Errorf("failed to refresh AAD token: %w", err)
 	}
 
@@ -103,6 +104,7 @@ func (a *acrProvider) authenticate(ctx context.Context, server string) (*types.A
 	loginServerURL := "https://" + loginServer
 	directive, err := cloudauth.ChallengeLoginServer(ctx, loginServerURL)
 	if err != nil {
+		logger.Error(err, "ACR cloud authentication failed.")
 		return nil, err
 	}
 
@@ -116,9 +118,11 @@ func (a *acrProvider) authenticate(ctx context.Context, server string) (*types.A
 		armAccessToken,
 	)
 	if err != nil {
+		logger.Error(err, "Token refresh failed.")
 		return nil, fmt.Errorf("failed to generate ACR refresh token: %w", err)
 	}
 
+	logger.Info("Successfully authenticated with ACR")
 	return &types.AuthConfig{
 		Username: acrUserForRefreshToken,
 		Password: to.String(refreshToken.RefreshToken),

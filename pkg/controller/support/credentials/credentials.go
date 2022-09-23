@@ -38,7 +38,7 @@ type DockerConfigJSON struct {
 	Auths AuthConfigs `json:"auths"`
 }
 
-func Persist(ctx context.Context, cfg *rest.Config, credentials []hephv1.RegistryCredentials) (string, error) {
+func Persist(ctx context.Context, logger logr.Logger, cfg *rest.Config, credentials []hephv1.RegistryCredentials) (string, error) {
 	dir, err := os.MkdirTemp("", "docker-config-")
 	if err != nil {
 		return "", err
@@ -81,7 +81,7 @@ func Persist(ctx context.Context, cfg *rest.Config, credentials []hephv1.Registr
 				Password: cred.BasicAuth.Password,
 			}
 		case pointer.BoolDeref(cred.CloudProvided, false):
-			pac, err := CloudAuthRegistry.RetrieveAuthorization(ctx, cred.Server)
+			pac, err := CloudAuthRegistry.RetrieveAuthorization(ctx, logger, cred.Server)
 			if err != nil {
 				return "", fmt.Errorf("cloud registry authorization failed: %w", err)
 			}
