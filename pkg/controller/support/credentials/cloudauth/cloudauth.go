@@ -3,10 +3,10 @@ package cloudauth
 import (
 	"context"
 	"errors"
-	"github.com/go-logr/logr"
 	"regexp"
 
 	"github.com/docker/docker/api/types"
+	"github.com/go-logr/logr"
 )
 
 var ErrNoLoader = errors.New("no loader found")
