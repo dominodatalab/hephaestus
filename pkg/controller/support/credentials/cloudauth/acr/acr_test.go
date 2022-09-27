@@ -3,6 +3,7 @@ package acr
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/services/preview/containerregistry/runtime/2019-08-15-preview/containerregistry"
@@ -37,18 +38,50 @@ func TestAuthenticate(t *testing.T) {
 	observerCore, observedLogs := observer.New(zap.DebugLevel)
 	log := zapr.NewLogger(zap.New(observerCore))
 
-	t.Run("invalid_server", func(t *testing.T) {
-		_, err := provider.authenticate(ctx, log, "test-server")
-
-		require.Error(t, err)
-		assert.Equal(t, `ACR URL is invalid: "test-server" should match pattern .*\.azurecr\.io|.*\.azurecr\.cn|.*\.azurecr\.de|.*\.azurecr\.us`, observedLogs.All()[0].Message)
-	})
-
 	t.Run("success", func(t *testing.T) {
 		authConfig, err := provider.authenticate(ctx, log, "foo.azurecr.us")
 
 		require.NoError(t, err)
 		assert.Equal(t, &types.AuthConfig{Username: acrUserForRefreshToken}, authConfig)
+		assert.Equal(t, "Successfully authenticated with ACR", observedLogs.All()[observedLogs.Len()-1].Message)
+	})
+
+	t.Run("invalid_server", func(t *testing.T) {
+		_, err := provider.authenticate(ctx, log, "test-server")
+
+		require.Error(t, err)
+		assert.Equal(t, fmt.Sprintf(`ACR URL is invalid: "test-server" should match pattern %s`, acrRegex),
+			observedLogs.All()[observedLogs.Len()-1].Message)
+	})
+
+	defaultRefreshTokensClient = func(loginURL string) containerregistryapi.RefreshTokensClientAPI {
+		return &fakeRefreshTokensClient{
+			errOut: true,
+		}
+	}
+
+	t.Run("failed_get_from_exchange", func(t *testing.T) {
+		_, err := provider.authenticate(ctx, log, "foo.azurecr.us")
+
+		require.Error(t, err)
+		assert.Equal(t, "Token refresh failed.", observedLogs.All()[observedLogs.Len()-1].Message)
+		assert.Equal(t, "failed to generate ACR refresh token: get from exchange error", err.Error())
+	})
+
+	provider = &acrProvider{
+		tenantID: "test-tenant-id",
+		servicePrincipalToken: fakeServicePrincipalToken{
+			errOut: true,
+		},
+	}
+
+	t.Run("failed_refresh_exchange", func(t *testing.T) {
+		_, err := provider.authenticate(ctx, log, "foo.azurecr.us")
+
+		require.Error(t, err)
+		assert.Equal(t, "Failed to refresh AAD token.", observedLogs.All()[observedLogs.Len()-1].Message)
+		assert.Equal(t, "failed to refresh AAD token: failed to refresh principal token", err.Error())
+
 	})
 }
 
@@ -74,8 +107,13 @@ func (f fakeServicePrincipalToken) OAuthToken() string {
 	return "test-oauth-token"
 }
 
-type fakeRefreshTokensClient struct{}
+type fakeRefreshTokensClient struct {
+	errOut bool
+}
 
 func (f fakeRefreshTokensClient) GetFromExchange(ctx context.Context, grantType string, service string, tenant string, refreshToken string, accessToken string) (result containerregistry.RefreshToken, err error) {
+	if f.errOut {
+		return containerregistry.RefreshToken{}, errors.New("get from exchange error")
+	}
 	return containerregistry.RefreshToken{}, nil
 }
