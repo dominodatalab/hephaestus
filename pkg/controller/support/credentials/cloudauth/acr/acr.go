@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/preview/containerregistry/runtime/2019-08-15-preview/containerregistry"
+	"github.com/Azure/azure-sdk-for-go/services/preview/containerregistry/runtime/2019-08-15-preview/containerregistry/containerregistryapi"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
@@ -22,11 +23,25 @@ import (
 
 const acrUserForRefreshToken = "00000000-0000-0000-0000-000000000000"
 
-var acrRegex = regexp.MustCompile(`.*\.azurecr\.io|.*\.azurecr\.cn|.*\.azurecr\.de|.*\.azurecr\.us`)
+var (
+	acrRegex                                           = regexp.MustCompile(`.*\.azurecr\.io|.*\.azurecr\.cn|.*\.azurecr\.de|.*\.azurecr\.us`)
+	defaultRefreshTokensClient refreshTokensClientFunc = func(loginURL string) containerregistryapi.RefreshTokensClientAPI {
+		obj := containerregistry.NewRefreshTokensClient(loginURL)
+		return &obj
+	}
+	defaultChallengeLoginServer = cloudauth.ChallengeLoginServer
+)
+
+type refreshTokensClientFunc func(loginURL string) containerregistryapi.RefreshTokensClientAPI
+
+type refresherWithContextAndOAuthToken interface {
+	adal.RefresherWithContext
+	adal.OAuthTokenProvider
+}
 
 type acrProvider struct {
 	tenantID              string
-	servicePrincipalToken *adal.ServicePrincipalToken
+	servicePrincipalToken refresherWithContextAndOAuthToken
 }
 
 // Register will instantiate a new authentication provider whenever the AZURE_TENANT_ID or AZURE_CLIENT_ID envvars are
@@ -84,11 +99,14 @@ func newProvider(ctx context.Context, logger logr.Logger) (*acrProvider, error) 
 }
 
 func (a *acrProvider) authenticate(ctx context.Context, logger logr.Logger, server string) (*types.AuthConfig, error) {
-	logger.WithName("acr-auth-provider")
+	logger = logger.WithName("acr-auth-provider")
+
 	match := acrRegex.FindAllString(server, -1)
 	if len(match) != 1 {
-		logger.V(2).Info(fmt.Sprintf("Invalid ACR url. %s should match %s", server, acrRegex))
-		return nil, fmt.Errorf("invalid ACR url: %q should match %v", server, acrRegex)
+		err := fmt.Errorf("ACR URL is invalid: %q should match pattern %v", server, acrRegex)
+		logger.Info(err.Error())
+
+		return nil, err
 	}
 
 	loginServer := match[0]
@@ -102,13 +120,13 @@ func (a *acrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 
 	armAccessToken := a.servicePrincipalToken.OAuthToken()
 	loginServerURL := "https://" + loginServer
-	directive, err := cloudauth.ChallengeLoginServer(ctx, loginServerURL)
+	directive, err := defaultChallengeLoginServer(ctx, loginServerURL)
 	if err != nil {
 		logger.Error(err, "ACR cloud authentication failed.")
 		return nil, err
 	}
 
-	refreshClient := containerregistry.NewRefreshTokensClient(loginServerURL)
+	refreshClient := defaultRefreshTokensClient(loginServerURL)
 	refreshToken, err := refreshClient.GetFromExchange(
 		ctx,
 		"access_token",

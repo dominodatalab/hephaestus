@@ -17,7 +17,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 
-	cloudauth2 "github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
 )
 
 const cloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform"
@@ -45,7 +45,7 @@ type gcrProvider struct {
 	tokenSource oauth2.TokenSource
 }
 
-func Register(ctx context.Context, logger logr.Logger, registry *cloudauth2.Registry) error {
+func Register(ctx context.Context, logger logr.Logger, registry *cloudauth.Registry) error {
 	provider, err := newProvider(ctx, logger)
 	if err != nil {
 		logger.Info("GCR not registered", "error", err)
@@ -85,7 +85,7 @@ func (g *gcrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 	}
 
 	loginServerURL := "https://" + match[0]
-	directive, err := cloudauth2.ChallengeLoginServer(ctx, loginServerURL)
+	directive, err := cloudauth.ChallengeLoginServer(ctx, loginServerURL)
 	if err != nil {
 		logger.Error(err, "Failed gcr cloud authentication.")
 		return nil, err
