@@ -23,6 +23,10 @@ import (
 const cloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform"
 
 var (
+	defaultChallengeLoginServer = cloudauth.ChallengeLoginServer
+)
+
+var (
 	gcrRegex      = regexp.MustCompile(`.*-docker\.pkg\.dev|(?:.*\.)?gcr\.io`)
 	defaultClient = &http.Client{
 		Transport: &http.Transport{
@@ -70,24 +74,23 @@ func newProvider(ctx context.Context, logger logr.Logger) (*gcrProvider, error) 
 }
 
 func (g *gcrProvider) authenticate(ctx context.Context, logger logr.Logger, server string) (*types.AuthConfig, error) {
-	logger.WithName("gcr-auth-provider")
-
 	match := gcrRegex.FindAllString(server, -1)
 	if len(match) != 1 {
-		logger.V(2).Info(fmt.Sprintf("Invalid gcr url %s should match %s", server, gcrRegex))
+		err := fmt.Errorf(fmt.Sprintf("Invalid gcr url %s should match %s", server, gcrRegex))
+		logger.Info(err.Error())
 		return nil, fmt.Errorf("invalid gcr url: %q should match %v", server, gcrRegex)
 	}
 
 	token, err := g.tokenSource.Token()
 	if err != nil {
-		logger.Error(err, "Unable to access gcr token.")
+		logger.Info("Unable to access gcr token.")
 		return nil, err
 	}
 
 	loginServerURL := "https://" + match[0]
-	directive, err := cloudauth.ChallengeLoginServer(ctx, loginServerURL)
+	directive, err := defaultChallengeLoginServer(ctx, loginServerURL)
 	if err != nil {
-		logger.Error(err, "Failed gcr cloud authentication.")
+		logger.Info("Failed gcr cloud authentication.")
 		return nil, err
 	}
 

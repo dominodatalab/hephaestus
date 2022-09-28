@@ -39,7 +39,7 @@ func TestAuthenticate(t *testing.T) {
 			"foo.azurecr.us",
 			createProvider("test-tenantId", fakeServicePrincipalToken{}),
 			createDefaultRefreshTokensClient(false),
-			createDefaultChallengeLoginServer("test-service", "test-realm", nil),
+			cloudauth.CreateDefaultChallengeLoginServer("test-service", "test-realm", nil),
 			&types.AuthConfig{Username: acrUserForRefreshToken},
 			"Successfully authenticated with ACR",
 			nil,
@@ -49,7 +49,7 @@ func TestAuthenticate(t *testing.T) {
 			"test-server",
 			createProvider("test-tenantId", fakeServicePrincipalToken{}),
 			createDefaultRefreshTokensClient(false),
-			createDefaultChallengeLoginServer("", "", nil),
+			cloudauth.CreateDefaultChallengeLoginServer("", "", nil),
 			nil,
 			fmt.Sprintf(`ACR URL is invalid: "test-server" should match pattern %s`, acrRegex),
 			invalidServerErr,
@@ -59,7 +59,7 @@ func TestAuthenticate(t *testing.T) {
 			"foo.azurecr.us",
 			createProvider("test-tenantId", fakeServicePrincipalToken{}),
 			createDefaultRefreshTokensClient(true),
-			createDefaultChallengeLoginServer("", "", nil),
+			cloudauth.CreateDefaultChallengeLoginServer("", "", nil),
 			nil,
 			"Token refresh failed.",
 			acrGetExchangeErr,
@@ -69,7 +69,7 @@ func TestAuthenticate(t *testing.T) {
 			"foo.azurecr.us",
 			createProvider("test-tenantId", fakeServicePrincipalToken{errOut: true}),
 			createDefaultRefreshTokensClient(false),
-			createDefaultChallengeLoginServer("", "", nil),
+			cloudauth.CreateDefaultChallengeLoginServer("", "", nil),
 			nil,
 			"Failed to refresh AAD token.",
 			aadTokenErr,
@@ -79,7 +79,7 @@ func TestAuthenticate(t *testing.T) {
 			"foo.azurecr.us",
 			createProvider("test-tenantId", fakeServicePrincipalToken{}),
 			createDefaultRefreshTokensClient(false),
-			createDefaultChallengeLoginServer("", "", challengeServerErr),
+			cloudauth.CreateDefaultChallengeLoginServer("", "", challengeServerErr),
 			nil,
 			"ACR cloud authentication failed.",
 			aadTokenErr,
@@ -94,6 +94,7 @@ func TestAuthenticate(t *testing.T) {
 			defaultRefreshTokensClient = tt.defaultRefreshTokensClient
 
 			authConfig, err := tt.provider.authenticate(ctx, log, tt.serverName)
+			assert.Equal(t, tt.authConfig, authConfig)
 
 			// Compare expected error condition.
 			if tt.expectedError == nil {
@@ -105,12 +106,9 @@ func TestAuthenticate(t *testing.T) {
 
 			// Compare expected log messages.
 			logLen := observedLogs.Len()
-			if logLen > 0 {
-				recentLogMessage := observedLogs.All()[observedLogs.Len()-1].Message
-				assert.Equal(t, tt.expectedLogMessage, recentLogMessage)
-			}
-
-			assert.Equal(t, tt.authConfig, authConfig)
+			require.GreaterOrEqual(t, logLen, 1)
+			recentLogMessage := observedLogs.All()[observedLogs.Len()-1].Message
+			assert.Equal(t, tt.expectedLogMessage, recentLogMessage)
 		})
 	}
 }
@@ -148,28 +146,11 @@ func (f fakeRefreshTokensClient) GetFromExchange(_ context.Context, _, _, _, _, 
 	return
 }
 
-// helpers
+// Helper functions
 func createProvider(tenantId string, servicePrincipalToken fakeServicePrincipalToken) *acrProvider {
 	return &acrProvider{
 		tenantID:              tenantId,
 		servicePrincipalToken: servicePrincipalToken,
-	}
-}
-
-func createDefaultChallengeLoginServer(
-	serviceName,
-	realmName string,
-	expectedErr error,
-) func(ctx context.Context, loginServerURL string) (*cloudauth.AuthDirective, error) {
-	var err error
-	if expectedErr != nil {
-		err = expectedErr
-	}
-	return func(ctx context.Context, loginServerURL string) (*cloudauth.AuthDirective, error) {
-		return &cloudauth.AuthDirective{
-			Service: serviceName,
-			Realm:   realmName,
-		}, err
 	}
 }
 

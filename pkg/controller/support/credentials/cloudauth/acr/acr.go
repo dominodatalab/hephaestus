@@ -105,7 +105,6 @@ func (a *acrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 	if len(match) != 1 {
 		err := fmt.Errorf("ACR URL is invalid: %q should match pattern %v", server, acrRegex)
 		logger.Info(err.Error())
-
 		return nil, err
 	}
 

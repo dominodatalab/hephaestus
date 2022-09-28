@@ -1,102 +1,108 @@
-//go:build integration
-// +build integration
-
 package gcr
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"net/http"
-	"os"
-	"testing"
-
-	"github.com/go-logr/logr"
-
+	"github.com/docker/docker/api/types"
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
+	"github.com/go-logr/zapr"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
+	"golang.org/x/oauth2"
+	"testing"
 )
 
-var envCredentials = "GOOGLE_APPLICATION_CREDENTIALS"
+var (
+	defaultTestingErr = errors.New("seals are sea puppies")
+)
 
-func TestRegister(t *testing.T) {
-	if os.Getenv(envCredentials) == "" {
-		t.Skip("Skipping, gcp not setup")
-	}
-
-	registry := &cloudauth.Registry{}
-
-	err := Register(context.TODO(), logr.Discard(), registry)
-	if err != nil {
-		t.Error(err)
-	}
+type fakeOauth2TokenSource struct {
+	errOut bool
 }
 
-func TestRegisterNoCredentials(t *testing.T) {
-	secret := os.Getenv(envCredentials)
-	os.Unsetenv(envCredentials)
-	t.Cleanup(func() {
-		os.Setenv(envCredentials, secret)
-	})
-
-	registry := &cloudauth.Registry{}
-	err := Register(context.TODO(), logr.Discard(), registry)
-	if err != nil {
-		t.Error(err)
+func (f *fakeOauth2TokenSource) Token() (*oauth2.Token, error) {
+	if f.errOut {
+		return nil, defaultTestingErr
 	}
+	return nil, nil
 }
 
 func TestAuthenticate(t *testing.T) {
-	if os.Getenv(envCredentials) == "" {
-		t.Skip("Skipping, gcp not setup")
-	}
-
-	p, err := newProvider(context.TODO(), logr.Discard())
-	if err != nil {
-		t.Fatal(err)
-	}
+	invalidServerError := errors.New("invalid gcr url: \"test-server\" should match .*-docker\\.pkg\\.dev|(?:.*\\.)?gcr\\.io")
 
 	ctx := context.Background()
-	t.Run("invalid url", func(t *testing.T) {
-		auth, err := p.authenticate(ctx, "bogus.g.io")
-		if err == nil {
-			t.Error("unexpected error")
-		}
-		if auth != nil {
-			t.Errorf("auth not nil")
-		}
-	})
+	observerCore, observedLogs := observer.New(zap.DebugLevel)
+	log := zapr.NewLogger(zap.New(observerCore))
 
-	t.Run("valid url", func(t *testing.T) {
-		for _, tt := range []struct {
-			name string
-		}{
-			{"gcr.io"},
-			{"us-west1-docker.pkg.dev"},
-		} {
-			t.Run(tt.name, func(t *testing.T) {
-				auth, err := p.authenticate(ctx, tt.name)
-				if err != nil {
-					t.Fatalf("%#v", err)
-				}
-				if auth.Username == "" || auth.Password == "" || auth.RegistryToken == "" {
-					t.Fatalf("incorrect auth config: %v", auth)
-				}
+	for _, tt := range []struct {
+		name                        string
+		serverName                  string
+		provider                    *gcrProvider
+		authConfig                  *types.AuthConfig
+		defaultChallengeLoginServer func(ctx context.Context, loginServerURL string) (*cloudauth.AuthDirective, error)
+		expectedLogMessage          string
+		expectedError               error
+	}{
+		{
+			"invalid-url",
+			"test-server",
+			&gcrProvider{
+				logger:      log,
+				tokenSource: nil,
+			},
+			nil,
+			defaultChallengeLoginServer,
+			fmt.Sprintf("Invalid gcr url test-server should match %s", gcrRegex),
+			invalidServerError,
+		},
+		{
+			"oauth2-error",
+			"gcr.io",
+			&gcrProvider{
+				logger:      log,
+				tokenSource: &fakeOauth2TokenSource{errOut: true},
+			},
+			nil,
+			defaultChallengeLoginServer,
+			"Unable to access gcr token.",
+			defaultTestingErr,
+		},
+		{
+			"failed-challenge-server-error",
+			"gcr.io",
+			&gcrProvider{
+				logger:      log,
+				tokenSource: &fakeOauth2TokenSource{},
+			},
+			nil,
+			cloudauth.CreateDefaultChallengeLoginServer(
+				"serviceName",
+				"realmName",
+				defaultTestingErr),
+			"Failed gcr cloud authentication.",
+			defaultTestingErr,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			defaultChallengeLoginServer = tt.defaultChallengeLoginServer
+			
+			authConfig, err := tt.provider.authenticate(ctx, log, tt.serverName)
+			assert.Equal(t, tt.authConfig, authConfig)
 
-				// verify the registry token
-				req, err := http.NewRequestWithContext(ctx, "GET", "https://"+tt.name+"/v2/", nil)
-				if err != nil {
-					t.Fatal(err)
-				}
-				req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", auth.RegistryToken))
-				resp, err := defaultClient.Do(req)
-				if err != nil {
-					t.Fatal(err)
-				}
-				defer resp.Body.Close()
+			if tt.expectedError != nil {
+				require.Error(t, err)
+				assert.Equal(t, err.Error(), tt.expectedError.Error())
+			} else {
+				require.NoError(t, err)
+			}
 
-				if resp.StatusCode != 200 {
-					t.Fatalf("non 200 status code: %d", resp.StatusCode)
-				}
-			})
-		}
-	})
+			logLen := observedLogs.Len()
+			require.GreaterOrEqual(t, logLen, 1)
+			recentLogMessage := observedLogs.All()[logLen-1].Message
+			assert.Equal(t, tt.expectedLogMessage, recentLogMessage)
+		})
+	}
 }
