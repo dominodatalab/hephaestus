@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/docker/docker/api/types"
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth/cloudauthtest"
 	"github.com/go-logr/zapr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -78,7 +79,7 @@ func TestAuthenticate(t *testing.T) {
 				tokenSource: &fakeOauth2TokenSource{},
 			},
 			nil,
-			cloudauth.CreateDefaultChallengeLoginServer(
+			cloudauthtest.FakeChallengeLoginServer(
 				"serviceName",
 				"realmName",
 				defaultTestingErr),
@@ -88,7 +89,7 @@ func TestAuthenticate(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			defaultChallengeLoginServer = tt.defaultChallengeLoginServer
-			
+
 			authConfig, err := tt.provider.authenticate(ctx, log, tt.serverName)
 			assert.Equal(t, tt.authConfig, authConfig)
 

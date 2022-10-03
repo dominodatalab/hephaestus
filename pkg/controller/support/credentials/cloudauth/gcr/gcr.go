@@ -22,9 +22,7 @@ import (
 
 const cloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform"
 
-var (
-	defaultChallengeLoginServer = cloudauth.ChallengeLoginServer
-)
+var defaultChallengeLoginServer = cloudauth.ChallengeLoginServer
 
 var (
 	gcrRegex      = regexp.MustCompile(`.*-docker\.pkg\.dev|(?:.*\.)?gcr\.io`)
@@ -78,6 +76,7 @@ func (g *gcrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 	if len(match) != 1 {
 		err := fmt.Errorf(fmt.Sprintf("Invalid gcr url %s should match %s", server, gcrRegex))
 		logger.Info(err.Error())
+
 		return nil, fmt.Errorf("invalid gcr url: %q should match %v", server, gcrRegex)
 	}
 

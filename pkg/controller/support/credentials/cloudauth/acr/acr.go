@@ -103,6 +103,7 @@ func (a *acrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 	if len(match) != 1 {
 		err := fmt.Errorf("ACR URL is invalid: %q should match pattern %v", server, acrRegex)
 		logger.Info(err.Error())
+
 		return nil, err
 	}
 
@@ -110,16 +111,21 @@ func (a *acrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 	err := retry(ctx, logger, 3, func() error {
 		return a.servicePrincipalToken.EnsureFreshWithContext(ctx)
 	})
+
 	if err != nil {
-		logger.Error(err, "Failed to refresh AAD token.")
-		return nil, fmt.Errorf("failed to refresh AAD token: %w", err)
+		err = fmt.Errorf("AAD token refresh failure: %w", err)
+		logger.Info(err.Error())
+
+		return nil, err
 	}
 
 	armAccessToken := a.servicePrincipalToken.OAuthToken()
 	loginServerURL := "https://" + loginServer
 	directive, err := defaultChallengeLoginServer(ctx, loginServerURL)
 	if err != nil {
-		logger.Error(err, "ACR cloud authentication failed.")
+		err = fmt.Errorf("ACR registry %q is unusable: %w", loginServerURL, err)
+		logger.Info(err.Error())
+
 		return nil, err
 	}
 
@@ -133,11 +139,13 @@ func (a *acrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 		armAccessToken,
 	)
 	if err != nil {
-		logger.Error(err, "Token refresh failed.")
-		return nil, fmt.Errorf("failed to generate ACR refresh token: %w", err)
+		err = fmt.Errorf("failed to generate ACR refresh token: %w", err)
+		logger.Info(err.Error())
+
+		return nil, err
 	}
 
-	logger.Info("Successfully authenticated with ACR")
+	logger.Info(fmt.Sprintf("Successfully authenticated with ACR %q", server))
 	return &types.AuthConfig{
 		Username: acrUserForRefreshToken,
 		Password: to.String(refreshToken.RefreshToken),
