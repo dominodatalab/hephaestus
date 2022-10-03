@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/preview/containerregistry/runtime/2019-08-15-preview/containerregistry"
-	"github.com/Azure/azure-sdk-for-go/services/preview/containerregistry/runtime/2019-08-15-preview/containerregistry/containerregistryapi"
+	cra "github.com/Azure/azure-sdk-for-go/services/preview/containerregistry/runtime/2019-08-15-preview/containerregistry/containerregistryapi"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
@@ -23,16 +23,14 @@ import (
 
 const acrUserForRefreshToken = "00000000-0000-0000-0000-000000000000"
 
-var (
-	acrRegex                                           = regexp.MustCompile(`.*\.azurecr\.io|.*\.azurecr\.cn|.*\.azurecr\.de|.*\.azurecr\.us`)
-	defaultRefreshTokensClient refreshTokensClientFunc = func(loginURL string) containerregistryapi.RefreshTokensClientAPI {
-		obj := containerregistry.NewRefreshTokensClient(loginURL)
-		return &obj
-	}
-	defaultChallengeLoginServer = cloudauth.ChallengeLoginServer
-)
+var acrRegex = regexp.MustCompile(`.*\.azurecr\.io|.*\.azurecr\.cn|.*\.azurecr\.de|.*\.azurecr\.us`)
+var defaultRefreshTokensClient refreshTokensClientFunc = func(loginURL string) cra.RefreshTokensClientAPI {
+	obj := containerregistry.NewRefreshTokensClient(loginURL)
+	return &obj
+}
+var defaultChallengeLoginServer = cloudauth.ChallengeLoginServer
 
-type refreshTokensClientFunc func(loginURL string) containerregistryapi.RefreshTokensClientAPI
+type refreshTokensClientFunc func(loginURL string) cra.RefreshTokensClientAPI
 
 type refresherWithContextAndOAuthToken interface {
 	adal.RefresherWithContext
