@@ -1,9 +1,9 @@
 package cloudauthtest
 
 import (
-	"context"
-
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
+
+	"context"
 )
 
 type LoginChallenger func(ctx context.Context, loginServerURL string) (*cloudauth.AuthDirective, error)
