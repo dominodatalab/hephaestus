@@ -82,21 +82,27 @@ func (g *gcrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 
 	token, err := g.tokenSource.Token()
 	if err != nil {
-		logger.Info("Unable to access gcr token.")
+		err = fmt.Errorf("unable to access gcr token from oauth: %w", err)
+		logger.Info(err.Error())
+
 		return nil, err
 	}
 
 	loginServerURL := "https://" + match[0]
 	directive, err := defaultChallengeLoginServer(ctx, loginServerURL)
 	if err != nil {
-		logger.Info("Failed gcr cloud authentication.")
+		err = fmt.Errorf("GCR registry %q is unusable: %w", loginServerURL, err)
+		logger.Info(err.Error())
+
 		return nil, err
 	}
 
 	// obtain the registry token
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, directive.Realm, nil)
 	if err != nil {
-		logger.Error(err, "Unable to access registry token.")
+		err = fmt.Errorf("unable to create new request: %w", err)
+		logger.Info(err.Error())
+
 		return nil, err
 	}
 
@@ -107,25 +113,32 @@ func (g *gcrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 	req.URL.User = url.UserPassword("oauth2accesstoken", token.AccessToken)
 	resp, err := defaultClient.Do(req)
 	if err != nil {
-		logger.Error(err, fmt.Sprintf("Unable to make a request to: %s", req.URL))
+		err = fmt.Errorf("unable to make a request to url %q\nerror: %w", req.URL, err)
+		logger.Info(err.Error())
+
 		return nil, err
 	}
 
 	defer resp.Body.Close()
 	content, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logger.Error(err, "Unable to read response body.")
+		err = fmt.Errorf("unable to read response body %w", err)
+		logger.Info(err.Error())
+
 		return nil, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		logger.Info(fmt.Sprintf("Failed to obtain token. Received status code: %d", resp.StatusCode))
-		return nil, fmt.Errorf("failed to obtain token:\n %s", content)
+		err = fmt.Errorf("failed to obtain token, received unexpected response code: %d\nresponse: %q",
+			resp.StatusCode, content)
+		logger.Info(err.Error())
+
+		return nil, err
 	}
 
 	var response tokenResponse
-	if err := json.Unmarshal(content, &response); err != nil {
-		logger.Error(err, "Failed unmarshal json response.")
+	if err = json.Unmarshal(content, &response); err != nil {
+		err = fmt.Errorf("failed unmarshal json token response: %w", err)
 		return nil, err
 	}
 
@@ -137,16 +150,17 @@ func (g *gcrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 
 	// Find a token to turn into a Bearer authenticator
 	if response.Token == "" {
-		logger.Info("Failed, no gcr token in bearer response.")
-		return nil, fmt.Errorf("no token in bearer response:\n%s", content)
+		err = fmt.Errorf("failed, no gcr token in bearer response:\n%s", content)
+		logger.Info(err.Error())
+
+		return nil, err
 	}
 
-	logger.Info("Successfully authenticated with gcr.")
+	logger.Info(fmt.Sprintf("Successfully authenticated with gcr %q", server))
 	// buildkit only supports username/password
 	return &types.AuthConfig{
-		Username: "oauth2accesstoken",
-		Password: token.AccessToken,
-
+		Username:      "oauth2accesstoken",
+		Password:      token.AccessToken,
 		RegistryToken: response.Token,
 	}, nil
 }
