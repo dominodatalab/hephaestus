@@ -2,6 +2,7 @@ package cloudauthtest
 
 import (
 	"context"
+
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
 )
 
