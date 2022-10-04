@@ -74,10 +74,10 @@ func newProvider(ctx context.Context, logger logr.Logger) (*gcrProvider, error) 
 func (g *gcrProvider) authenticate(ctx context.Context, logger logr.Logger, server string) (*types.AuthConfig, error) {
 	match := gcrRegex.FindAllString(server, -1)
 	if len(match) != 1 {
-		err := fmt.Errorf(fmt.Sprintf("Invalid gcr url %s should match %s", server, gcrRegex))
+		err := fmt.Errorf(fmt.Sprintf("invalid gcr url %s should match %s", server, gcrRegex))
 		logger.Info(err.Error())
 
-		return nil, fmt.Errorf("invalid gcr url: %q should match %v", server, gcrRegex)
+		return nil, err
 	}
 
 	token, err := g.tokenSource.Token()
@@ -113,7 +113,6 @@ func (g *gcrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 	req.URL.User = url.UserPassword("oauth2accesstoken", token.AccessToken)
 	resp, err := defaultClient.Do(req)
 	if err != nil {
-		err = fmt.Errorf("unable to make a request to url %q\nerror: %w", req.URL, err)
 		logger.Info(err.Error())
 
 		return nil, err

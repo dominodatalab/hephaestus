@@ -2,10 +2,13 @@ package gcr
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/docker/docker/api/types"
@@ -36,18 +39,45 @@ func (f *fakeOauth2TokenSource) Token() (*oauth2.Token, error) {
 	}, nil
 }
 
+type roundTripFunc func(r *http.Request) (*http.Response, error)
+
+func (s roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return s(r)
+}
+
 func TestAuthenticate(t *testing.T) {
-	ctx := context.Background()
+	defaultCtx := context.Background()
+
+	// Canceled context for testing failed do request
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// logger for comparing expected vs actual logging.
 	observerCore, observedLogs := observer.New(zap.DebugLevel)
 	log := zapr.NewLogger(zap.New(observerCore))
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+	// test server
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "New Server, %s", r.Proto)
 	}))
-	server.Close()
+	ts.Close()
+
+	// test server IP and port information for error logging
+	tsAddress := ts.Listener.Addr()
+
+	// expected errors
+	invalidUrlErr := errors.New(fmt.Sprintf("invalid gcr url test-ts should match %s", gcrRegex))
+	gcrTokenAccessErr := errors.New("unable to access gcr token from oauth: default error message")
+	gcrRegistryErr := errors.New("GCR registry \"https://hi-docker.pkg.dev\" is unusable: default error message")
+	ctxCanceledErr := errors.New(fmt.Sprintf("Get \"http://oauth2accesstoken:***@%s?client_id=forge&service=serviceName\": context canceled", tsAddress.String()))
+	non200StatusErr := errors.New("failed to obtain token, received unexpected response code: 400\nresponse: \"nope\"")
+	noResTokenErr := errors.New("failed, no gcr token in bearer response:\n{\"token\":\"\",\"access_token\":\"\",\"refresh_token\":\"\"}")
 
 	for _, tt := range []struct {
 		name                        string
 		serverName                  string
+		ctx                         context.Context
+		roundTripper                roundTripFunc
 		provider                    *gcrProvider
 		authConfig                  *types.AuthConfig
 		defaultChallengeLoginServer cloudauthtest.LoginChallenger
@@ -56,31 +86,37 @@ func TestAuthenticate(t *testing.T) {
 	}{
 		{
 			"invalid-url",
-			"test-server",
+			"test-ts",
+			defaultCtx,
+			nil,
 			&gcrProvider{
 				logger:      log,
 				tokenSource: nil,
 			},
 			nil,
 			defaultChallengeLoginServer,
-			fmt.Sprintf("Invalid gcr url test-server should match %s", gcrRegex),
-			errors.New("invalid gcr url: \"test-server\" should match .*-docker\\.pkg\\.dev|(?:.*\\.)?gcr\\.io"),
+			invalidUrlErr.Error(),
+			invalidUrlErr,
 		},
 		{
 			"oauth2-error",
 			"gcr.io",
+			defaultCtx,
+			nil,
 			&gcrProvider{
 				logger:      log,
 				tokenSource: &fakeOauth2TokenSource{errOut: true},
 			},
 			nil,
 			defaultChallengeLoginServer,
-			"unable to access gcr token from oauth: default error message",
-			errors.New("unable to access gcr token from oauth: default error message"),
+			gcrTokenAccessErr.Error(),
+			gcrTokenAccessErr,
 		},
 		{
-			"failed-challenge-server-error",
+			"failed-challenge-ts-error",
 			"hi-docker.pkg.dev",
+			defaultCtx,
+			nil,
 			&gcrProvider{
 				logger:      log,
 				tokenSource: &fakeOauth2TokenSource{},
@@ -90,29 +126,14 @@ func TestAuthenticate(t *testing.T) {
 				"serviceName",
 				"realmName",
 				defaultTestingErr),
-			"GCR registry \"https://hi-docker.pkg.dev\" is unusable: default error message",
-			errors.New("GCR registry \"https://hi-docker.pkg.dev\" is unusable: default error message"),
-		},
-
-		// TODO: http errors - WIP
-		{
-			"failed-create-request",
-			"gcr.io",
-			&gcrProvider{
-				logger:      log,
-				tokenSource: &fakeOauth2TokenSource{},
-			},
-			nil,
-			cloudauthtest.FakeChallengeLoginServer(
-				"serviceName",
-				server.URL,
-				nil),
-			"",
-			errors.New(""),
+			gcrRegistryErr.Error(),
+			gcrRegistryErr,
 		},
 		{
 			"failed-do-request",
 			"gcr.io",
+			canceledCtx,
+			nil,
 			&gcrProvider{
 				logger:      log,
 				tokenSource: &fakeOauth2TokenSource{},
@@ -120,29 +141,21 @@ func TestAuthenticate(t *testing.T) {
 			nil,
 			cloudauthtest.FakeChallengeLoginServer(
 				"serviceName",
-				server.URL,
+				ts.URL,
 				nil),
-			"",
-			errors.New(""),
-		},
-		{
-			"invalid-response-body",
-			"gcr.io",
-			&gcrProvider{
-				logger:      log,
-				tokenSource: &fakeOauth2TokenSource{},
-			},
-			nil,
-			cloudauthtest.FakeChallengeLoginServer(
-				"serviceName",
-				server.URL,
-				nil),
-			"",
-			errors.New(""),
+			ctxCanceledErr.Error(),
+			ctxCanceledErr,
 		},
 		{
 			"non-200-response-code",
 			"gcr.io",
+			defaultCtx,
+			roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusBadRequest,
+					Body:       io.NopCloser(strings.NewReader(`nope`)),
+				}, nil
+			}),
 			&gcrProvider{
 				logger:      log,
 				tokenSource: &fakeOauth2TokenSource{},
@@ -150,44 +163,25 @@ func TestAuthenticate(t *testing.T) {
 			nil,
 			cloudauthtest.FakeChallengeLoginServer(
 				"serviceName",
-				server.URL,
+				ts.URL,
 				nil),
-			"",
-			errors.New(""),
-		},
-		{
-			"failed-to-unmarshal-response-body",
-			"gcr.io",
-			&gcrProvider{
-				logger:      log,
-				tokenSource: &fakeOauth2TokenSource{},
-			},
-			nil,
-			cloudauthtest.FakeChallengeLoginServer(
-				"serviceName",
-				server.URL,
-				nil),
-			"",
-			errors.New(""),
-		},
-		{
-			"setting-response-access-token",
-			"gcr.io",
-			&gcrProvider{
-				logger:      log,
-				tokenSource: &fakeOauth2TokenSource{},
-			},
-			nil,
-			cloudauthtest.FakeChallengeLoginServer(
-				"serviceName",
-				server.URL,
-				nil),
-			"",
-			errors.New(""),
+			non200StatusErr.Error(),
+			non200StatusErr,
 		},
 		{
 			"failed-no-token-in-response",
 			"gcr.io",
+			defaultCtx,
+			roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				res, err := json.Marshal(tokenResponse{})
+				if err != nil {
+					t.Fatalf("Unexpected error while marshalling token response")
+				}
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(string(res))),
+				}, nil
+			}),
 			&gcrProvider{
 				logger:      log,
 				tokenSource: &fakeOauth2TokenSource{},
@@ -195,34 +189,119 @@ func TestAuthenticate(t *testing.T) {
 			nil,
 			cloudauthtest.FakeChallengeLoginServer(
 				"serviceName",
-				server.URL,
+				ts.URL,
 				nil),
-			"",
-			errors.New(""),
+			noResTokenErr.Error(),
+			noResTokenErr,
 		},
 		// success
 		{
-			"successfully-authenticated-with-gcr",
+			"token-response-has-access-token",
 			"gcr.io",
+			defaultCtx,
+			roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				res, err := json.Marshal(tokenResponse{
+					AccessToken: "test-access-token",
+				})
+				if err != nil {
+					t.Fatalf("Unexpected error while marshalling token response")
+				}
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(string(res))),
+				}, nil
+			}),
 			&gcrProvider{
 				logger:      log,
 				tokenSource: &fakeOauth2TokenSource{},
 			},
-			nil,
+			&types.AuthConfig{
+				Username:      "oauth2accesstoken",
+				Password:      "hey",
+				RegistryToken: "test-access-token",
+			},
 			cloudauthtest.FakeChallengeLoginServer(
 				"serviceName",
-				server.URL,
+				ts.URL,
 				nil),
-			"",
-			errors.New(""),
+			"Successfully authenticated with gcr \"gcr.io\"",
+			nil,
+		},
+		{
+			"token-response",
+			"gcr.io",
+			defaultCtx,
+			roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				res, err := json.Marshal(tokenResponse{
+					Token: "regular-token",
+				})
+				if err != nil {
+					t.Fatalf("Unexpected error while marshalling token response")
+				}
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(string(res))),
+				}, nil
+			}),
+			&gcrProvider{
+				logger:      log,
+				tokenSource: &fakeOauth2TokenSource{},
+			},
+			&types.AuthConfig{
+				Username:      "oauth2accesstoken",
+				Password:      "hey",
+				RegistryToken: "regular-token",
+			},
+			cloudauthtest.FakeChallengeLoginServer(
+				"serviceName",
+				ts.URL,
+				nil),
+			"Successfully authenticated with gcr \"gcr.io\"",
+			nil,
+		},
+		{
+			"refresh-token-response",
+			"gcr.io",
+			defaultCtx,
+			roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				res, err := json.Marshal(tokenResponse{
+					Token:        "regular-token",
+					RefreshToken: "ignore-this-refresh-token",
+				})
+				if err != nil {
+					t.Fatalf("Unexpected error while marshalling token response")
+				}
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(string(res))),
+				}, nil
+			}),
+			&gcrProvider{
+				logger:      log,
+				tokenSource: &fakeOauth2TokenSource{},
+			},
+			&types.AuthConfig{
+				Username:      "oauth2accesstoken",
+				Password:      "hey",
+				RegistryToken: "regular-token",
+			},
+			cloudauthtest.FakeChallengeLoginServer(
+				"serviceName",
+				ts.URL,
+				nil),
+			"Successfully authenticated with gcr \"gcr.io\"",
+			nil,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			defaultChallengeLoginServer = tt.defaultChallengeLoginServer
+			defaultClient = ts.Client()
 
-			defaultClient = server.Client()
+			if tt.roundTripper != nil {
+				defaultClient.Transport = tt.roundTripper
+			}
 
-			authConfig, err := tt.provider.authenticate(ctx, log, tt.serverName)
+			authConfig, err := tt.provider.authenticate(tt.ctx, log, tt.serverName)
 			assert.Equal(t, tt.authConfig, authConfig)
 
 			if tt.expectedError != nil {
