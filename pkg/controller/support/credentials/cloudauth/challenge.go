@@ -16,6 +16,8 @@ type AuthDirective struct {
 	Realm   string
 }
 
+type LoginChallenger func(ctx context.Context, loginServerURL string) (*AuthDirective, error)
+
 func ChallengeLoginServer(ctx context.Context, loginServerURL string) (*AuthDirective, error) {
 	v2Support := containerregistry.NewV2SupportClient(loginServerURL)
 	challenge, err := v2Support.Check(ctx)

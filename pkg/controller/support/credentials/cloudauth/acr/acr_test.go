@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth/cloudauthtest"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/services/preview/containerregistry/runtime/2019-08-15-preview/containerregistry"
+
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth/cloudauthtest"
+
 	"github.com/Azure/azure-sdk-for-go/services/preview/containerregistry/runtime/2019-08-15-preview/containerregistry/containerregistryapi"
 	"github.com/docker/docker/api/types"
 	"github.com/go-logr/zapr"
@@ -18,21 +21,20 @@ import (
 )
 
 func TestAuthenticate(t *testing.T) {
-
 	for _, tt := range []struct {
 		name                       string
 		serverName                 string
 		provider                   *acrProvider
 		defaultRefreshTokensClient refreshTokensClientFunc
-		fakeChallengeLoginServer   cloudauthtest.LoginChallenger
+		fakeChallengeLoginServer   cloudauth.LoginChallenger
 		authConfig                 *types.AuthConfig
 		expectedLogMessage         string
 		expectedError              error
 	}{
 		{
-			"success",
+			"success server - foo.azurecr.us",
 			"foo.azurecr.us",
-			createProvider("test-tenantId", fakeServicePrincipalToken{}),
+			createProvider("test-tenantId", false),
 			createDefaultRefreshTokensClient(false),
 			cloudauthtest.FakeChallengeLoginServer("test-service", "test-realm", nil),
 			&types.AuthConfig{Username: acrUserForRefreshToken},
@@ -40,9 +42,39 @@ func TestAuthenticate(t *testing.T) {
 			nil,
 		},
 		{
+			"success server - foo.azurecr.cn",
+			"foo.azurecr.cn",
+			createProvider("test-tenantId", false),
+			createDefaultRefreshTokensClient(false),
+			cloudauthtest.FakeChallengeLoginServer("test-service", "test-realm", nil),
+			&types.AuthConfig{Username: acrUserForRefreshToken},
+			"Successfully authenticated with ACR \"foo.azurecr.cn\"",
+			nil,
+		},
+		{
+			"success server - foo.azurecr.de",
+			"foo.azurecr.de",
+			createProvider("test-tenantId", false),
+			createDefaultRefreshTokensClient(false),
+			cloudauthtest.FakeChallengeLoginServer("test-service", "test-realm", nil),
+			&types.AuthConfig{Username: acrUserForRefreshToken},
+			"Successfully authenticated with ACR \"foo.azurecr.de\"",
+			nil,
+		},
+		{
+			"success server - foo.azurecr.io",
+			"foo.azurecr.io",
+			createProvider("test-tenantId", false),
+			createDefaultRefreshTokensClient(false),
+			cloudauthtest.FakeChallengeLoginServer("test-service", "test-realm", nil),
+			&types.AuthConfig{Username: acrUserForRefreshToken},
+			"Successfully authenticated with ACR \"foo.azurecr.io\"",
+			nil,
+		},
+		{
 			"invalid_server",
 			"test-server",
-			createProvider("test-tenantId", fakeServicePrincipalToken{}),
+			createProvider("test-tenantId", false),
 			createDefaultRefreshTokensClient(false),
 			cloudauthtest.FakeChallengeLoginServer("", "", nil),
 			nil,
@@ -52,7 +84,7 @@ func TestAuthenticate(t *testing.T) {
 		{
 			"failed_get_from_exchange",
 			"foo.azurecr.cn",
-			createProvider("test-tenantId", fakeServicePrincipalToken{}),
+			createProvider("test-tenantId", false),
 			createDefaultRefreshTokensClient(true),
 			cloudauthtest.FakeChallengeLoginServer("", "", nil),
 			nil,
@@ -62,7 +94,7 @@ func TestAuthenticate(t *testing.T) {
 		{
 			"failed_refresh_exchange",
 			"foo.azurecr.de",
-			createProvider("test-tenantId", fakeServicePrincipalToken{errOut: true}),
+			createProvider("test-tenantId", true),
 			createDefaultRefreshTokensClient(false),
 			cloudauthtest.FakeChallengeLoginServer("", "", nil),
 			nil,
@@ -72,7 +104,7 @@ func TestAuthenticate(t *testing.T) {
 		{
 			"failed_default_challenge_login_server",
 			"foo.azurecr.io",
-			createProvider("test-tenantId", fakeServicePrincipalToken{}),
+			createProvider("test-tenantId", false),
 			createDefaultRefreshTokensClient(false),
 			cloudauthtest.FakeChallengeLoginServer("", "",
 				errors.New("failed to refresh AAD token: failed to refresh principal token")),
@@ -143,10 +175,12 @@ func (f fakeRefreshTokensClient) GetFromExchange(_ context.Context, _, _, _, _, 
 }
 
 // Helper functions
-func createProvider(tenantId string, servicePrincipalToken fakeServicePrincipalToken) *acrProvider {
+func createProvider(tenantId string, shouldErr bool) *acrProvider {
 	return &acrProvider{
-		tenantID:              tenantId,
-		servicePrincipalToken: servicePrincipalToken,
+		tenantID: tenantId,
+		servicePrincipalToken: fakeServicePrincipalToken{
+			errOut: shouldErr,
+		},
 	}
 }
 

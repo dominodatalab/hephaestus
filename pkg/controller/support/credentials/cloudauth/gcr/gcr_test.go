@@ -19,6 +19,7 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 	"golang.org/x/oauth2"
 
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth/cloudauthtest"
 )
 
@@ -80,7 +81,7 @@ func TestAuthenticate(t *testing.T) {
 		roundTripper                roundTripFunc
 		provider                    *gcrProvider
 		authConfig                  *types.AuthConfig
-		defaultChallengeLoginServer cloudauthtest.LoginChallenger
+		defaultChallengeLoginServer cloudauth.LoginChallenger
 		expectedLogMessage          string
 		expectedError               error
 	}{

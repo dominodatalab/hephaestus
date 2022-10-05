@@ -106,7 +106,6 @@ func (a *acrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 
 		return nil, err
 	}
-
 	loginServer := match[0]
 	err := retry(ctx, logger, 3, func() error {
 		return a.servicePrincipalToken.EnsureFreshWithContext(ctx)
