@@ -19,7 +19,7 @@ func TestRegistry_RetrieveAuthorization(t *testing.T) {
 		Password: "test-pass",
 	}
 	registry := &Registry{}
-	registry.Register(regexp.MustCompile(`^my.cloud`), func(ctx context.Context, logger logr.Logger, url string) (*types.AuthConfig, error) {
+	registry.Register(regexp.MustCompile(`^my.cloud`), func(context.Context, logr.Logger, string) (*types.AuthConfig, error) {
 		return expected, nil
 	})
 	zapLogger, err := logger.NewZap(cfg.Logging{})

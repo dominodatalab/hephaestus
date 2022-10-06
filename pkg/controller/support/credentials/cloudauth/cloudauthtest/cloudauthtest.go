@@ -1,9 +1,9 @@
 package cloudauthtest
 
 import (
-	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
-
 	"context"
+
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
 )
 
 func FakeChallengeLoginServer(serviceName, realmName string, expectedErr error) cloudauth.LoginChallenger {

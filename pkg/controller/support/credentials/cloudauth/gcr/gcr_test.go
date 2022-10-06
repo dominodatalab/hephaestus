@@ -23,9 +23,7 @@ import (
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth/cloudauthtest"
 )
 
-var (
-	defaultTestingErr = errors.New("default error message")
-)
+var defaultTestingErr = errors.New("default error message")
 
 type fakeOauth2TokenSource struct {
 	errOut bool
@@ -81,7 +79,7 @@ func TestAuthenticate(t *testing.T) {
 		roundTripper                roundTripFunc
 		provider                    *gcrProvider
 		authConfig                  *types.AuthConfig
-		defaultChallengeLoginServer cloudauth.LoginChallenger
+		loginChallenger cloudauth.LoginChallenger
 		expectedLogMessage          string
 		expectedError               error
 	}{
