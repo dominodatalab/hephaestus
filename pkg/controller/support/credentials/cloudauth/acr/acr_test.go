@@ -32,7 +32,7 @@ func TestAuthenticate(t *testing.T) {
 		expectedError              error
 	}{
 		{
-			"success server - foo.azurecr.us",
+			"success_foo.azurecr.us",
 			"foo.azurecr.us",
 			createProvider("test-tenantId", false),
 			createDefaultRefreshTokensClient(false),
@@ -42,7 +42,7 @@ func TestAuthenticate(t *testing.T) {
 			nil,
 		},
 		{
-			"success server - foo.azurecr.cn",
+			"success_foo.azurecr.cn",
 			"foo.azurecr.cn",
 			createProvider("test-tenantId", false),
 			createDefaultRefreshTokensClient(false),
@@ -52,7 +52,7 @@ func TestAuthenticate(t *testing.T) {
 			nil,
 		},
 		{
-			"success server - foo.azurecr.de",
+			"success_foo.azurecr.de",
 			"foo.azurecr.de",
 			createProvider("test-tenantId", false),
 			createDefaultRefreshTokensClient(false),
@@ -62,7 +62,7 @@ func TestAuthenticate(t *testing.T) {
 			nil,
 		},
 		{
-			"success server - foo.azurecr.io",
+			"success_foo.azurecr.io",
 			"foo.azurecr.io",
 			createProvider("test-tenantId", false),
 			createDefaultRefreshTokensClient(false),

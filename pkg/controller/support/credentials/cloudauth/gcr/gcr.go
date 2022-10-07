@@ -100,7 +100,7 @@ func (g *gcrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 	// obtain the registry token
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, directive.Realm, nil)
 	if err != nil {
-		err = fmt.Errorf("unable to create new request: %w", err)
+		err = fmt.Errorf("bad realm provided by GCR: %w", err)
 		logger.Info(err.Error())
 
 		return nil, err
@@ -113,8 +113,8 @@ func (g *gcrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 	req.URL.User = url.UserPassword("oauth2accesstoken", token.AccessToken)
 	resp, err := defaultClient.Do(req)
 	if err != nil {
+		err = fmt.Errorf("request to access GCR reqistry token failed with Error: %w", err)
 		logger.Info(err.Error())
-
 		return nil, err
 	}
 
@@ -143,7 +143,6 @@ func (g *gcrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 
 	// Some registries set access_token instead of token.
 	if response.AccessToken != "" {
-		logger.Info("Setting gcr access token.")
 		response.Token = response.AccessToken
 	}
 

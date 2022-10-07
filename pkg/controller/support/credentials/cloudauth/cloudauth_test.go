@@ -2,13 +2,10 @@ package cloudauth
 
 import (
 	"context"
-	cfg "github.com/dominodatalab/hephaestus/pkg/config"
-	"github.com/dominodatalab/hephaestus/pkg/logger"
-	"github.com/go-logr/logr"
-	"github.com/go-logr/zapr"
 	"regexp"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"testing"
+
+	"github.com/go-logr/logr"
 
 	"github.com/docker/docker/api/types"
 )
@@ -22,13 +19,8 @@ func TestRegistry_RetrieveAuthorization(t *testing.T) {
 	registry.Register(regexp.MustCompile(`^my.cloud`), func(context.Context, logr.Logger, string) (*types.AuthConfig, error) {
 		return expected, nil
 	})
-	zapLogger, err := logger.NewZap(cfg.Logging{})
-	if err != nil {
-		t.Fatalf("Unexpected error while creating test logger.")
-	}
 
-	ctrl.SetLogger(zapr.NewLogger(zapLogger))
-	testLog := ctrl.Log.WithName("testLog")
+	testLog := logr.Discard()
 
 	ctx := context.Background()
 	auth, err := registry.RetrieveAuthorization(ctx, testLog, "my.cloud/best/cloud")

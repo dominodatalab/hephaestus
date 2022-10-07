@@ -3,15 +3,12 @@ package credentials
 import (
 	"context"
 	"encoding/json"
-	cfg "github.com/dominodatalab/hephaestus/pkg/config"
-	"github.com/dominodatalab/hephaestus/pkg/logger"
-	"github.com/go-logr/zapr"
 	"os"
 	"path/filepath"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"testing"
 
 	"github.com/docker/docker/api/types"
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -61,15 +58,7 @@ func TestPersist(t *testing.T) {
 			},
 		}
 
-		zapLogger, err := logger.NewZap(cfg.Logging{})
-		if err != nil {
-			t.Fatalf("Unexpected error while creating test logger.")
-		}
-
-		ctrl.SetLogger(zapr.NewLogger(zapLogger))
-		testLog := ctrl.Log.WithName("testLog")
-
-		configPath, err := Persist(context.Background(), testLog, nil, credentials)
+		configPath, err := Persist(context.Background(), logr.Discard(), nil, credentials)
 		require.NoError(t, err)
 		t.Cleanup(func() {
 			os.RemoveAll(configPath)
