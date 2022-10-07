@@ -50,29 +50,33 @@ func authenticate(ctx context.Context, logger logr.Logger, url string) (*types.A
 	logger.WithName("ecr-auth-provider")
 
 	if !urlRegex.MatchString(url) {
-		logger.V(2).Info(fmt.Sprintf("Invalid ecr url. %s should match %s", url, urlRegex))
-		return nil, fmt.Errorf("invalid ecr url: %q should match %v", url, urlRegex)
+		err := fmt.Errorf("ECR URL is invalid: %q should match pattern %v", url, urlRegex)
+		logger.Info(err.Error())
+		return nil, err
 	}
 	input := &ecr.GetAuthorizationTokenInput{}
 
 	resp, err := client.GetAuthorizationToken(ctx, input)
 	if err != nil {
-		logger.Error(err, "Failed to access ecr auth token.")
-		return nil, fmt.Errorf("failed to get ecr auth token: %w", err)
+		err = fmt.Errorf("failed to access ECR auth token: %s", err)
+		logger.Info(err.Error())
+		return nil, err
 	}
 	if len(resp.AuthorizationData) != 1 {
-		logger.Info(fmt.Sprintf("Expected a single ecr token, received: %v", resp.AuthorizationData))
-		return nil, fmt.Errorf("expected a single ecr authorization token: %v", resp.AuthorizationData)
+		err = fmt.Errorf("expected a single ecr authorization token: %v", resp.AuthorizationData)
+		logger.Info(err.Error())
+		return nil, err
 	}
 	authToken := aws.ToString(resp.AuthorizationData[0].AuthorizationToken)
 
 	username, password, err := decodeAuth(authToken)
 	if err != nil {
-		logger.Error(err, "Invalid ecr authorization token.")
-		return nil, fmt.Errorf("invalid ecr authorization token: %w", err)
+		err = fmt.Errorf("invalid ecr authorization token: %s", err)
+		logger.Info(err.Error())
+		return nil, err
 	}
 
-	logger.Info("Successfully authenticated with ecr.")
+	logger.Info("Successfully authenticated with ECR.")
 	return &types.AuthConfig{
 		Username: username,
 		Password: password,

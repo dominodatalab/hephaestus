@@ -1,133 +1,198 @@
-//go:build integration
-// +build integration
-
 package ecr
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
-	"strings"
 	"testing"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
-	"github.com/aws/aws-sdk-go-v2/service/ecr/types"
-	dockertypes "github.com/docker/docker/api/types"
-	"github.com/go-logr/logr"
-
-	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
+	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
+	dockerTypes "github.com/docker/docker/api/types"
+	"github.com/go-logr/zapr"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
+	"gotest.tools/v3/assert"
 )
 
-func TestRegister(t *testing.T) {
-	registry := &cloudauth.Registry{}
+func TestAuthenticate(t *testing.T) {
+	defaultCtx := context.Background()
+	observerCore, observedLogs := observer.New(zap.DebugLevel)
+	log := zapr.NewLogger(zap.New(observerCore))
 
-	err := Register(logr.Discard(), registry)
-	if err != nil {
-		t.Error(err)
-	}
-}
+	var emptyToken *string
+	invalidB64 := "%"
+	invalidToken := "YWJk"
+	validToken := "YWJjOmhp"
 
-func TestPatternMatching(t *testing.T) {
-	testcases := []struct {
-		name  string
-		url   string
-		match bool
+	// expected errors
+	invalidServerErr := fmt.Errorf("ECR URL is invalid: \"0123456789012.dkr.ecr.us-west-2.amazonaws.io\" should match pattern %v", urlRegex)
+	TokenAccessErr := fmt.Errorf("failed to access ECR auth token: test error")
+	failedAuthTokenErr := errors.New("expected a single ecr authorization token: []")
+	emptyAuthTokenErr := errors.New("invalid ecr authorization token: docker auth token cannot be blank")
+	invalidB64Err := errors.New("invalid ecr authorization token: failed to decode docker auth token: illegal base64 data at input byte 0")
+	invalidTokenErr := errors.New("invalid ecr authorization token: invalid docker auth token: [\"abd\"]")
+
+	successMsg := "Successfully authenticated with ECR."
+
+	for _, tt := range []struct {
+		name               string
+		serverUrl          string
+		client             fakeECRClient
+		authConfig         *dockerTypes.AuthConfig
+		expectedLogMessage string
+		expectedError      error
 	}{
 		{
-			name:  "america",
-			url:   "0123456789012.dkr.ecr.us-west-2.amazonaws.com",
-			match: true,
+			name:               "invalid_server",
+			serverUrl:          "0123456789012.dkr.ecr.us-west-2.amazonaws.io",
+			expectedLogMessage: invalidServerErr.Error(),
+			expectedError:      invalidServerErr,
 		},
 		{
-			name:  "fips",
-			url:   "0123456789012.dkr.ecr-fips.us-gov-east-1.amazonaws.com",
-			match: true,
+			name:               "errored_authorization_token",
+			serverUrl:          "0123456789012.dkr.ecr.us-west-2.amazonaws.com",
+			client:             fakeECRClient{errOut: true},
+			expectedLogMessage: TokenAccessErr.Error(),
+			expectedError:      TokenAccessErr,
 		},
 		{
-			name:  "china",
-			url:   "0123456789012.dkr.ecr.cn-north-1.amazonaws.com.cn",
-			match: true,
+			name:      "failed_authorization_data",
+			serverUrl: "0123456789012.dkr.ecr.us-west-2.amazonaws.com",
+			client: fakeECRClient{
+				TokenOutput: &ecr.GetAuthorizationTokenOutput{
+					AuthorizationData: []ecrTypes.AuthorizationData{},
+				},
+			},
+			expectedLogMessage: failedAuthTokenErr.Error(),
+			expectedError:      failedAuthTokenErr,
 		},
 		{
-			name: "no_region",
-			url:  "0123456789012.dkr.ecr.amazonaws.com",
+			name:      "invalid_ecr_auth_token",
+			serverUrl: "0123456789012.dkr.ecr.us-west-2.amazonaws.com",
+			client: fakeECRClient{
+				TokenOutput: &ecr.GetAuthorizationTokenOutput{
+					AuthorizationData: []ecrTypes.AuthorizationData{
+						{AuthorizationToken: emptyToken},
+					},
+				},
+			},
+			expectedLogMessage: emptyAuthTokenErr.Error(),
+			expectedError:      emptyAuthTokenErr,
 		},
 		{
-			name: "no_account_id",
-			url:  "dkr.ecr.us-east-1.amazonaws.com",
+			name:      "invalid_ecr_auth_token_base_64",
+			serverUrl: "0123456789012.dkr.ecr.us-west-2.amazonaws.com",
+			client: fakeECRClient{
+				TokenOutput: &ecr.GetAuthorizationTokenOutput{
+					AuthorizationData: []ecrTypes.AuthorizationData{
+						{AuthorizationToken: &invalidB64},
+					},
+				},
+			},
+			expectedLogMessage: invalidB64Err.Error(),
+			expectedError:      invalidB64Err,
 		},
-	}
-	for _, tc := range testcases {
-		t.Run(tc.name, func(t *testing.T) {
-			actual := urlRegex.MatchString(tc.url)
+		{
+			name:      "invalid_ecr_auth_token_len_err",
+			serverUrl: "0123456789012.dkr.ecr.us-west-2.amazonaws.com",
+			client: fakeECRClient{
+				TokenOutput: &ecr.GetAuthorizationTokenOutput{
+					AuthorizationData: []ecrTypes.AuthorizationData{
+						{AuthorizationToken: &invalidToken},
+					},
+				},
+			},
+			expectedLogMessage: invalidTokenErr.Error(),
+			expectedError:      invalidTokenErr,
+		},
+		// success
+		{
+			name:      "success_server.com",
+			serverUrl: "0123456789012.dkr.ecr.us-west-2.amazonaws.com",
+			client: fakeECRClient{
+				TokenOutput: &ecr.GetAuthorizationTokenOutput{
+					AuthorizationData: []ecrTypes.AuthorizationData{
+						{AuthorizationToken: &validToken},
+					},
+				},
+			},
+			authConfig: &dockerTypes.AuthConfig{
+				Username: "abc",
+				Password: "hi",
+			},
+			expectedLogMessage: successMsg,
+		},
+		{
+			name:      "success_server.com.cn",
+			serverUrl: "0123456789012.dkr.ecr.us-west-2.amazonaws.com.cn",
+			client: fakeECRClient{
+				TokenOutput: &ecr.GetAuthorizationTokenOutput{
+					AuthorizationData: []ecrTypes.AuthorizationData{
+						{AuthorizationToken: &validToken},
+					},
+				},
+			},
+			authConfig: &dockerTypes.AuthConfig{
+				Username: "abc",
+				Password: "hi",
+			},
+			expectedLogMessage: successMsg,
+		},
+		{
+			name:      "success_server.fips",
+			serverUrl: "0123456789012.dkr.ecr-fips.us-west-2.amazonaws.com",
+			client: fakeECRClient{
+				TokenOutput: &ecr.GetAuthorizationTokenOutput{
+					AuthorizationData: []ecrTypes.AuthorizationData{
+						{AuthorizationToken: &validToken},
+					},
+				},
+			},
+			authConfig: &dockerTypes.AuthConfig{
+				Username: "abc",
+				Password: "hi",
+			},
+			expectedLogMessage: successMsg,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client = &tt.client
+			authConfig, err := authenticate(defaultCtx, log, tt.serverUrl)
 
-			if actual != tc.match {
-				t.Errorf("wrong match: got %v", actual)
+			// Compare expected error condition.
+			if tt.expectedError == nil {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Equal(t, tt.expectedError.Error(), err.Error())
 			}
+
+			reflect.DeepEqual(tt.authConfig, authConfig)
+
+			// Compare expected log messages.
+			logLen := observedLogs.Len()
+			require.GreaterOrEqual(t, logLen, 1)
+			recentLogMessage := observedLogs.All()[observedLogs.Len()-1].Message
+			assert.Equal(t, tt.expectedLogMessage, recentLogMessage)
 		})
 	}
 }
 
-func TestAuthenticate(t *testing.T) {
-	ctx := context.Background()
-	url := "0123456789012.dkr.ecr.af-south-1.amazonaws.com"
-
-	t.Run("success", func(t *testing.T) {
-		client = &mockECRClient{
-			out: &ecr.GetAuthorizationTokenOutput{
-				AuthorizationData: []types.AuthorizationData{
-					{
-						AuthorizationToken: aws.String("c3RldmUtbzphd2Vzb21l"), // base64 -> "steve-o:awesome"
-					},
-				},
-			},
-		}
-
-		actual, err := authenticate(ctx, url)
-		expected := &dockertypes.AuthConfig{
-			Username: "steve-o",
-			Password: "awesome",
-		}
-
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !reflect.DeepEqual(expected, actual) {
-			t.Fatalf("wrong auth: got %v, want %v", actual, expected)
-		}
-	})
-
-	t.Run("request_error", func(t *testing.T) {
-		expected := errors.New("api ka-boom")
-		client = &mockECRClient{
-			err: expected,
-		}
-
-		_, err := authenticate(ctx, url)
-		if !errors.Is(err, expected) {
-			t.Fatalf("wrong err: %v", err)
-		}
-	})
-
-	t.Run("bad_url", func(t *testing.T) {
-		client = &mockECRClient{}
-
-		_, err := authenticate(ctx, "garbage.url")
-		if err == nil {
-			t.Fatalf("expected err")
-		}
-		if !strings.Contains(err.Error(), "invalid ecr url") {
-			t.Fatalf("wrong err: %v", err)
-		}
-	})
+type fakeECRClient struct {
+	errOut      bool
+	TokenOutput *ecr.GetAuthorizationTokenOutput
 }
 
-type mockECRClient struct {
-	out *ecr.GetAuthorizationTokenOutput // mock output
-	err error                            // mock error
-}
-
-func (m *mockECRClient) GetAuthorizationToken(ctx context.Context, params *ecr.GetAuthorizationTokenInput, optFns ...func(*ecr.Options)) (*ecr.GetAuthorizationTokenOutput, error) {
-	return m.out, m.err
+func (f *fakeECRClient) GetAuthorizationToken(
+	context.Context,
+	*ecr.GetAuthorizationTokenInput,
+	...func(*ecr.Options),
+) (*ecr.GetAuthorizationTokenOutput, error) {
+	if f.errOut {
+		return nil, errors.New("test error")
+	}
+	return f.TokenOutput, nil
 }
