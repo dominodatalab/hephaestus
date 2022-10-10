@@ -17,10 +17,12 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 
-	cloudauth2 "github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
 )
 
 const cloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform"
+
+var defaultChallengeLoginServer = cloudauth.ChallengeLoginServer
 
 var (
 	gcrRegex      = regexp.MustCompile(`.*-docker\.pkg\.dev|(?:.*\.)?gcr\.io`)
@@ -45,7 +47,7 @@ type gcrProvider struct {
 	tokenSource oauth2.TokenSource
 }
 
-func Register(ctx context.Context, logger logr.Logger, registry *cloudauth2.Registry) error {
+func Register(ctx context.Context, logger logr.Logger, registry *cloudauth.Registry) error {
 	provider, err := newProvider(ctx, logger)
 	if err != nil {
 		logger.Info("GCR not registered", "error", err)
@@ -69,26 +71,38 @@ func newProvider(ctx context.Context, logger logr.Logger) (*gcrProvider, error) 
 	return &gcrProvider{logger: logger.WithName("gcr-auth-provider"), tokenSource: creds.TokenSource}, nil
 }
 
-func (g *gcrProvider) authenticate(ctx context.Context, server string) (*types.AuthConfig, error) {
+func (g *gcrProvider) authenticate(ctx context.Context, logger logr.Logger, server string) (*types.AuthConfig, error) {
 	match := gcrRegex.FindAllString(server, -1)
 	if len(match) != 1 {
-		return nil, fmt.Errorf("invalid gcr url: %q should match %v", server, gcrRegex)
+		err := fmt.Errorf(fmt.Sprintf("invalid GCR URL %s should match %s", server, gcrRegex))
+		logger.Info(err.Error())
+
+		return nil, err
 	}
 
 	token, err := g.tokenSource.Token()
 	if err != nil {
+		err = fmt.Errorf("unable to access GCR token from oauth: %w", err)
+		logger.Info(err.Error())
+
 		return nil, err
 	}
 
 	loginServerURL := "https://" + match[0]
-	directive, err := cloudauth2.ChallengeLoginServer(ctx, loginServerURL)
+	directive, err := defaultChallengeLoginServer(ctx, loginServerURL)
 	if err != nil {
+		err = fmt.Errorf("GCR registry %q is unusable: %w", loginServerURL, err)
+		logger.Info(err.Error())
+
 		return nil, err
 	}
 
 	// obtain the registry token
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, directive.Realm, nil)
 	if err != nil {
+		err = fmt.Errorf("bad realm provided by GCR: %w", err)
+		logger.Info(err.Error())
+
 		return nil, err
 	}
 
@@ -99,21 +113,31 @@ func (g *gcrProvider) authenticate(ctx context.Context, server string) (*types.A
 	req.URL.User = url.UserPassword("oauth2accesstoken", token.AccessToken)
 	resp, err := defaultClient.Do(req)
 	if err != nil {
+		err = fmt.Errorf("request to access GCR reqistry token failed with Error: %w", err)
+		logger.Info(err.Error())
 		return nil, err
 	}
 
 	defer resp.Body.Close()
 	content, err := io.ReadAll(resp.Body)
 	if err != nil {
+		err = fmt.Errorf("unable to read response body %w", err)
+		logger.Info(err.Error())
+
 		return nil, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to obtain token:\n %s", content)
+		err = fmt.Errorf("failed to obtain token, received unexpected response code: %d\nresponse: %q",
+			resp.StatusCode, content)
+		logger.Info(err.Error())
+
+		return nil, err
 	}
 
 	var response tokenResponse
-	if err := json.Unmarshal(content, &response); err != nil {
+	if err = json.Unmarshal(content, &response); err != nil {
+		err = fmt.Errorf("failed unmarshal json token response: %w", err)
 		return nil, err
 	}
 
@@ -124,14 +148,17 @@ func (g *gcrProvider) authenticate(ctx context.Context, server string) (*types.A
 
 	// Find a token to turn into a Bearer authenticator
 	if response.Token == "" {
-		return nil, fmt.Errorf("no token in bearer response:\n%s", content)
+		err = fmt.Errorf("no GCR token in bearer response:\n%s", content)
+		logger.Info(err.Error())
+
+		return nil, err
 	}
 
+	logger.Info(fmt.Sprintf("Successfully authenticated with GCR %q", server))
 	// buildkit only supports username/password
 	return &types.AuthConfig{
-		Username: "oauth2accesstoken",
-		Password: token.AccessToken,
-
+		Username:      "oauth2accesstoken",
+		Password:      token.AccessToken,
 		RegistryToken: response.Token,
 	}, nil
 }

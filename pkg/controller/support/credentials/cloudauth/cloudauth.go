@@ -6,11 +6,12 @@ import (
 	"regexp"
 
 	"github.com/docker/docker/api/types"
+	"github.com/go-logr/logr"
 )
 
 var ErrNoLoader = errors.New("no loader found")
 
-type AuthLoader func(ctx context.Context, server string) (*types.AuthConfig, error)
+type AuthLoader func(ctx context.Context, logger logr.Logger, server string) (*types.AuthConfig, error)
 
 type Registry struct {
 	loaders map[*regexp.Regexp]AuthLoader
@@ -18,10 +19,14 @@ type Registry struct {
 
 // RetrieveAuthorization will multiplex registered auth loaders based on url pattern and use the appropriate one to
 // make an authorization request. The returned value can be marshalled into the contents of a Docker config.json file.
-func (r *Registry) RetrieveAuthorization(ctx context.Context, server string) (*types.AuthConfig, error) {
+func (r *Registry) RetrieveAuthorization(
+	ctx context.Context,
+	logger logr.Logger,
+	server string,
+) (*types.AuthConfig, error) {
 	for r, loader := range r.loaders {
 		if r.MatchString(server) {
-			return loader(ctx, server)
+			return loader(ctx, logger, server)
 		}
 	}
 	return nil, ErrNoLoader

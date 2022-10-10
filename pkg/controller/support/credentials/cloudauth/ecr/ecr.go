@@ -46,26 +46,37 @@ func Register(ctx context.Context, logger logr.Logger, registry *cloudauth.Regis
 	return nil
 }
 
-func authenticate(ctx context.Context, url string) (*types.AuthConfig, error) {
+func authenticate(ctx context.Context, logger logr.Logger, url string) (*types.AuthConfig, error) {
+	logger.WithName("ecr-auth-provider")
+
 	if !urlRegex.MatchString(url) {
-		return nil, fmt.Errorf("invalid ecr url: %q should match %v", url, urlRegex)
+		err := fmt.Errorf("ECR URL is invalid: %q should match pattern %v", url, urlRegex)
+		logger.Info(err.Error())
+		return nil, err
 	}
 	input := &ecr.GetAuthorizationTokenInput{}
 
 	resp, err := client.GetAuthorizationToken(ctx, input)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get ecr auth token: %w", err)
+		err = fmt.Errorf("failed to access ECR auth token: %s", err)
+		logger.Info(err.Error())
+		return nil, err
 	}
 	if len(resp.AuthorizationData) != 1 {
-		return nil, fmt.Errorf("expected a single ecr authorization token: %v", resp.AuthorizationData)
+		err = fmt.Errorf("expected a single ECR authorization token: %v", resp.AuthorizationData)
+		logger.Info(err.Error())
+		return nil, err
 	}
 	authToken := aws.ToString(resp.AuthorizationData[0].AuthorizationToken)
 
 	username, password, err := decodeAuth(authToken)
 	if err != nil {
-		return nil, fmt.Errorf("invalid ecr authorization token: %w", err)
+		err = fmt.Errorf("invalid ECR authorization token: %s", err)
+		logger.Info(err.Error())
+		return nil, err
 	}
 
+	logger.Info("Successfully authenticated with ECR")
 	return &types.AuthConfig{
 		Username: username,
 		Password: password,

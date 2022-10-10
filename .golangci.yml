@@ -79,3 +79,6 @@ issues:
       text: "NewFromConfig"
       linters:
         - contextcheck
+    - linters:
+        - lll
+      source: "github.com/Azure/azure-sdk-for-go"

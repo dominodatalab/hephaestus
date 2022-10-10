@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/docker/docker/api/types"
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -57,7 +58,7 @@ func TestPersist(t *testing.T) {
 			},
 		}
 
-		configPath, err := Persist(context.Background(), nil, credentials)
+		configPath, err := Persist(context.Background(), logr.Discard(), nil, credentials)
 		require.NoError(t, err)
 		t.Cleanup(func() {
 			os.RemoveAll(configPath)
