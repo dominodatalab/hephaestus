@@ -11,10 +11,10 @@ import (
 	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	dockerTypes "github.com/docker/docker/api/types"
 	"github.com/go-logr/zapr"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
-	"gotest.tools/v3/assert"
 )
 
 func TestAuthenticate(t *testing.T) {
@@ -30,12 +30,12 @@ func TestAuthenticate(t *testing.T) {
 	// expected errors
 	invalidServerErr := fmt.Errorf("ECR URL is invalid: \"0123456789012.dkr.ecr.us-west-2.amazonaws.io\" should match pattern %v", urlRegex)
 	TokenAccessErr := fmt.Errorf("failed to access ECR auth token: test error")
-	failedAuthTokenErr := errors.New("expected a single ecr authorization token: []")
-	emptyAuthTokenErr := errors.New("invalid ecr authorization token: docker auth token cannot be blank")
-	invalidB64Err := errors.New("invalid ecr authorization token: failed to decode docker auth token: illegal base64 data at input byte 0")
-	invalidTokenErr := errors.New("invalid ecr authorization token: invalid docker auth token: [\"abd\"]")
+	failedAuthTokenErr := errors.New("expected a single ECR authorization token: []")
+	emptyAuthTokenErr := errors.New("invalid ECR authorization token: docker auth token cannot be blank")
+	invalidB64Err := errors.New("invalid ECR authorization token: failed to decode docker auth token: illegal base64 data at input byte 0")
+	invalidTokenErr := errors.New("invalid ECR authorization token: invalid docker auth token: [\"abd\"]")
 
-	successMsg := "Successfully authenticated with ECR."
+	successMsg := "Successfully authenticated with ECR"
 
 	for _, tt := range []struct {
 		name               string

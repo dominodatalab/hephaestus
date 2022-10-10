@@ -52,7 +52,6 @@ require (
 	github.com/newrelic/go-agent/v3 v3.16.1
 	github.com/newrelic/go-agent/v3/integrations/nrzap v1.0.1
 	go.uber.org/multierr v1.6.0
-	gotest.tools/v3 v3.0.3
 	k8s.io/apiextensions-apiserver v0.25.0
 	sigs.k8s.io/yaml v1.3.0
 )

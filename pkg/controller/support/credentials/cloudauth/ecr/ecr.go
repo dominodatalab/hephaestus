@@ -71,7 +71,7 @@ func authenticate(ctx context.Context, logger logr.Logger, url string) (*types.A
 
 	username, password, err := decodeAuth(authToken)
 	if err != nil {
-		err = fmt.Errorf("invalid ecr authorization token: %s", err)
+		err = fmt.Errorf("invalid ECR authorization token: %s", err)
 		logger.Info(err.Error())
 		return nil, err
 	}
