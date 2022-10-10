@@ -14,27 +14,27 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
-	
+
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth/cloudauthtest"
 )
 
 func TestAuthenticate(t *testing.T) {
 	for _, tt := range []struct {
-		name                       string
-		serverName                 string
-		provider                   *acrProvider
-		defaultRefreshTokensClient refreshTokensClientFunc
-		fakeChallengeLoginServer   cloudauth.LoginChallenger
-		authConfig                 *types.AuthConfig
-		expectedLogMessage         string
-		expectedError              error
+		name                     string
+		serverName               string
+		provider                 *acrProvider
+		refreshTokensClient      refreshTokensClientFunc
+		fakeChallengeLoginServer cloudauth.LoginChallenger
+		authConfig               *types.AuthConfig
+		expectedLogMessage       string
+		expectedError            error
 	}{
 		{
 			"success_foo.azurecr.us",
 			"foo.azurecr.us",
 			createProvider("test-tenantId", false),
-			createDefaultRefreshTokensClient(false),
+			createRefreshTokensClient(false),
 			cloudauthtest.FakeChallengeLoginServer("test-service", "test-realm", nil),
 			&types.AuthConfig{Username: acrUserForRefreshToken},
 			"Successfully authenticated with ACR \"foo.azurecr.us\"",
@@ -44,7 +44,7 @@ func TestAuthenticate(t *testing.T) {
 			"success_foo.azurecr.cn",
 			"foo.azurecr.cn",
 			createProvider("test-tenantId", false),
-			createDefaultRefreshTokensClient(false),
+			createRefreshTokensClient(false),
 			cloudauthtest.FakeChallengeLoginServer("test-service", "test-realm", nil),
 			&types.AuthConfig{Username: acrUserForRefreshToken},
 			"Successfully authenticated with ACR \"foo.azurecr.cn\"",
@@ -54,7 +54,7 @@ func TestAuthenticate(t *testing.T) {
 			"success_foo.azurecr.de",
 			"foo.azurecr.de",
 			createProvider("test-tenantId", false),
-			createDefaultRefreshTokensClient(false),
+			createRefreshTokensClient(false),
 			cloudauthtest.FakeChallengeLoginServer("test-service", "test-realm", nil),
 			&types.AuthConfig{Username: acrUserForRefreshToken},
 			"Successfully authenticated with ACR \"foo.azurecr.de\"",
@@ -64,7 +64,7 @@ func TestAuthenticate(t *testing.T) {
 			"success_foo.azurecr.io",
 			"foo.azurecr.io",
 			createProvider("test-tenantId", false),
-			createDefaultRefreshTokensClient(false),
+			createRefreshTokensClient(false),
 			cloudauthtest.FakeChallengeLoginServer("test-service", "test-realm", nil),
 			&types.AuthConfig{Username: acrUserForRefreshToken},
 			"Successfully authenticated with ACR \"foo.azurecr.io\"",
@@ -74,7 +74,7 @@ func TestAuthenticate(t *testing.T) {
 			"invalid_server",
 			"test-server",
 			createProvider("test-tenantId", false),
-			createDefaultRefreshTokensClient(false),
+			createRefreshTokensClient(false),
 			cloudauthtest.FakeChallengeLoginServer("", "", nil),
 			nil,
 			fmt.Sprintf(`ACR URL is invalid: "test-server" should match pattern %s`, acrRegex),
@@ -84,7 +84,7 @@ func TestAuthenticate(t *testing.T) {
 			"failed_get_from_exchange",
 			"foo.azurecr.cn",
 			createProvider("test-tenantId", false),
-			createDefaultRefreshTokensClient(true),
+			createRefreshTokensClient(true),
 			cloudauthtest.FakeChallengeLoginServer("", "", nil),
 			nil,
 			"failed to generate ACR refresh token: get from exchange error",
@@ -94,7 +94,7 @@ func TestAuthenticate(t *testing.T) {
 			"failed_refresh_exchange",
 			"foo.azurecr.de",
 			createProvider("test-tenantId", true),
-			createDefaultRefreshTokensClient(false),
+			createRefreshTokensClient(false),
 			cloudauthtest.FakeChallengeLoginServer("", "", nil),
 			nil,
 			"AAD token refresh failure: failed to refresh principal token",
@@ -104,7 +104,7 @@ func TestAuthenticate(t *testing.T) {
 			"failed_default_challenge_login_server",
 			"foo.azurecr.io",
 			createProvider("test-tenantId", false),
-			createDefaultRefreshTokensClient(false),
+			createRefreshTokensClient(false),
 			cloudauthtest.FakeChallengeLoginServer("", "",
 				errors.New("failed to refresh AAD token: failed to refresh principal token")),
 			nil,
@@ -118,7 +118,7 @@ func TestAuthenticate(t *testing.T) {
 			log := zapr.NewLogger(zap.New(observerCore))
 
 			defaultChallengeLoginServer = tt.fakeChallengeLoginServer
-			defaultRefreshTokensClient = tt.defaultRefreshTokensClient
+			defaultRefreshTokensClient = tt.refreshTokensClient
 
 			authConfig, err := tt.provider.authenticate(ctx, log, tt.serverName)
 			assert.Equal(t, tt.authConfig, authConfig)
@@ -183,7 +183,7 @@ func createProvider(tenantId string, shouldErr bool) *acrProvider {
 	}
 }
 
-func createDefaultRefreshTokensClient(errOut bool) refreshTokensClientFunc {
+func createRefreshTokensClient(errOut bool) refreshTokensClientFunc {
 	return func(loginURL string) containerregistryapi.RefreshTokensClientAPI {
 		return &fakeRefreshTokensClient{
 			errOut: errOut,

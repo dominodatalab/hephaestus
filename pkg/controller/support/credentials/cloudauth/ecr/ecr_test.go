@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
+	"k8s.io/utils/pointer"
 )
 
 func TestAuthenticate(t *testing.T) {
@@ -22,9 +23,6 @@ func TestAuthenticate(t *testing.T) {
 	observerCore, observedLogs := observer.New(zap.DebugLevel)
 	log := zapr.NewLogger(zap.New(observerCore))
 
-	var emptyToken *string
-	invalidB64 := "%"
-	invalidToken := "YWJk"
 	validToken := "YWJjOmhp"
 
 	// expected errors
@@ -75,7 +73,7 @@ func TestAuthenticate(t *testing.T) {
 			client: fakeECRClient{
 				TokenOutput: &ecr.GetAuthorizationTokenOutput{
 					AuthorizationData: []ecrTypes.AuthorizationData{
-						{AuthorizationToken: emptyToken},
+						{AuthorizationToken: nil},
 					},
 				},
 			},
@@ -88,7 +86,7 @@ func TestAuthenticate(t *testing.T) {
 			client: fakeECRClient{
 				TokenOutput: &ecr.GetAuthorizationTokenOutput{
 					AuthorizationData: []ecrTypes.AuthorizationData{
-						{AuthorizationToken: &invalidB64},
+						{AuthorizationToken: pointer.String("%")},
 					},
 				},
 			},
@@ -101,7 +99,7 @@ func TestAuthenticate(t *testing.T) {
 			client: fakeECRClient{
 				TokenOutput: &ecr.GetAuthorizationTokenOutput{
 					AuthorizationData: []ecrTypes.AuthorizationData{
-						{AuthorizationToken: &invalidToken},
+						{AuthorizationToken: pointer.String("YWJk")},
 					},
 				},
 			},

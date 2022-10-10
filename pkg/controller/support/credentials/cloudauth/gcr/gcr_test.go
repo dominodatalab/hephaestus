@@ -66,7 +66,7 @@ func TestAuthenticate(t *testing.T) {
 		expectedError      error
 	}{
 		{
-			name:               "invalid-url",
+			name:               "invalid_url",
 			serverName:         "test-ts",
 			ctx:                defaultCtx,
 			roundTripper:       nil,
@@ -76,7 +76,7 @@ func TestAuthenticate(t *testing.T) {
 			expectedError:      invalidUrlErr,
 		},
 		{
-			name:               "oauth2-error",
+			name:               "oauth2_error",
 			serverName:         "gcr.io",
 			ctx:                defaultCtx,
 			tokenShouldErr:     true,
@@ -85,7 +85,7 @@ func TestAuthenticate(t *testing.T) {
 			expectedError:      gcrTokenAccessErr,
 		},
 		{
-			name:       "failed-challenge-ts-error",
+			name:       "failed_challenge_ts_error",
 			serverName: "hi-docker.pkg.dev",
 			ctx:        defaultCtx,
 			loginChallenger: cloudauthtest.FakeChallengeLoginServer(
@@ -97,18 +97,19 @@ func TestAuthenticate(t *testing.T) {
 			expectedError:      gcrRegistryErr,
 		},
 		{
-			name:       "failed-do-request",
+			name:       "failed_do_request",
 			serverName: "gcr.io",
 			ctx:        canceledCtx,
 			loginChallenger: cloudauthtest.FakeChallengeLoginServer(
 				"serviceName",
 				ts.URL,
-				nil),
+				nil,
+			),
 			expectedLogMessage: ctxCanceledErr.Error(),
 			expectedError:      ctxCanceledErr,
 		},
 		{
-			name:       "non-200-response-code",
+			name:       "non_200_response_code",
 			serverName: "gcr.io",
 			ctx:        defaultCtx,
 			roundTripper: roundTripFunc(func(r *http.Request) (*http.Response, error) {
@@ -120,25 +121,27 @@ func TestAuthenticate(t *testing.T) {
 			loginChallenger: cloudauthtest.FakeChallengeLoginServer(
 				"serviceName",
 				ts.URL,
-				nil),
+				nil,
+			),
 			expectedLogMessage: non200StatusErr.Error(),
 			expectedError:      non200StatusErr,
 		},
 		{
-			name:       "failed-no-token-in-response",
+			name:       "failed_no_token_in_response",
 			serverName: "gcr.io",
 			ctx:        defaultCtx,
 			loginChallenger: cloudauthtest.FakeChallengeLoginServer(
 				"serviceName",
 				ts.URL,
-				nil),
+				nil,
+			),
 			roundTripper:       createRoundTripperFunc(t, tokenResponse{}, http.StatusOK),
 			expectedLogMessage: noResTokenErr.Error(),
 			expectedError:      noResTokenErr,
 		},
 		// success
 		{
-			name:         "token-response-has-access-token",
+			name:         "token_response_has_access_token",
 			serverName:   "gcr.io",
 			ctx:          defaultCtx,
 			roundTripper: createRoundTripperFunc(t, tokenResponse{AccessToken: "test-access-token"}, http.StatusOK),
@@ -150,11 +153,12 @@ func TestAuthenticate(t *testing.T) {
 			loginChallenger: cloudauthtest.FakeChallengeLoginServer(
 				"serviceName",
 				ts.URL,
-				nil),
+				nil,
+			),
 			expectedLogMessage: "Successfully authenticated with GCR \"gcr.io\"",
 		},
 		{
-			name:         "token-response",
+			name:         "token_response",
 			serverName:   "gcr.io",
 			ctx:          defaultCtx,
 			roundTripper: createRoundTripperFunc(t, tokenResponse{Token: "regular-token"}, http.StatusOK),
@@ -166,11 +170,12 @@ func TestAuthenticate(t *testing.T) {
 			loginChallenger: cloudauthtest.FakeChallengeLoginServer(
 				"serviceName",
 				ts.URL,
-				nil),
+				nil,
+			),
 			expectedLogMessage: "Successfully authenticated with GCR \"gcr.io\"",
 		},
 		{
-			name:       "refresh-token-response",
+			name:       "refresh_token_response",
 			serverName: "gcr.io",
 			ctx:        defaultCtx,
 			roundTripper: createRoundTripperFunc(t, tokenResponse{
@@ -184,7 +189,8 @@ func TestAuthenticate(t *testing.T) {
 			loginChallenger: cloudauthtest.FakeChallengeLoginServer(
 				"serviceName",
 				ts.URL,
-				nil),
+				nil,
+			),
 			expectedLogMessage: "Successfully authenticated with GCR \"gcr.io\"",
 		},
 	} {
