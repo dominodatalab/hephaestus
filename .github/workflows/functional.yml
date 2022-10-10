@@ -1,0 +1,30 @@
+name: Functional Tests
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  gke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: test/functional/go.mod
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+
+      - name: Run tests
+        run: |
+          cd test/functional
+          go test -tags functional,gke
+
+      - name: Save testenv files
+        uses: actions/upload-artifact@v3
+        with:
+          name: testenv-gke
+          path: test/functional/testenv
