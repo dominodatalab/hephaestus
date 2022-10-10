@@ -14,6 +14,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      # TODO: add gcp auth bits
+
       - name: Install Go
         uses: actions/setup-go@v3
         with:
@@ -41,6 +43,9 @@ jobs:
         uses: azure/setup-helm@v3
 
       - name: Run tests
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ secrets.GCP_REGION }}
         run: |
           cd test/functional
           go test -tags functional,gke
