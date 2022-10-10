@@ -63,7 +63,7 @@ func authenticate(ctx context.Context, logger logr.Logger, url string) (*types.A
 		return nil, err
 	}
 	if len(resp.AuthorizationData) != 1 {
-		err = fmt.Errorf("expected a single ecr authorization token: %v", resp.AuthorizationData)
+		err = fmt.Errorf("expected a single ECR authorization token: %v", resp.AuthorizationData)
 		logger.Info(err.Error())
 		return nil, err
 	}
@@ -76,7 +76,7 @@ func authenticate(ctx context.Context, logger logr.Logger, url string) (*types.A
 		return nil, err
 	}
 
-	logger.Info("Successfully authenticated with ECR.")
+	logger.Info("Successfully authenticated with ECR")
 	return &types.AuthConfig{
 		Username: username,
 		Password: password,

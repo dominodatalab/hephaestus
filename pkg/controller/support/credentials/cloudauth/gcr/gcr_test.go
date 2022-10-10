@@ -91,7 +91,8 @@ func TestAuthenticate(t *testing.T) {
 			loginChallenger: cloudauthtest.FakeChallengeLoginServer(
 				"serviceName",
 				"realmName",
-				defaultTestingErr),
+				defaultTestingErr,
+			),
 			expectedLogMessage: gcrRegistryErr.Error(),
 			expectedError:      gcrRegistryErr,
 		},
