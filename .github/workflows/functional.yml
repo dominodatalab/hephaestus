@@ -2,10 +2,9 @@ name: Functional Tests
 
 on:
   workflow_dispatch:
-  on:
-    push:
-      branches:
-        - functional-testing
+  push:
+    branches:
+      - functional-testing
 
 jobs:
   gke:
