@@ -41,6 +41,8 @@ jobs:
 
       - name: Install Helm
         uses: azure/setup-helm@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run tests
         env:
@@ -51,6 +53,7 @@ jobs:
           go test -tags functional,gke
 
       - name: Save testenv files
+        if: ${{ always() }}
         uses: actions/upload-artifact@v3
         with:
           name: testenv-gke

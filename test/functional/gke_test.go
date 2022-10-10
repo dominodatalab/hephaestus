@@ -36,6 +36,7 @@ func (suite *GKETestSuite) SetupSuite() {
 	var err error
 	suite.manager, err = testenv.NewCloudEnvManager(ctx, cfg, true)
 	require.NoError(suite.T(), err)
+	suite.T().SkipNow()
 	require.NoError(suite.T(), suite.manager.Create(ctx))
 	require.NoError(suite.T(), suite.manager.Apply(ctx, "helmfile.yaml"))
 
