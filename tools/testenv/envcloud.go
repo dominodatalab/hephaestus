@@ -31,7 +31,7 @@ type removableInstall interface {
 // CloudConfig represents a type that contains the information required to build cloud-based Kubernetes cluster from one
 // of the templates defined in the project resources/ directory.
 type CloudConfig interface {
-	Vars() []*tfexec.VarOption
+	Vars() []byte
 	Validate() error
 	ResourcePath() string
 }
@@ -39,7 +39,6 @@ type CloudConfig interface {
 // CloudEnvManager is a Terraform-based Manager used to create Kubernetes clusters in the cloud.
 type CloudEnvManager struct {
 	log       *golog.Logger
-	vars      []*tfexec.VarOption
 	installer removableInstall
 	terraform *tfexec.Terraform
 }
@@ -83,19 +82,13 @@ func NewCloudEnvManager(ctx context.Context, config CloudConfig, verbose bool) (
 	testenvLog.Println("successfully created manager")
 	return &CloudEnvManager{
 		log:       newLogger("cloud-env-manager"),
-		vars:      config.Vars(),
 		installer: installer,
 		terraform: terraform,
 	}, nil
 }
 
 func (m *CloudEnvManager) Create(ctx context.Context) error {
-	applyOpts := make([]tfexec.ApplyOption, len(m.vars))
-	for i, option := range m.vars {
-		applyOpts[i] = option
-	}
-
-	if err := m.terraform.Apply(ctx, applyOpts...); err != nil {
+	if err := m.terraform.Apply(ctx); err != nil {
 		return fmt.Errorf("terraform apply failed: %w", err)
 	}
 
@@ -156,7 +149,13 @@ func (m *CloudEnvManager) KubeconfigBytes(ctx context.Context) ([]byte, error) {
 }
 
 func (m *CloudEnvManager) Destroy(ctx context.Context) error {
-	// TODO: destroy infra, uninstall terraform, and anything else?
+	if err := m.terraform.Destroy(ctx); err != nil {
+		return fmt.Errorf("terraform destroy failed: %w", err)
+	}
+
+	if err := m.installer.Remove(ctx); err != nil {
+		return fmt.Errorf("terraform exec removal failed: %w", err)
+	}
 
 	return nil
 }
@@ -208,6 +207,10 @@ func buildWorkingDir(config CloudConfig) (string, error) {
 		if err = os.WriteFile(target, content, 0644); err != nil {
 			return "", err
 		}
+	}
+
+	if err = os.WriteFile(filepath.Join(workingDir, "terraform.tfvars"), config.Vars(), 0644); err != nil {
+		return "", err
 	}
 
 	return workingDir, nil

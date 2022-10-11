@@ -2,11 +2,11 @@ package testenv
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/hashicorp/go-multierror"
-	"github.com/hashicorp/terraform-exec/tfexec"
+	"github.com/hashicorp/hcl/v2/hclwrite"
+	"github.com/zclconf/go-cty/cty"
 )
 
 // GKEConfig is used to create GKE test environments.
@@ -25,17 +25,18 @@ func (c GKEConfig) ResourcePath() string {
 }
 
 // Vars derived from struct fields.
-func (c GKEConfig) Vars() []*tfexec.VarOption {
-	opts := []*tfexec.VarOption{
-		tfexec.Var(fmt.Sprintf("project_id=%s", c.ProjectID)),
-		tfexec.Var(fmt.Sprintf("region=%s", c.Region)),
-	}
+func (c GKEConfig) Vars() []byte {
+	f := hclwrite.NewEmptyFile()
+
+	root := f.Body()
+	root.SetAttributeValue("project_id", cty.StringVal(c.ProjectID))
+	root.SetAttributeValue("region", cty.StringVal(c.Region))
 
 	if strings.TrimSpace(c.KubernetesVersion) != "" {
-		opts = append(opts, tfexec.Var(fmt.Sprintf("kubernetes_version=%s", c.KubernetesVersion)))
+		root.SetAttributeValue("kubernetes_version", cty.StringVal(c.KubernetesVersion))
 	}
 
-	return opts
+	return f.Bytes()
 }
 
 // Validate ensures required variables are provided.
