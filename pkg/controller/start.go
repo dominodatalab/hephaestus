@@ -17,11 +17,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	forgev1alpha1 "github.com/dominodatalab/hephaestus/pkg/api/forge/v1alpha1"
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/hephaestus/pkg/buildkit/worker"
 	"github.com/dominodatalab/hephaestus/pkg/config"
-	"github.com/dominodatalab/hephaestus/pkg/controller/containerimagebuild"
 	"github.com/dominodatalab/hephaestus/pkg/controller/imagebuild"
 	"github.com/dominodatalab/hephaestus/pkg/controller/imagebuildmessage"
 	"github.com/dominodatalab/hephaestus/pkg/controller/imagecache"
@@ -100,7 +98,6 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 	scheme := runtime.NewScheme()
 	_ = clientgoscheme.AddToScheme(scheme)
 	_ = hephv1.AddToScheme(scheme)
-	_ = forgev1alpha1.AddToScheme(scheme)
 
 	// +kubebuilder:scaffold:scheme
 
@@ -180,11 +177,6 @@ func registerControllers(
 	nr *newrelic.Application,
 	cfg config.Controller,
 ) error {
-	log.Info("Registering ContainerImageBuild controller")
-	if err := containerimagebuild.Register(mgr); err != nil {
-		return err
-	}
-
 	log.Info("Registering ImageBuild controller")
 	if err := imagebuild.Register(mgr, cfg, pool, nr); err != nil {
 		return err
