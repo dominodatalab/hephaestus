@@ -67,4 +67,6 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: testenv-gke
-          path: test/functional/testenv
+          path: |
+            test/functional/testenv
+            !test/functional/testenv/**/.terraform/
