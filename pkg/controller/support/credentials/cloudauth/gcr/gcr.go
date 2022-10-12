@@ -108,12 +108,12 @@ func (g *gcrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 
 	v := url.Values{}
 	v.Set("service", directive.Service)
-	v.Set("client_id", "forge")
+	v.Set("client_id", "hephaestus")
 	req.URL.RawQuery = v.Encode()
 	req.URL.User = url.UserPassword("oauth2accesstoken", token.AccessToken)
 	resp, err := defaultClient.Do(req)
 	if err != nil {
-		err = fmt.Errorf("request to access GCR reqistry token failed with Error: %w", err)
+		err = fmt.Errorf("request to access GCR registry token failed with Error: %w", err)
 		logger.Info(err.Error())
 		return nil, err
 	}

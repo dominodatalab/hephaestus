@@ -50,7 +50,7 @@ func TestAuthenticate(t *testing.T) {
 	invalidUrlErr := errors.New(fmt.Sprintf("invalid GCR URL test-ts should match %s", gcrRegex))
 	gcrTokenAccessErr := errors.New("unable to access GCR token from oauth: default error message")
 	gcrRegistryErr := errors.New("GCR registry \"https://hi-docker.pkg.dev\" is unusable: default error message")
-	ctxCanceledErr := errors.New(fmt.Sprintf("request to access GCR reqistry token failed with Error: Get \"http://oauth2accesstoken:***@%s?client_id=forge&service=serviceName\": context canceled", tsAddress.String()))
+	ctxCanceledErr := errors.New(fmt.Sprintf("request to access GCR registry token failed with Error: Get \"http://oauth2accesstoken:***@%s?client_id=hephaestus&service=serviceName\": context canceled", tsAddress.String()))
 	non200StatusErr := errors.New("failed to obtain token, received unexpected response code: 400\nresponse: \"nope\"")
 	noResTokenErr := errors.New("no GCR token in bearer response:\n{\"token\":\"\",\"access_token\":\"\",\"refresh_token\":\"\"}")
 
