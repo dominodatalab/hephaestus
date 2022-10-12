@@ -13,3 +13,9 @@
 - test messaging
 - test istio
 - test eks, aks, gke
+
+
+## Difficult Aspects:
+
+- passing values into helmfile (including image tag)
+- deciding when to run workflow
