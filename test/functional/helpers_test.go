@@ -26,7 +26,7 @@ func validImageBuild() *hephv1.ImageBuild {
 			GenerateName: "test-build-",
 		},
 		Spec: hephv1.ImageBuildSpec{
-			Context: "https://raw.githubusercontent.com/dominodatalab/hephaestus/functional-testing/test/functional/fixtures/docker-context/python39-jupyter/archive.tgz",
+			Context: "https://raw.githubusercontent.com/dominodatalab/hephaestus/main/test/functional/fixtures/docker-context/python39-jupyter/archive.tgz",
 			Images: []string{
 				"registry/org/repo:tag",
 			},
