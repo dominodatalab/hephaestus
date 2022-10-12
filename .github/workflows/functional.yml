@@ -17,7 +17,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      # TODO: add gcp auth bits
+      - name: Authenticate with Google Cloud
+        uses: google-github-actions/auth@v0
+        with:
+          service_account: ${{ secrets.GCP_IAM_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.GCP_IAM_WORKLOAD_IDENTITY_PROVIDER }}
 
       - name: Install Go
         uses: actions/setup-go@v3
