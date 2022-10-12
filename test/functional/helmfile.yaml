@@ -1,0 +1,111 @@
+repositories:
+  - name: bitnami
+    url: https://charts.bitnami.com/bitnami
+
+  - name: jetstack
+    url: https://charts.jetstack.io
+
+  - name: twuni
+    url: https://helm.twun.io
+
+releases:
+  # TODO: install istio
+
+  - name: cert-manager
+    namespace: cert-manager
+    chart: jetstack/cert-manager
+    version: v1.9.1
+    wait: true
+    waitForJobs: true
+    values:
+      - installCRDs: true
+        extraArgs:
+          - --enable-certificate-owner-ref
+
+  - name: docker-registry
+    namespace: default
+    chart: twuni/docker-registry
+    version: 2.2.2
+    wait: true
+    values:
+      - service:
+          type: LoadBalancer
+        secrets:
+          haSharedSecret: docker-registry-ha-shared-secret
+
+  - name: rabbitmq
+    namespace: default
+    chart: bitnami/rabbitmq
+    version: 11.0.0
+    wait: true
+    values:
+      - auth:
+          password: rabbitmq-password
+          erlangCookie: rabbitmq-erlang-cookie
+        persistence:
+          enabled: false
+
+  - name: redis
+    namespace: default
+    chart: bitnami/redis
+    version: 17.3.2
+    wait: true
+    values:
+      - auth:
+          password: redis-password
+        master:
+          persistence:
+            enabled: false
+        replica:
+          replicaCount: 0
+
+  - name: hephaestus
+    namespace: default
+    chart: ../../deployments/helm/hephaestus
+    wait: true
+    waitForJobs: true
+    needs:
+      - cert-manager/cert-manager
+      - rabbitmq
+      - redis
+    values:
+      - registries:
+          "docker-registry:5000":
+            http: true
+        buildkit:
+          rootless: false
+        controller:
+          manager:
+            messaging:
+              enabled: true
+              amqp:
+                url: "amqp://user:rabbitmq-password@rabbitmq:5672"
+          vector:
+            config:
+              transforms:
+                keyed_logs:
+                  type: remap
+                  inputs:
+                    - hephaestus_output
+                  source: |-
+                    message = parse_json!(.message)
+                    if !exists(message.logKey) || is_nullish(message.logKey) {
+                      abort
+                    }
+                    . = {
+                      "event": .,
+                      "stream": "stdout",
+                      "time": message.ts,
+                      "time_nano": to_string(to_unix_timestamp(to_timestamp!(message.ts), unit: "nanoseconds")),
+                      "log": message.msg,
+                      "logKey": message.logKey,
+                    }
+              sinks:
+                redis:
+                  type: redis
+                  inputs:
+                    - keyed_logs
+                  url: "redis://:redis-password@redis-master:6379/0"
+                  key: "{{`{{ logKey }}`}}"
+                  encoding:
+                    codec: json

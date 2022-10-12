@@ -1,0 +1,67 @@
+name: Functional Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      verbose:
+        description: Enable verbose logging during testing
+        type: boolean
+
+jobs:
+  gke:
+    name: GKE image building
+    runs-on: ubuntu-latest
+    env:
+      VERBOSE_TESTING: ${{ inputs.verbose }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Authenticate with Google Cloud
+        uses: google-github-actions/auth@v0
+        with:
+          service_account: ${{ secrets.GCP_IAM_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.GCP_IAM_WORKLOAD_IDENTITY_PROVIDER }}
+
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: test/functional/go.mod
+
+      - id: go-cache-paths
+        name: Gather Go cache paths
+        run: |
+          echo "::set-output name=go-build::$(go env GOCACHE)"
+          echo "::set-output name=go-mod::$(go env GOMODCACHE)"
+
+      - name: Go build cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.go-cache-paths.outputs.go-build }}
+          key: ${{ runner.os }}-go-build-${{ hashFiles('test/functional/**/*.go') }}
+
+      - name: Go mod cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.go-cache-paths.outputs.go-mod }}
+          key: ${{ runner.os }}-go-mod-${{ hashFiles('test/functional/go.sum') }}
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run tests
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ secrets.GCP_REGION }}
+        run: |
+          cd test/functional
+          go test -tags functional,gke
+
+      - name: Save testenv files
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: testenv-gke
+          path: test/functional/testenv
