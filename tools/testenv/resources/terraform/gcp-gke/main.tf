@@ -7,7 +7,8 @@ resource "random_string" "name_suffix" {
 }
 
 locals {
-  name = "testenv-gke-${random_string.name_suffix.result}"
+  name        = "testenv-gke-${random_string.name_suffix.result}"
+  subnet_name = "subnet-gke-${random_string.name_suffix.result}"
 }
 
 module "vpc" {
@@ -22,7 +23,7 @@ module "vpc" {
     {
       description = "The subnet containing GKE cluster and node pools"
 
-      subnet_name           = "subnet-gke"
+      subnet_name           = local.subnet_name
       subnet_ip             = "10.10.10.0/24"
       subnet_region         = var.region
       subnet_private_access = "true"
@@ -30,7 +31,7 @@ module "vpc" {
   ]
 
   secondary_ranges = {
-    subnet-gke = [
+    (local.subnet_name) = [
       {
         range_name    = "service-range"
         ip_cidr_range = "192.168.1.0/24"
