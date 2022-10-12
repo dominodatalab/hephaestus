@@ -95,7 +95,7 @@ func (m *CloudEnvManager) Create(ctx context.Context) error {
 	return nil
 }
 
-func (m *CloudEnvManager) Apply(ctx context.Context, helmfilePath string) error {
+func (m *CloudEnvManager) HelmfileApply(ctx context.Context, helmfilePath string) error {
 	kubeconfig, err := m.KubeconfigBytes(ctx)
 	if err != nil {
 		return err
@@ -119,7 +119,7 @@ func (m *CloudEnvManager) Apply(ctx context.Context, helmfilePath string) error 
 	globalOpts := &config.GlobalOptions{File: helmfilePath}
 	globalOpts.SetLogger(helmexec.NewLogger(os.Stdout, "info"))
 	globalImpl := config.NewGlobalImpl(globalOpts)
-	applyImpl := config.NewApplyImpl(globalImpl, &config.ApplyOptions{})
+	applyImpl := config.NewApplyImpl(globalImpl, &config.ApplyOptions{SkipDiffOnInstall: true})
 
 	helmfile := app.New(applyImpl)
 	if err = helmfile.Apply(applyImpl); err != nil {
@@ -149,6 +149,8 @@ func (m *CloudEnvManager) KubeconfigBytes(ctx context.Context) ([]byte, error) {
 }
 
 func (m *CloudEnvManager) Destroy(ctx context.Context) error {
+	// TODO: destroy helmfile apps to clean up garbage
+
 	if err := m.terraform.Destroy(ctx); err != nil {
 		return fmt.Errorf("terraform destroy failed: %w", err)
 	}

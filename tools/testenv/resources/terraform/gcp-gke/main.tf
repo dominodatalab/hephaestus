@@ -69,6 +69,28 @@ module "gke_auth" {
 }
 
 resource "local_file" "kubeconfig" {
-  content  = module.gke_auth.kubeconfig_raw
-  filename = "${path.module}/kubeconfig"
+  content         = module.gke_auth.kubeconfig_raw
+  filename        = "${path.module}/kubeconfig"
+  file_permission = "0600"
+}
+
+resource "google_artifact_registry_repository" "repo" {
+  project       = var.project_id
+  location      = var.region
+  format        = "DOCKER"
+  repository_id = local.name
+  description   = "Created by Domino Data Lab testenv tooling"
+}
+
+resource "google_service_account" "external_agent" {
+  project      = var.project_id
+  account_id   = local.name
+  display_name = local.name
+  description  = "Created by Domino Data Lab testenv tooling"
+}
+
+resource "google_project_iam_member" "external_agent_gar_rw" {
+  project = var.project_id
+  member  = "serviceAccount:${google_service_account.external_agent.email}"
+  role    = "roles/artifactregistry.writer"
 }

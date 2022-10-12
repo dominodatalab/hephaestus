@@ -23,8 +23,8 @@ type Manager interface {
 	Create(ctx context.Context) error
 	// Destroy an existing environment.
 	Destroy(ctx context.Context) error
-	// Apply all resources from helmfile only when there are changes.
-	Apply(ctx context.Context, helmfilePath string) error
+	// HelmfileApply all resources from helmfile only when there are changes.
+	HelmfileApply(ctx context.Context, helmfilePath string) error
 	// KubeconfigBytes can be written to disk or used to initialize a Kubernetes client.
 	KubeconfigBytes(ctx context.Context) ([]byte, error)
 }
