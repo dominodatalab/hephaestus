@@ -31,6 +31,7 @@ func TestGKEFunctionality(t *testing.T) {
 
 type GKETestSuite struct {
 	suite.Suite
+	suiteSetupDone bool
 
 	manager    testenv.Manager
 	k8sClient  kubernetes.Interface
@@ -50,6 +51,12 @@ func (suite *GKETestSuite) SetupSuite() {
 	var err error
 	suite.manager, err = testenv.NewCloudEnvManager(ctx, cfg, verbose)
 	require.NoError(suite.T(), err)
+
+	defer func() {
+		if !suite.suiteSetupDone {
+			suite.TearDownSuite()
+		}
+	}()
 
 	suite.T().Log("Creating GKE test environment")
 	start := time.Now()
@@ -77,6 +84,7 @@ func (suite *GKETestSuite) SetupSuite() {
 	require.NoError(suite.T(), err)
 
 	suite.T().Log("Test setup complete")
+	suite.suiteSetupDone = true
 }
 
 func (suite *GKETestSuite) TearDownSuite() {
