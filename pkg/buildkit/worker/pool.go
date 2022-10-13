@@ -395,8 +395,8 @@ func (p *AutoscalingPool) updateWorkers(ctx context.Context) error {
 		} else if pod.Status.Phase == corev1.PodPending { // mark pending pods
 			pending = append(pending, pod.Name)
 
-			if time.Since(pod.CreationTimestamp.Time) < p.podMaxIdleTime {
-				log.Info("Pending pod is not old enough for terminate")
+			if elapsed := time.Since(pod.CreationTimestamp.Time); elapsed < p.podMaxIdleTime {
+				log.Info("Pending pod is not old enough for termination", "gracePeriod", p.podMaxIdleTime-elapsed)
 				pendingGracePeriodOffset++
 			}
 		} else if p.isOperationalPod(ctx, pod.Name) { // dispatch builds/check expiry/check age on operation pods
