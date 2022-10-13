@@ -1,3 +1,11 @@
+locals {
+  name        = "testenv-gke-${random_string.name_suffix.result}"
+  subnet_name = "subnet-gke-${random_string.name_suffix.result}"
+
+  pod_range_name     = "pod-range"
+  service_range_name = "service-range"
+}
+
 resource "random_string" "name_suffix" {
   length  = 5
   lower   = true
@@ -6,41 +14,32 @@ resource "random_string" "name_suffix" {
   special = false
 }
 
-locals {
-  name        = "testenv-gke-${random_string.name_suffix.result}"
-  subnet_name = "subnet-gke-${random_string.name_suffix.result}"
+resource "google_compute_network" "main" {
+  name        = local.name
+  project     = var.project_id
+  description = "Created by Domino Data Lab testenv tooling"
+
+  auto_create_subnetworks = false
 }
 
-module "vpc" {
-  source  = "terraform-google-modules/network/google"
-  version = "~> 5.2"
+resource "google_compute_subnetwork" "kubernetes" {
+  name        = local.subnet_name
+  project     = var.project_id
+  region      = var.region
+  network     = google_compute_network.main.name
+  description = "The subnet containing GKE cluster and node pools"
 
-  network_name = local.name
-  project_id   = var.project_id
-  description  = "Created by Domino Data Lab testenv tooling"
+  ip_cidr_range            = "10.10.10.0/24"
+  private_ip_google_access = true
 
-  subnets = [
-    {
-      description = "The subnet containing GKE cluster and node pools"
+  secondary_ip_range {
+    range_name    = local.service_range_name
+    ip_cidr_range = "192.168.1.0/24"
+  }
 
-      subnet_name           = local.subnet_name
-      subnet_ip             = "10.10.10.0/24"
-      subnet_region         = var.region
-      subnet_private_access = "true"
-    }
-  ]
-
-  secondary_ranges = {
-    (local.subnet_name) = [
-      {
-        range_name    = "service-range"
-        ip_cidr_range = "192.168.1.0/24"
-      },
-      {
-        range_name    = "pod-range"
-        ip_cidr_range = "192.168.64.0/20"
-      }
-    ]
+  secondary_ip_range {
+    range_name    = local.pod_range_name
+    ip_cidr_range = "192.168.64.0/20"
   }
 }
 
@@ -53,11 +52,11 @@ module "gke" {
   project_id         = var.project_id
   kubernetes_version = var.kubernetes_version
 
-  network    = module.vpc.network_name
-  subnetwork = module.vpc.subnets_names[0]
+  network    = google_compute_network.main.name
+  subnetwork = google_compute_subnetwork.kubernetes.name
 
-  ip_range_pods     = module.vpc.subnets_secondary_ranges[0][1].range_name
-  ip_range_services = module.vpc.subnets_secondary_ranges[0][0].range_name
+  ip_range_pods     = local.pod_range_name
+  ip_range_services = local.service_range_name
 }
 
 module "gke_auth" {
