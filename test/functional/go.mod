@@ -6,7 +6,7 @@ go 1.19
 
 require (
 	github.com/dominodatalab/hephaestus v0.1.21
-	github.com/dominodatalab/testenv v0.0.0-20221012220423-788bcc95f310
+	github.com/dominodatalab/testenv v0.0.0-20221013012501-bb63aa01ea20
 	github.com/heroku/docker-registry-client v0.0.0-20211012143308-9463674c8930
 	github.com/stretchr/testify v1.8.0
 	k8s.io/api v0.25.0
