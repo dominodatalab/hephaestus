@@ -375,6 +375,8 @@ func (p *AutoscalingPool) updateWorkers(ctx context.Context) error {
 	var removals []string
 	var abnormal []string
 
+	var pendingGracePeriodOffset int
+
 	// mark pods for removal based on state and lease pods when requests exist
 	for _, pod := range podList.Items {
 		allPods = append(allPods, pod.Name)
@@ -392,6 +394,11 @@ func (p *AutoscalingPool) updateWorkers(ctx context.Context) error {
 			leased = append(leased, pod.Name)
 		} else if pod.Status.Phase == corev1.PodPending { // mark pending pods
 			pending = append(pending, pod.Name)
+
+			if time.Since(pod.CreationTimestamp.Time) < p.podMaxIdleTime {
+				log.Info("Pending pod is not old enough for terminate")
+				pendingGracePeriodOffset++
+			}
 		} else if p.isOperationalPod(ctx, pod.Name) { // dispatch builds/check expiry/check age on operation pods
 			log.Info("Pod is operational")
 
@@ -454,7 +461,7 @@ func (p *AutoscalingPool) updateWorkers(ctx context.Context) error {
 
 	podCount := len(allPods)
 	requestCount := p.requests.Len()
-	replicas := int32(podCount + requestCount - subtractions)
+	replicas := int32(podCount + requestCount + pendingGracePeriodOffset - subtractions)
 
 	p.log.Info("Pod evaluation complete",
 		"allPods", allPods,
