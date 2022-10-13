@@ -70,3 +70,16 @@ jobs:
           path: |
             test/functional/testenv
             !test/functional/testenv/**/.terraform/
+
+  aks:
+    name: AKS image building
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      # TODO:
+      #   - auth with Azure cloud (need SP and regular AAD auth mechanisms)
+      #   - create aks cluster
+      #   - run tests
+      #   - profit
