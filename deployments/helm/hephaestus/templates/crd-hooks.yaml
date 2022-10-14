@@ -1,6 +1,7 @@
-{{- if .Values.installCRDs }}
 {{- $serviceAccountName := printf "%s-hook" (include "hephaestus.serviceAccountName" .) -}}
 {{- $hookName := printf "%s:hook" (include "hephaestus.rbac.managerName" .) -}}
+
+{{- if or .Values.installCRDs .Values.uninstallCRDs }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -61,7 +62,9 @@ subjects:
   - kind: ServiceAccount
     name: {{ $serviceAccountName }}
     namespace: {{ .Release.Namespace }}
+{{- end }}
 
+{{- if .Values.installCRDs }}
 ---
 apiVersion: batch/v1
 kind: Job
@@ -117,7 +120,9 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+{{- end }}
 
+{{- if .Values.uninstallCRDs }}
 ---
 apiVersion: batch/v1
 kind: Job
