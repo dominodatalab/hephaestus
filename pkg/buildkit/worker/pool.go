@@ -392,6 +392,12 @@ func (p *AutoscalingPool) updateWorkers(ctx context.Context) error {
 			leased = append(leased, pod.Name)
 		} else if pod.Status.Phase == corev1.PodPending { // mark pending pods
 			pending = append(pending, pod.Name)
+
+			if elapsed := time.Since(pod.CreationTimestamp.Time); elapsed < p.podMaxIdleTime {
+				log.Info("Pending pod is not old enough for termination", "gracePeriod", p.podMaxIdleTime-elapsed)
+			} else {
+				removals = append(removals, pod.Name)
+			}
 		} else if p.isOperationalPod(ctx, pod.Name) { // dispatch builds/check expiry/check age on operation pods
 			log.Info("Pod is operational")
 
@@ -431,9 +437,6 @@ func (p *AutoscalingPool) updateWorkers(ctx context.Context) error {
 	// collect names of pods that might be terminated
 	subtractionMap := make(map[string]bool)
 	for _, name := range removals {
-		subtractionMap[name] = true
-	}
-	for _, name := range pending {
 		subtractionMap[name] = true
 	}
 	for _, name := range abnormal {

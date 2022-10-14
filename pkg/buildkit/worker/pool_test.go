@@ -155,10 +155,10 @@ func assertLeasedPod(t *testing.T, action k8stesting.Action, ret *corev1.Pod) {
 	ret.Annotations = pod.Annotations
 }
 
-// NOTE: this set of assertions is fine, but it's not great. we need a better way of asserting the patching. ideally, we
-//
-//	would make assertions against the API object after the event but client-go doesn't support SSA right now, which
-//	means we have to override the "patch" action with a reactor.
+// NOTE: this set of assertions is fine, but it's not great. we need a better way of asserting the patching.
+//	ideally, we would make assertions against the API object after the event but client-go doesn't support SSA right
+//	now, which means we have to override the "patch" action with a reactor.
+
 func assertUnleasedPod(t *testing.T, action k8stesting.Action) {
 	t.Helper()
 
@@ -737,10 +737,22 @@ func TestPoolPodReconciliation(t *testing.T) {
 			expected: 0,
 		},
 		{
-			name: "pending",
+			name: "pending_new",
 			objects: func() []runtime.Object {
 				p := validPod.DeepCopy()
 				p.Status.Phase = corev1.PodPending
+				p.CreationTimestamp = metav1.NewTime(time.Now())
+
+				return []runtime.Object{p}
+			},
+			expected: 1,
+		},
+		{
+			name: "pending_old",
+			objects: func() []runtime.Object {
+				p := validPod.DeepCopy()
+				p.Status.Phase = corev1.PodPending
+				p.CreationTimestamp = metav1.NewTime(time.Now().Add(-15 * time.Minute))
 
 				return []runtime.Object{p}
 			},
@@ -958,6 +970,26 @@ func TestPoolPodReconciliation(t *testing.T) {
 			},
 			requests: 1,
 			expected: 1,
+		},
+		{
+			name: "combination_embedded_new_pending",
+			objects: func() []runtime.Object {
+				p0 := validPod.DeepCopy()
+				p0.Name = "buildkit-0"
+				p0.CreationTimestamp = metav1.Time{Time: time.Now()}
+
+				p1 := validPod.DeepCopy()
+				p1.Name = "buildkit-1"
+				p1.Status.Phase = corev1.PodPending
+				p1.CreationTimestamp = metav1.Time{Time: time.Now().Add(-5 * time.Minute)}
+
+				p2 := validPod.DeepCopy()
+				p2.Name = "buildkit-2"
+				p2.CreationTimestamp = metav1.Time{Time: time.Now()}
+
+				return []runtime.Object{p0, p1, p2}
+			},
+			expected: 3,
 		},
 	}
 
