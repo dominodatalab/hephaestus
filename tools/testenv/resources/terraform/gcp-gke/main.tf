@@ -45,7 +45,7 @@ resource "google_compute_subnetwork" "kubernetes" {
 
 module "gke" {
   source  = "terraform-google-modules/kubernetes-engine/google"
-  version = "~> 23.1"
+  version = "~> 23.2"
 
   name               = local.name
   region             = var.region
@@ -61,7 +61,7 @@ module "gke" {
 
 module "gke_auth" {
   source  = "terraform-google-modules/kubernetes-engine/google//modules/auth"
-  version = "~> 23.1"
+  version = "~> 23.2"
 
   location     = module.gke.location
   project_id   = var.project_id
@@ -87,6 +87,15 @@ resource "google_service_account" "external_agent" {
   account_id   = local.name
   display_name = local.name
   description  = "Created by Domino Data Lab testenv tooling"
+}
+
+resource "google_service_account_iam_binding" "external_agent_k8s_sa_binding" {
+  role               = "roles/iam.workloadIdentityUser"
+  service_account_id = google_service_account.external_agent.name
+
+  members = [
+    "serviceAccount:${var.project_id}.svc.id.goog[${var.kubernetes_service_account}]"
+  ]
 }
 
 resource "google_project_iam_member" "external_agent_gar_rw" {

@@ -11,12 +11,14 @@ import (
 
 // GKEConfig is used to create GKE test environments.
 type GKEConfig struct {
-	// KubernetesVersion supported by GKE.
-	KubernetesVersion string
-	// ProjectID in GCP where cluster will be created.
-	ProjectID string
 	// Region in GCP where cluster will be created.
 	Region string
+	// ProjectID in GCP where cluster will be created.
+	ProjectID string
+	// KubernetesVersion supported by GKE.
+	KubernetesVersion string
+	// KubernetesServiceAccount that should be granted access to the test Google Artifact Registry.
+	KubernetesServiceAccount string
 }
 
 // ResourcePath to Terraform module.
@@ -29,8 +31,9 @@ func (c GKEConfig) Vars() []byte {
 	f := hclwrite.NewEmptyFile()
 
 	root := f.Body()
-	root.SetAttributeValue("project_id", cty.StringVal(c.ProjectID))
 	root.SetAttributeValue("region", cty.StringVal(c.Region))
+	root.SetAttributeValue("project_id", cty.StringVal(c.ProjectID))
+	root.SetAttributeValue("kubernetes_service_account", cty.StringVal(c.KubernetesServiceAccount))
 
 	if strings.TrimSpace(c.KubernetesVersion) != "" {
 		root.SetAttributeValue("kubernetes_version", cty.StringVal(c.KubernetesVersion))
@@ -41,12 +44,16 @@ func (c GKEConfig) Vars() []byte {
 
 // Validate ensures required variables are provided.
 func (c GKEConfig) Validate() (err error) {
+	if strings.TrimSpace(c.Region) == "" {
+		err = multierror.Append(err, errors.New("GCP region cannot be blank"))
+	}
+
 	if strings.TrimSpace(c.ProjectID) == "" {
 		err = multierror.Append(err, errors.New("GCP project id cannot be blank"))
 	}
 
-	if strings.TrimSpace(c.Region) == "" {
-		err = multierror.Append(err, errors.New("GCP region cannot be blank"))
+	if strings.TrimSpace(c.KubernetesServiceAccount) == "" {
+		err = multierror.Append(err, errors.New("kubernetes service account cannot be blank"))
 	}
 
 	return err

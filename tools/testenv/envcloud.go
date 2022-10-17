@@ -2,7 +2,6 @@ package testenv
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	golog "log"
 	"os"
@@ -95,7 +94,7 @@ func (m *CloudEnvManager) Create(ctx context.Context) error {
 	return nil
 }
 
-func (m *CloudEnvManager) HelmfileApply(ctx context.Context, helmfilePath string) error {
+func (m *CloudEnvManager) HelmfileApply(ctx context.Context, helmfilePath string, values []string) error {
 	kubeconfig, err := m.KubeconfigBytes(ctx)
 	if err != nil {
 		return err
@@ -117,35 +116,36 @@ func (m *CloudEnvManager) HelmfileApply(ctx context.Context, helmfilePath string
 	defer os.Unsetenv("KUBECONFIG")
 
 	globalOpts := &config.GlobalOptions{File: helmfilePath}
-	globalOpts.SetLogger(helmexec.NewLogger(os.Stdout, "info"))
+	globalOpts.SetLogger(helmexec.NewLogger(os.Stdout, "WARN"))
 	globalImpl := config.NewGlobalImpl(globalOpts)
-	applyImpl := config.NewApplyImpl(globalImpl, &config.ApplyOptions{SkipDiffOnInstall: true})
 
+	applyImpl := config.NewApplyImpl(globalImpl, &config.ApplyOptions{SkipDiffOnInstall: true, Set: values})
 	helmfile := app.New(applyImpl)
-	if err = helmfile.Apply(applyImpl); err != nil {
-		return err
-	}
 
-	return nil
+	return helmfile.Apply(applyImpl)
 }
 
-func (m *CloudEnvManager) KubeconfigBytes(ctx context.Context) ([]byte, error) {
+func (m *CloudEnvManager) OutputVar(ctx context.Context, key string) ([]byte, error) {
 	output, err := m.terraform.Output(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("terraform output failed: %w", err)
 	}
 
-	kubeconfig, ok := output["kubeconfig"]
+	outputMeta, ok := output[key]
 	if !ok {
-		return nil, errors.New("terraform output missing kubeconfig variable")
+		return nil, fmt.Errorf("terraform output missing %q variable", key)
 	}
 
-	unescaped, err := strconv.Unquote(string(kubeconfig.Value))
+	unescaped, err := strconv.Unquote(string(outputMeta.Value))
 	if err != nil {
-		return nil, fmt.Errorf("failed to unescape kubeconfig: %w", err)
+		return nil, fmt.Errorf("failed to unescape %q variable: %w", key, err)
 	}
 
 	return []byte(unescaped), nil
+}
+
+func (m *CloudEnvManager) KubeconfigBytes(ctx context.Context) ([]byte, error) {
+	return m.OutputVar(ctx, "kubeconfig")
 }
 
 func (m *CloudEnvManager) Destroy(ctx context.Context) error {

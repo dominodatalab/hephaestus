@@ -23,8 +23,10 @@ type Manager interface {
 	Create(ctx context.Context) error
 	// Destroy an existing environment.
 	Destroy(ctx context.Context) error
+	// OutputVar read from test environment provisioner.
+	OutputVar(ctx context.Context, key string) ([]byte, error)
 	// HelmfileApply all resources from helmfile only when there are changes.
-	HelmfileApply(ctx context.Context, helmfilePath string) error
+	HelmfileApply(ctx context.Context, helmfilePath string, values []string) error
 	// KubeconfigBytes can be written to disk or used to initialize a Kubernetes client.
 	KubeconfigBytes(ctx context.Context) ([]byte, error)
 }
