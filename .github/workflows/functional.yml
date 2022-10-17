@@ -14,10 +14,13 @@ jobs:
       id-token: write
       pull-requests: write
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v3
-        with:
-          ref: ${{ github.event.issue.number }}
+
+      - name: Checkout pull request
+        run: hub pr checkout ${{ github.event.issue.number }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update PR Comment
         uses: peter-evans/create-or-update-comment@v2
@@ -67,7 +70,7 @@ jobs:
           VERBOSE_TESTING: true
           GCP_REGION: ${{ secrets.GCP_REGION }}
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-          MANAGER_IMAGE_TAG: ${{ github.event.issue.number }}
+          MANAGER_IMAGE_TAG: pr-${{ github.event.issue.number }}
         run: |
           cd test/functional
           go test -tags functional,gke
