@@ -17,12 +17,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	auth "golang.org/x/oauth2/google"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/utils/pointer"
 )
 
 func TestGKEFunctionality(t *testing.T) {
@@ -31,7 +33,10 @@ func TestGKEFunctionality(t *testing.T) {
 
 type GKETestSuite struct {
 	suite.Suite
+
 	suiteSetupDone bool
+	gcpRegistry    string
+	gcpRepository  string
 
 	manager    testenv.Manager
 	k8sClient  kubernetes.Interface
@@ -40,18 +45,23 @@ type GKETestSuite struct {
 
 func (suite *GKETestSuite) SetupSuite() {
 	verbose := os.Getenv("VERBOSE_TESTING") == "true"
+	region := os.Getenv("GCP_REGION")
+	projectID := os.Getenv("GCP_PROJECT_ID")
+	k8sVersion := os.Getenv("KUBERNETES_VERSION")
+	managerImageTag := os.Getenv("MANAGER_IMAGE_TAG")
 
-	ctx := context.Background()
 	cfg := testenv.GKEConfig{
-		KubernetesVersion: os.Getenv("KUBERNETES_VERSION"),
-		ProjectID:         os.Getenv("GCP_PROJECT_ID"),
-		Region:            os.Getenv("GCP_REGION"),
+		Region:                   region,
+		ProjectID:                projectID,
+		KubernetesVersion:        k8sVersion,
+		KubernetesServiceAccount: "default/hephaestus",
 	}
 
 	var err error
+	ctx := context.Background()
+
 	suite.manager, err = testenv.NewCloudEnvManager(ctx, cfg, verbose)
 	require.NoError(suite.T(), err)
-
 	defer func() {
 		if !suite.suiteSetupDone {
 			suite.TearDownSuite()
@@ -63,9 +73,23 @@ func (suite *GKETestSuite) SetupSuite() {
 	require.NoError(suite.T(), suite.manager.Create(ctx))
 	suite.T().Logf("Total cluster creation time: %s", time.Since(start))
 
+	repoName, err := suite.manager.OutputVar(ctx, "repository")
+	require.NoError(suite.T(), err)
+	suite.gcpRegistry = fmt.Sprintf("%s-docker.pkg.dev", region)
+	suite.gcpRepository = fmt.Sprintf("%s/%s", projectID, repoName)
+
+	gcpServiceAccount, err := suite.manager.OutputVar(ctx, "service_account")
+	require.NoError(suite.T(), err)
+
+	helmfileValues := []string{
+		"controller.manager.cloudRegistryAuth.gcp.enabled=true",
+		fmt.Sprintf("controller.manager.cloudRegistryAuth.gcp.serviceAccount=%s", gcpServiceAccount),
+		fmt.Sprintf("controller.manager.image.tag=%s", managerImageTag),
+	}
+
 	suite.T().Log("Installing cluster applications")
 	start = time.Now()
-	require.NoError(suite.T(), suite.manager.HelmfileApply(ctx, "helmfile.yaml"))
+	require.NoError(suite.T(), suite.manager.HelmfileApply(ctx, "helmfile.yaml", helmfileValues))
 	suite.T().Logf("Total application install time: %s", time.Since(start))
 
 	configBytes, err := suite.manager.KubeconfigBytes(ctx)
@@ -93,6 +117,8 @@ func (suite *GKETestSuite) TearDownSuite() {
 }
 
 func (suite *GKETestSuite) TestInvalidImageBuild() {
+	suite.T().Log("Testing image build validation")
+
 	ctx := context.Background()
 	client := suite.hephClient.HephaestusV1().ImageBuilds(corev1.NamespaceDefault)
 
@@ -228,6 +254,7 @@ func (suite *GKETestSuite) TestInvalidImageBuild() {
 	}
 
 	for _, tc := range tt {
+		suite.T().Logf("Test case: %s", tc.name)
 		suite.T().Run(tc.name, func(t *testing.T) {
 			build := validImageBuild()
 			tc.mutator(build)
@@ -246,8 +273,10 @@ func (suite *GKETestSuite) TestInvalidImageBuild() {
 }
 
 func (suite *GKETestSuite) TestRegistryPush() {
-	suite.T().Run("internal", func(t *testing.T) {
-		ctx := context.Background()
+	ctx := context.Background()
+	client := suite.hephClient.HephaestusV1().ImageBuilds(corev1.NamespaceDefault)
+
+	suite.T().Run("no_auth", func(t *testing.T) {
 		tag := RandomString(8)
 		build := validImageBuild()
 		build.Spec.LogKey = tag
@@ -255,12 +284,10 @@ func (suite *GKETestSuite) TestRegistryPush() {
 			fmt.Sprintf("docker-registry:5000/test-ns/test-repo:%s", tag),
 		}
 
-		buildClient := suite.hephClient.HephaestusV1().ImageBuilds(corev1.NamespaceDefault)
-
-		build, err := buildClient.Create(ctx, build, metav1.CreateOptions{})
+		build, err := client.Create(ctx, build, metav1.CreateOptions{})
 		require.NoError(t, err)
 
-		watcher, err := buildClient.Watch(ctx, metav1.SingleObject(build.ObjectMeta))
+		watcher, err := client.Watch(ctx, metav1.SingleObject(build.ObjectMeta))
 		require.NoError(t, err)
 		defer watcher.Stop()
 
@@ -309,9 +336,72 @@ func (suite *GKETestSuite) TestRegistryPush() {
 		// assert log delivery
 	})
 
-	suite.T().Run("remote", func(t *testing.T) {
+	suite.T().Run("bad_auth", func(t *testing.T) {})
+
+	suite.T().Run("basic_auth", func(t *testing.T) {})
+
+	suite.T().Run("secret_auth", func(t *testing.T) {})
+
+	suite.T().Run("cloud_auth", func(t *testing.T) {
+		tag := RandomString(8)
+		image := fmt.Sprintf("%s/test-image", suite.gcpRepository)
+
+		build := validImageBuild()
+		build.Spec.LogKey = tag
+		build.Spec.Images = []string{
+			fmt.Sprintf("%s/%s:%s", suite.gcpRegistry, image, tag),
+		}
+		build.Spec.RegistryAuth = []hephv1.RegistryCredentials{
+			{
+				Server:        suite.gcpRegistry,
+				CloudProvided: pointer.Bool(true),
+			},
+		}
+
+		build, err := client.Create(ctx, build, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		watcher, err := client.Watch(ctx, metav1.SingleObject(build.ObjectMeta))
+		require.NoError(t, err)
+		defer watcher.Stop()
+
+		ctxTimeout, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		defer cancel()
+
+		var ib *hephv1.ImageBuild
+		for loop := true; loop; {
+			select {
+			case <-ctxTimeout.Done():
+				t.Fatal("Build failed to finish within context deadline")
+			case event := <-watcher.ResultChan():
+				if event.Type != watch.Modified {
+					continue
+				}
+
+				ib = event.Object.(*hephv1.ImageBuild)
+				require.NotEqual(t, hephv1.PhaseFailed, ib.Status.Phase)
+
+				if ib.Status.Phase == hephv1.PhaseSucceeded {
+					loop = false
+				}
+			}
+		}
+
+		credentials, err := auth.FindDefaultCredentials(ctx, "https://www.googleapis.com/auth/cloud-platform")
+		require.NoError(t, err)
+
+		token, err := credentials.TokenSource.Token()
+		require.NoError(t, err)
+
+		hub, err := registry.New(fmt.Sprintf("https://%s", suite.gcpRegistry), "oauth2accesstoken", token.AccessToken)
+		require.NoError(t, err)
+
+		tags, err := hub.Tags(image)
+		require.NoError(t, err)
+		assert.Contains(t, tags, tag)
 	})
 
-	suite.T().Run("build_failure", func(t *testing.T) {
-	})
+	suite.T().Run("build_args", func(t *testing.T) {})
+
+	suite.T().Run("build_failure", func(t *testing.T) {})
 }

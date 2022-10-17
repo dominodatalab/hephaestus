@@ -6,12 +6,14 @@ go 1.19
 
 require (
 	github.com/dominodatalab/hephaestus v0.1.21
-	github.com/dominodatalab/testenv v0.0.0-20221013012501-bb63aa01ea20
+	github.com/dominodatalab/testenv v0.0.0-20221017202832-3c4e9a11fcc4
 	github.com/heroku/docker-registry-client v0.0.0-20211012143308-9463674c8930
 	github.com/stretchr/testify v1.8.0
+	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8
 	k8s.io/api v0.25.0
 	k8s.io/apimachinery v0.25.2
 	k8s.io/client-go v0.25.0
+	k8s.io/utils v0.0.0-20220728103510-ee6ede2d64ed
 )
 
 require (
@@ -179,7 +181,6 @@ require (
 	go.uber.org/zap v1.23.0 // indirect
 	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e // indirect
 	golang.org/x/net v0.0.0-20220722155237-a158d28d115b // indirect
-	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4 // indirect
 	golang.org/x/sys v0.0.0-20220915200043-7b5979e65e41 // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
@@ -202,7 +203,6 @@ require (
 	k8s.io/cli-runtime v0.25.0 // indirect
 	k8s.io/klog/v2 v2.70.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20220803162953-67bda5d908f1 // indirect
-	k8s.io/utils v0.0.0-20220728103510-ee6ede2d64ed // indirect
 	oras.land/oras-go v1.2.0 // indirect
 	sigs.k8s.io/controller-runtime v0.13.0 // indirect
 	sigs.k8s.io/json v0.0.0-20220713155537-f223a00ba0e2 // indirect
