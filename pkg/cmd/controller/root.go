@@ -59,7 +59,7 @@ func newCRDApplyCommand() *cobra.Command {
 		Long: `Apply all "hephaestus.dominodatalab.com" CRDs to a cluster.
 
 Apply Rules:
-  - When a definition is is missing, it will be created
+  - When a definition is missing, it will be created
   - If a definition is already present, then it will be updated
   - Updating definitions that have not changed results in a no-op`,
 		RunE: func(cmd *cobra.Command, args []string) error {
