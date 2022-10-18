@@ -890,8 +890,9 @@ func schema_pkg_api_hephaestus_v1_RegistryCredentials(ref common.ReferenceCallba
 				Properties: map[string]spec.Schema{
 					"server": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "NOTE: this field was previously used to assert the presence of an auth entry inside of secret credentials. if the\n Server was missing, then an error was raised. this design is limiting because it requires users to create\n several `registryAuth` items with the same secret if they want to verify the presence. in a future api version,\n we may remove the Server field from this type and replace it with one or more fields that service the needs all\n credential types.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"cloudProvided": {
