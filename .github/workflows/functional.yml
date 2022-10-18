@@ -71,7 +71,7 @@ jobs:
           MANAGER_IMAGE_TAG: pr-${{ github.event.issue.number }}
         run: |
           cd test/functional
-          go test -tags functional,gke
+          go test -timeout 0 -tags functional,gke
 
       - name: Save testenv files
         if: ${{ always() }}
