@@ -424,6 +424,10 @@ func (p *AutoscalingPool) updateWorkers(ctx context.Context) error {
 				removals = append(removals, pod.Name)
 			}
 		} else { // mark abnormal pods
+			// TODO: if a buildkit pod is coming up initially and is NOT in a pending state, then the controller never
+			// 	gives it a chances to reach a steady state and terminates it prematurely. this check should be a little
+			// 	bit more robust. i think we need to make this function a little less unwieldly with all its if/else if
+			// 	branches.
 			log.Info(
 				"Unknown phase detected",
 				"phase", pod.Status.Phase,
