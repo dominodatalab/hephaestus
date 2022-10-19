@@ -56,8 +56,8 @@ releases:
     values:
       - secrets:
           haSharedSecret: docker-registry-ha-shared-secret
-#        service:
-#          type: LoadBalancer
+        service:
+          type: LoadBalancer
 
   - name: docker-registry-secure
     namespace: default
@@ -68,10 +68,10 @@ releases:
       - istio-system/istiod
     values:
       - secrets:
-          htpasswd: "test-user:$2y$05$ztRaiJFJUA0ewAcgD3UameXMdpUcx2IEMRkIH2P.gCBm/R57sPW6C"
+          htpasswd: "test-user:$2y$05$1eGDzSDRv.qRvDAhZOvFker9bqg06hlQCL3pbnga139jOtjtrdf8e"
           haSharedSecret: docker-registry-ha-shared-secret
-#        service:
-#          type: LoadBalancer
+        service:
+          type: LoadBalancer
 
   - name: rabbitmq
     namespace: default
@@ -117,12 +117,16 @@ releases:
       - istio:
           enabled: true
         registries:
+          "docker-registry-secure:5000":
+            http: true
           "docker-registry:5000":
             http: true
         buildkit:
           rootless: false
         controller:
           manager:
+            image:
+              pullPolicy: Always
             messaging:
               enabled: true
               amqp:
