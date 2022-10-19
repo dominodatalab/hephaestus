@@ -54,7 +54,7 @@ func (in *ImageBuild) validateImageBuild(action string) error {
 	}
 
 	for idx, arg := range in.Spec.BuildArgs {
-		if len(strings.SplitN(arg, "=", 2)) != 2 {
+		if ss := strings.SplitN(arg, "=", 2); len(ss) != 2 || strings.TrimSpace(ss[0]) == "" {
 			log.V(1).Info("Build arg is invalid", "arg", arg)
 			errList = append(errList, field.Invalid(
 				fp.Child("buildArgs").Index(idx), arg, "must use a <key>=<value> format",
