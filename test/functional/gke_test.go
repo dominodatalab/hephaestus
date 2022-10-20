@@ -21,7 +21,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/utils/pointer"
@@ -113,7 +112,7 @@ func (suite *GKETestSuite) SetupSuite() {
 
 func (suite *GKETestSuite) TearDownSuite() {
 	suite.T().Log("Tearing down test cluster")
-	// require.NoError(suite.T(), suite.manager.Destroy(context.Background()))
+	require.NoError(suite.T(), suite.manager.Destroy(context.Background()))
 }
 
 func (suite *GKETestSuite) TestImageBuildValidation() {
@@ -296,16 +295,13 @@ func (suite *GKETestSuite) TestImageBuildValidation() {
 func (suite *GKETestSuite) TestImageBuilding() {
 	ctx := context.Background()
 
-	// TODO: assert message delivery
-	// TODO: assert log delivery
-
 	suite.T().Run("no_auth", func(t *testing.T) {
 		build := newImageBuild(
 			python39JupyterBuildContext,
 			"docker-registry:5000/test-ns/test-repo",
 			nil,
 		)
-		ib := suite.createBuild(t, ctx, build)
+		ib := createBuild(t, ctx, suite.hephClient, build)
 		require.NotEqual(t, hephv1.PhaseFailed, ib.Status.Phase)
 
 		svc, err := suite.k8sClient.CoreV1().Services(corev1.NamespaceDefault).Get(
@@ -324,6 +320,9 @@ func (suite *GKETestSuite) TestImageBuilding() {
 		tags, err := hub.Tags("test-ns/test-repo")
 		require.NoError(t, err)
 		assert.Contains(t, tags, ib.Spec.LogKey)
+
+		testLogDelivery(t, ctx, suite.k8sClient, ib)
+		testMessageDelivery(t, ctx, suite.k8sClient, ib)
 	})
 
 	suite.T().Run("bad_auth", func(t *testing.T) {
@@ -338,7 +337,7 @@ func (suite *GKETestSuite) TestImageBuilding() {
 				},
 			},
 		)
-		ib := suite.createBuild(t, ctx, build)
+		ib := createBuild(t, ctx, suite.hephClient, build)
 
 		assert.Equal(t, ib.Status.Phase, hephv1.PhaseFailed)
 		assert.Contains(t, ib.Status.Conditions[0].Message, `"docker-registry-secure:5000" client credentials are invalid`)
@@ -356,7 +355,7 @@ func (suite *GKETestSuite) TestImageBuilding() {
 				},
 			},
 		)
-		ib := suite.createBuild(t, ctx, build)
+		ib := createBuild(t, ctx, suite.hephClient, build)
 
 		assert.Equalf(t, ib.Status.Phase, hephv1.PhaseSucceeded, "failed build with message %q", ib.Status.Conditions[0].Message)
 	})
@@ -387,7 +386,7 @@ func (suite *GKETestSuite) TestImageBuilding() {
 				},
 			},
 		)
-		ib := suite.createBuild(t, ctx, build)
+		ib := createBuild(t, ctx, suite.hephClient, build)
 
 		assert.Equalf(t, ib.Status.Phase, hephv1.PhaseSucceeded, "failed build with message %q", ib.Status.Conditions[0].Message)
 	})
@@ -402,7 +401,7 @@ func (suite *GKETestSuite) TestImageBuilding() {
 				CloudProvided: pointer.Bool(true),
 			},
 		)
-		ib := suite.createBuild(t, ctx, build)
+		ib := createBuild(t, ctx, suite.hephClient, build)
 
 		credentials, err := auth.FindDefaultCredentials(ctx, "https://www.googleapis.com/auth/cloud-platform")
 		require.NoError(t, err)
@@ -425,7 +424,7 @@ func (suite *GKETestSuite) TestImageBuilding() {
 			nil,
 		)
 		build.Spec.BuildArgs = []string{"INPUT=VAR=VAL"}
-		ib := suite.createBuild(t, ctx, build)
+		ib := createBuild(t, ctx, suite.hephClient, build)
 
 		assert.Equalf(t, ib.Status.Phase, hephv1.PhaseSucceeded, "failed build with message %q", ib.Status.Conditions[0].Message)
 	})
@@ -436,45 +435,16 @@ func (suite *GKETestSuite) TestImageBuilding() {
 			"docker-registry:5000/test-ns/test-repo",
 			nil,
 		)
-		ib := suite.createBuild(t, ctx, build)
+		ib := createBuild(t, ctx, suite.hephClient, build)
 
 		assert.Equalf(t, ib.Status.Phase, hephv1.PhaseFailed, "expected build with bad Dockerfile to fail")
 	})
 
-	// NOTE: should we test multi-stage and concurrent builds? probs
-}
+	suite.T().Run("multi_stage", func(t *testing.T) {
+		t.Skip("implement")
+	})
 
-func (suite *GKETestSuite) createBuild(t *testing.T, ctx context.Context, build *hephv1.ImageBuild) *hephv1.ImageBuild {
-	t.Helper()
-
-	client := suite.hephClient.HephaestusV1().ImageBuilds(corev1.NamespaceDefault)
-
-	build, err := client.Create(ctx, build, metav1.CreateOptions{})
-	require.NoError(t, err, "failed to create build")
-
-	watcher, err := client.Watch(ctx, metav1.SingleObject(build.ObjectMeta))
-	require.NoError(t, err, "failed to create build watch")
-	defer watcher.Stop()
-
-	ctxTimeout, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	defer cancel()
-
-	var result *hephv1.ImageBuild
-	for loop := true; loop; {
-		select {
-		case <-ctxTimeout.Done():
-			t.Fatal("Build failed to finish within context deadline")
-		case event := <-watcher.ResultChan():
-			if event.Type != watch.Modified {
-				continue
-			}
-
-			result = event.Object.(*hephv1.ImageBuild)
-			if (result.Status.Phase == hephv1.PhaseSucceeded || result.Status.Phase == hephv1.PhaseFailed) && result.Status.Conditions != nil {
-				loop = false
-			}
-		}
-	}
-
-	return result
+	suite.T().Run("concurrent_builds", func(t *testing.T) {
+		t.Skip("implement")
+	})
 }
