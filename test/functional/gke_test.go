@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -441,10 +442,57 @@ func (suite *GKETestSuite) TestImageBuilding() {
 	})
 
 	suite.T().Run("multi_stage", func(t *testing.T) {
-		t.Skip("implement")
+		build := newImageBuild(
+			multiStageBuildContext,
+			"docker-registry:5000/test-ns/test-repo",
+			nil,
+		)
+		ib := createBuild(t, ctx, suite.hephClient, build)
+
+		assert.Equalf(t, ib.Status.Phase, hephv1.PhaseSucceeded, "failed build with message %q", ib.Status.Conditions[0].Message)
 	})
 
 	suite.T().Run("concurrent_builds", func(t *testing.T) {
-		t.Skip("implement")
+		var wg sync.WaitGroup
+		ch := make(chan *hephv1.ImageBuild, 3)
+
+		for i := 0; i < 3; i++ {
+			wg.Add(1)
+
+			go func() {
+				defer wg.Done()
+
+				build := newImageBuild(
+					python39JupyterBuildContext,
+					"docker-registry:5000/test-ns/test-repo",
+					nil,
+				)
+				build.Spec.DisableLocalBuildCache = true
+
+				ch <- createBuild(t, ctx, suite.hephClient, build)
+			}()
+		}
+		wg.Wait()
+		close(ch)
+
+		var builders []string
+		for ib := range ch {
+			builders = append(builders, ib.Status.BuilderAddr)
+			assert.Equalf(
+				t,
+				ib.Status.Phase,
+				hephv1.PhaseSucceeded,
+				"failed build %q with message %q",
+				ib.Name,
+				ib.Status.Conditions[0].Message,
+			)
+		}
+
+		expected := []string{
+			"tcp://hephaestus-buildkit-0.hephaestus-buildkit.default:1234",
+			"tcp://hephaestus-buildkit-1.hephaestus-buildkit.default:1234",
+			"tcp://hephaestus-buildkit-2.hephaestus-buildkit.default:1234",
+		}
+		assert.ElementsMatch(t, builders, expected, "builds did not execute on unique buildkit pods")
 	})
 }

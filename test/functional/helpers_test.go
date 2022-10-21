@@ -42,6 +42,7 @@ const (
 	buildArgBuildContext remoteDockerBuildContext = iota
 	errorBuildContext
 	python39JupyterBuildContext
+	multiStageBuildContext
 )
 
 func (c remoteDockerBuildContext) String() string {
@@ -49,6 +50,7 @@ func (c remoteDockerBuildContext) String() string {
 		"build-arg",
 		"error",
 		"python39-jupyter",
+		"multi-stage",
 	}[c-1]
 }
 
