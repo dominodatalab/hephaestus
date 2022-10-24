@@ -369,36 +369,49 @@ func (p *AutoscalingPool) updateWorkers(ctx context.Context) error {
 		return getOrdinal(podList.Items[i].Name) < getOrdinal(podList.Items[j].Name)
 	})
 
-	var allPods []string
-	var leased []string
-	var pending []string
-	var removals []string
-	var abnormal []string
+	var subtractions int
+	var allPods, pending, starting, leased, removals []string
 
 	// mark pods for removal based on state and lease pods when requests exist
 	for _, pod := range podList.Items {
+		log := p.log.WithValues("podName", pod.Name)
+
+		log.Info("Evaluating pod metadata and status")
 		allPods = append(allPods, pod.Name)
 
-		log := p.log.WithValues("podName", pod.Name)
-		log.Info("Evaluating pod metadata and status")
-
-		if id, ok := pod.Annotations[managerIDAnnotation]; ok && id != p.uuid { // mark unmanaged pods
+		// mark pods for removal when their manager ID is different from the current one
+		if id, ok := pod.Annotations[managerIDAnnotation]; ok && id != p.uuid {
 			log.Info("Eligible for termination, manager id mismatch", "expected", p.uuid, "actual", id)
-
 			removals = append(removals, pod.Name)
-		} else if _, hasLease := pod.Annotations[leasedByAnnotation]; hasLease { // mark leased pods
-			log.Info("Ineligible for termination, pod is leased")
 
+			continue
+		}
+
+		// mark leased pods to safeguard them from multi-leasing and termination
+		if _, hasLease := pod.Annotations[leasedByAnnotation]; hasLease {
+			log.Info("Ineligible for termination, pod is leased")
 			leased = append(leased, pod.Name)
-		} else if pod.Status.Phase == corev1.PodPending { // mark pending pods
+
+			continue
+		}
+
+		// mark pending pods and optionally terminate them when their ttl has expired
+		if pod.Status.Phase == corev1.PodPending {
 			pending = append(pending, pod.Name)
 
-			if elapsed := time.Since(pod.CreationTimestamp.Time); elapsed < p.podMaxIdleTime {
-				log.Info("Pending pod is not old enough for termination", "gracePeriod", p.podMaxIdleTime-elapsed)
-			} else {
+			if time.Since(pod.CreationTimestamp.Time) > p.podMaxIdleTime {
+				log.Info("Eligible for termination, pending pod age older than max idle time")
 				removals = append(removals, pod.Name)
+			} else {
+				log.Info("Ineligible for termination, pending pod is not old enough")
 			}
-		} else if p.isOperationalPod(ctx, pod.Name) { // dispatch builds/check expiry/check age on operation pods
+
+			continue
+		}
+
+		// leverage operational pods to service build requests or mark them for removal
+		// when there are no requests and their ttl has expired
+		if p.isOperationalPod(ctx, pod.Name) {
 			log.Info("Pod is operational")
 
 			if req := p.requests.Dequeue(); req != nil {
@@ -406,6 +419,7 @@ func (p *AutoscalingPool) updateWorkers(ctx context.Context) error {
 				if p.processPodRequest(ctx, req, pod) {
 					leased = append(leased, pod.Name)
 				}
+
 				continue
 			}
 
@@ -419,23 +433,42 @@ func (p *AutoscalingPool) updateWorkers(ctx context.Context) error {
 					log.Info("Eligible for termination, ttl has expired", "expiry", expiry)
 					removals = append(removals, pod.Name)
 				}
-			} else if time.Since(pod.CreationTimestamp.Time) > p.podMaxIdleTime {
+
+				continue
+			}
+
+			if time.Since(pod.CreationTimestamp.Time) > p.podMaxIdleTime {
 				log.Info("Eligible for termination, missing expiry time and pod age older than max idle time")
 				removals = append(removals, pod.Name)
 			}
-		} else { // mark abnormal pods
-			// TODO: if a buildkit pod is coming up initially and is NOT in a pending state, then the controller never
-			// 	gives it a chances to reach a steady state and terminates it prematurely. this check should be a little
-			// 	bit more robust. i think we need to make this function a little less unwieldy with all its if/else if
-			// 	branches.
-			log.Info(
-				"Unknown phase detected",
-				"phase", pod.Status.Phase,
-				"conditions", pod.Status.Conditions,
-				"containerStatuses", pod.Status.ContainerStatuses,
-			)
-			abnormal = append(abnormal, pod.Name)
+
+			continue
 		}
+
+		// mark pods that are in the process of starting up
+		// these pods are granted the same ttl as operational and pending pods
+		if pod.Status.Phase == corev1.PodRunning && time.Since(pod.CreationTimestamp.Time) < p.podMaxIdleTime {
+			log.Info("Ineligible for termination, starting pod is not old enough")
+			starting = append(starting, pod.Name)
+
+			if p.requests.Len() > 0 {
+				subtractions++
+				/*
+					starting
+				*/
+			}
+
+			continue
+		}
+
+		// mark abnormal pods for termination
+		log.Info(
+			"Eligible for termination, unknown phase or incomplete startup detected",
+			"phase", pod.Status.Phase,
+			"conditions", pod.Status.Conditions,
+			"containerStatuses", pod.Status.ContainerStatuses,
+		)
+		removals = append(removals, pod.Name)
 	}
 
 	// collect names of pods that might be terminated
@@ -443,12 +476,8 @@ func (p *AutoscalingPool) updateWorkers(ctx context.Context) error {
 	for _, name := range removals {
 		subtractionMap[name] = true
 	}
-	for _, name := range abnormal {
-		subtractionMap[name] = true
-	}
 
 	// calculate which pods can be removed based reverse-ordinal position
-	var subtractions int
 	for idx := range allPods {
 		reverseIdx := len(allPods) - 1 - idx
 
@@ -467,8 +496,8 @@ func (p *AutoscalingPool) updateWorkers(ctx context.Context) error {
 		"allPods", allPods,
 		"leasedPods", leased,
 		"pendingPods", pending,
+		"startingPods", starting,
 		"removalPods", removals,
-		"abnormalPods", abnormal,
 		"podRequests", requestCount,
 	)
 
