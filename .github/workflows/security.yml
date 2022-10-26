@@ -7,7 +7,7 @@ on:
     inputs:
       buildkitVersion:
         type: string
-        description: Override Buildkit image version defined in Helm chart (e.g. v0.10.3)
+        description: Override Helm chart Buildkit version (e.g. v0.10.3)
 
 jobs:
   check-input:
@@ -42,7 +42,7 @@ jobs:
           username: ${{ secrets.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_PASSWORD }}
 
-      - name: Build and push rootless Buildkit image to Quay
+      - name: Build and push image to Quay
         uses: docker/build-push-action@v3
         with:
           push: true
@@ -76,7 +76,7 @@ jobs:
           username: ${{ secrets.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_PASSWORD }}
 
-      - name: Build and push rootless Buildkit image to Quay
+      - name: Build and push image to Quay
         uses: docker/build-push-action@v3
         with:
           push: true
