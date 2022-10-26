@@ -13,9 +13,9 @@ jobs:
   check-input:
     name: Check user input
     runs-on: ubuntu-latest
-    if: github.event.inputs.buildkitVersion != ''
     steps:
       - name: Validate buildkit version
+        if: github.event.inputs.buildkitVersion != ''
         run: curl --head --fail-with-body https://hub.docker.com/v2/repositories/moby/buildkit/tags/${{ inputs.buildkitVersion }}
 
   buildkit:
