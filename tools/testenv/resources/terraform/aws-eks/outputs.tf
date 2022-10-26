@@ -1,5 +1,5 @@
 output "kubeconfig" {
   description = "Kubeconfig for eks cluster"
-  sensitive = true
+  sensitive   = true
   value       = local.kubeconfig
 }
