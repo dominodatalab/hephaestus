@@ -7,7 +7,8 @@ resource "random_string" "name_suffix" {
 }
 
 locals {
-  name = "testenv-eks-${random_string.name_suffix.result}"
+  name         = "testenv-eks-${random_string.name_suffix.result}"
+  cluster_name = "${local.name}-cluster"
   kubeconfig = yamlencode({
     apiVersion      = "v1"
     kind            = "Config"
@@ -60,20 +61,21 @@ module "vpc" {
 
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "~> 18.0"
+  version = "~> 18.30"
 
-  cluster_name    = "${local.name}-cluster"
+  cluster_name    = local.cluster_name
   cluster_version = var.kubernetes_version
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = concat(module.vpc.public_subnets, module.vpc.private_subnets)
+  #  iam_role_additional_policies = [aws_iam_policy.policy.arn]
 }
 
 module "ecr" {
   source          = "terraform-aws-modules/ecr/aws"
+  version         = "~> 1.4"
   repository_name = "${local.name}-ecr-repository"
 
-  repository_read_write_access_arns = [aws_iam_role.role.arn]
   repository_lifecycle_policy = jsonencode({
     rules = [
       {
@@ -93,42 +95,39 @@ module "ecr" {
   })
 }
 
-resource "aws_iam_role" "role" {
-  name               = "${local.name}-role"
-  assume_role_policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "ec2.amazonaws.com"
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-EOF
+data "aws_iam_policy_document" "ecr_access" {
+  statement {
+    sid       = "GetAuthorizationToken"
+    actions   = ["ecr:GetAuthorizationToken"]
+    effect    = "Allow"
+    resources = ["*"]
+  }
+  statement {
+    sid = "ManageRepositoryContents"
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:GetDownloadUrlForLayer",
+      "ecr:GetRepositoryPolicy",
+      "ecr:DescribeRepositories",
+      "ecr:ListImages",
+      "ecr:DescribeImages",
+      "ecr:BatchGetImage",
+      "ecr:InitiateLayerUpload",
+      "ecr:UploadLayerPart",
+      "ecr:CompleteLayerUpload",
+      "ecr:PutImage"
+    ]
+    effect    = "Allow"
+    resources = [module.ecr.repository_arn]
+  }
 }
 
 resource "aws_iam_policy" "policy" {
-  name = "${local.name}-ecr-access-policy"
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = [
-          "ecr:*",
-        ]
-        Effect   = "Allow"
-        Resource = "*"
-      },
-    ]
-  })
+  name   = "${local.name}-ecr-access-policy"
+  policy = data.aws_iam_policy_document.ecr_access.json
 }
 
-resource "aws_iam_policy_attachment" "attach" {
-  name       = "${local.name}-attach"
-  roles      = [aws_iam_role.role.name]
+resource "aws_iam_role_policy_attachment" "ecr_access" {
   policy_arn = aws_iam_policy.policy.arn
+  role       = module.eks.cluster_iam_role_name
 }
