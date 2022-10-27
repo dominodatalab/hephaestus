@@ -7,10 +7,10 @@ on:
     inputs:
       immutable:
         type: boolean
-        description: Generate immutable image tags for stable deployment
+        description: Generate stable image tags
       buildkitVersion:
         type: string
-        description: Override version defined in Helm chart (e.g. v0.10.3)
+        description: Override version defined in Helm chart
 
 jobs:
   process-input:
@@ -52,7 +52,7 @@ jobs:
   buildkit:
     name: Buildkit
     runs-on: ubuntu-latest
-    needs: [check-input]
+    needs: [process-input]
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -80,7 +80,7 @@ jobs:
   buildkit-rootless:
     name: Buildkit Rootless
     runs-on: ubuntu-latest
-    needs: [check-input]
+    needs: [process-input]
     steps:
       - name: Checkout
         uses: actions/checkout@v3
