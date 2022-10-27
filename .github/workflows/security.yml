@@ -35,7 +35,7 @@ jobs:
       - id: image_tags
         name: Construct image tags
         run: |
-          IMMUTABLE_SUFFIX="$(test -n "${{ inputs.immutable }}" && "-$(date +%Y%m%d%H%M%S)" || "")"
+          IMMUTABLE_SUFFIX="$([[ ${{ inputs.immutable }} == "true" ]] && echo "-$(date +%Y%m%d%H%M%S)" || echo "")"
           BUILDKIT_INPUT_TAG="${{ steps.buildkit_tag.outputs.result }}"
           BUILDKIT_OUTPUT_TAG="$BUILDKIT_INPUT_TAG$IMMUTABLE_SUFFIX"
           BUILDKIT_ROOTLESS_INPUT_TAG="$BUILDKIT_INPUT_TAG-rootless"
