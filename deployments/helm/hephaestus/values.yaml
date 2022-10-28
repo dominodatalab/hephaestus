@@ -88,6 +88,10 @@ controller:
   # Configure controller pod security context
   podSecurityContext:
     runAsNonRoot: true
+    # nonroot
+    runAsUser: 65532
+    seLinuxOptions:
+      type: spc_t
 
   # Annotations for controller pods
   podAnnotations: {}

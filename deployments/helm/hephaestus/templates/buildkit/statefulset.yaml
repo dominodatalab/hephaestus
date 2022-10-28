@@ -34,13 +34,15 @@ spec:
           {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
-      {{- include "hephaestus.imagePullSecrets" . | nindent 6 }}
+      {{- include "hephaestus.imagePullSecrets" . | indent 6 }}
       serviceAccountName: {{ include "hephaestus.buildkit.fullname" . }}
       securityContext:
+        runAsNonRoot: {{ .Values.buildkit.rootless }}
+        runAsUser: {{ ternary 1000 0 .Values.buildkit.rootless }}
+        fsGroup: {{ ternary 1000 0 .Values.buildkit.rootless }}
         fsGroupChangePolicy: "OnRootMismatch"
-      {{- if .Values.buildkit.rootless }}
-        fsGroup: 1000
-      {{- end }}
+        seLinuxOptions:
+          type: spc_t
       containers:
         - name: buildkitd
           securityContext:
