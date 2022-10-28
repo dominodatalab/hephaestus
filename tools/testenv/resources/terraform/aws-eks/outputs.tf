@@ -1,7 +1,7 @@
-output "kubeconfig" {
+output "kubeconfig_path" {
   description = "Kubeconfig for eks cluster"
   sensitive   = true
-  value       = local.kubeconfig
+  value       = var.kubeconfig_path
 }
 
 output "repo_url" {

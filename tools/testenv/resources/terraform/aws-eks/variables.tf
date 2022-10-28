@@ -9,3 +9,9 @@ variable "kubernetes_version" {
   default     = "1.22"
 }
 
+
+variable "kubeconfig_path" {
+  type        = string
+  description = "Path to the kubeconfig file."
+  default     = "./kubeconfig"
+}
