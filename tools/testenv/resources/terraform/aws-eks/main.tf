@@ -41,6 +41,8 @@ module "eks" {
   cluster_name    = local.cluster_name
   cluster_version = var.kubernetes_version
 
+  manage_aws_auth_configmap = true
+
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
 
@@ -80,7 +82,7 @@ module "ecr" {
   })
 }
 
-data "aws_iam_policy_document" "ecr_access" {
+data "aws_iam_policy_document" "ecr_access_policy_document" {
   statement {
     sid       = "GetAuthorizationToken"
     actions   = ["ecr:GetAuthorizationToken"]
@@ -107,13 +109,34 @@ data "aws_iam_policy_document" "ecr_access" {
   }
 }
 
+data "aws_iam_policy_document" "node_access_policy_document" {
+  statement {
+    sid = "NodeAccessPolicy"
+    actions = [
+      "ec2:Describe*"
+    ]
+    effect    = "Allow"
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_policy" "node_policy" {
+  name   = "${local.name}-node-access-policy"
+  policy = data.aws_iam_policy_document.node_access_policy_document.json
+}
+
 resource "aws_iam_policy" "ecr_policy" {
   name   = "${local.name}-ecr-access-policy"
-  policy = data.aws_iam_policy_document.ecr_access.json
+  policy = data.aws_iam_policy_document.ecr_access_policy_document.json
 }
 
 resource "aws_iam_role_policy_attachment" "ecr_access" {
   policy_arn = aws_iam_policy.ecr_policy.arn
+  role       = module.eks.cluster_iam_role_name
+}
+
+resource "aws_iam_role_policy_attachment" "node_access" {
+  policy_arn = aws_iam_policy.node_policy.arn
   role       = module.eks.cluster_iam_role_name
 }
 
