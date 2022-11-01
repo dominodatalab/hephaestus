@@ -20,10 +20,12 @@ data "aws_eks_cluster_auth" "this" {
 }
 
 module "vpc" {
-  source  = "terraform-aws-modules/vpc/aws"
-  version = "~> 3.18"
+  source             = "terraform-aws-modules/vpc/aws"
+  version            = "~> 3.18"
+  enable_nat_gateway = true
+  cidr               = "10.0.0.0/16"
 
-  cidr = "10.0.0.0/16"
+  enable_dns_hostnames = true
 
   name = "${local.name}-vpc"
   azs = [
@@ -54,6 +56,18 @@ module "eks" {
 
       instance_types = ["t3.xlarge"]
       capacity_type  = "SPOT"
+    }
+  }
+
+  node_security_group_additional_rules = {
+    egress_all = {
+      description      = "Node all egress"
+      protocol         = "-1"
+      from_port        = 0
+      to_port          = 0
+      type             = "egress"
+      cidr_blocks      = ["0.0.0.0/0"]
+      ipv6_cidr_blocks = ["::/0"]
     }
   }
 }
