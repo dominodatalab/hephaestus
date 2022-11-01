@@ -1,5 +1,5 @@
 output "kubeconfig_path" {
-  description = "Kubeconfig for eks cluster"
+  description = "Kubeconfig path for the eks cluster"
   sensitive   = true
   value       = var.kubeconfig_path
 }
