@@ -162,7 +162,7 @@ resource "aws_iam_policy" "ecr_policy" {
 
 resource "aws_iam_role_policy_attachment" "ecr_access" {
   policy_arn = aws_iam_policy.ecr_policy.arn
-  role       = module.eks.cluster_iam_role_name
+  role       = module.eks.eks_managed_node_groups["default"].iam_role_name
 }
 
 resource "aws_iam_role_policy_attachment" "node_access" {
