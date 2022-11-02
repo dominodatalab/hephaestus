@@ -6,12 +6,5 @@ variable "region" {
 variable "kubernetes_version" {
   type        = string
   description = "The Kubernetes version of the masters. If set to 'latest' it will pull latest available version in the selected region."
-  default     = "1.22"
-}
-
-
-variable "kubeconfig_path" {
-  type        = string
-  description = "Path to the kubeconfig file."
-  default     = "./kubeconfig"
+  default     = "1.23"
 }

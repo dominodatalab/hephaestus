@@ -1,10 +1,10 @@
-output "kubeconfig_path" {
-  description = "Kubeconfig for eks cluster"
+output "kubeconfig" {
+  description = "A kubeconfig file configured to access the EKS cluster."
   sensitive   = true
-  value       = var.kubeconfig_path
+  value       = local_file.kubeconfig
 }
 
-output "repo_url" {
+output "repository" {
   description = "Repository url for testing artifacts"
   value       = module.ecr.repository_url
 }
