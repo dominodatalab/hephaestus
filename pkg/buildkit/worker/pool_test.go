@@ -80,7 +80,7 @@ func TestPoolGet(t *testing.T) {
 			expected := "tcp://buildkit-0.buildkit.test-namespace:1234"
 			assert.Equal(t, expected, leaseAddr, "did not receive correct lease")
 		case <-time.After(testTimeoutDuration):
-			assert.Fail(t, "could not acquire a buildkit endpoint within 3s")
+			assert.Fail(t, "could not acquire a buildkit endpoint within %s", testTimeoutDuration)
 		}
 	})
 
@@ -153,7 +153,7 @@ func TestPoolGet(t *testing.T) {
 			expected := "tcp://buildkit-0.buildkit.test-namespace:1234"
 			assert.Equal(t, expected, leaseAddr, "did not receive correct lease")
 		case <-time.After(testTimeoutDuration):
-			assert.Fail(t, "could not acquire a buildkit endpoint within 3s")
+			assert.Fail(t, "could not acquire a buildkit endpoint within %s", testTimeoutDuration)
 		}
 	})
 
@@ -180,7 +180,7 @@ func TestPoolGet(t *testing.T) {
 			assert.Empty(t, res.res.(string), "expected an empty lease address")
 			assert.EqualError(t, res.err, "cannot update pod metadata: expected failure")
 		case <-time.After(testTimeoutDuration):
-			assert.Fail(t, "could not acquire a buildkit endpoint within 3s")
+			assert.Fail(t, "could not acquire a buildkit endpoint within %s", testTimeoutDuration)
 		}
 	})
 
@@ -232,7 +232,7 @@ func TestPoolGet(t *testing.T) {
 			assert.Empty(t, res.res.(string), "expected an empty lease address")
 			assert.EqualError(t, res.err, "failed to extract hostname after 180 seconds")
 		case <-time.After(testTimeoutDuration):
-			assert.Fail(t, "could not acquire a buildkit endpoint within 3s")
+			assert.Fail(t, "could not acquire a buildkit endpoint within %s", testTimeoutDuration)
 		}
 	})
 
@@ -287,7 +287,7 @@ func TestPoolGet(t *testing.T) {
 			expected := "tcp://buildkit-0.buildkit.test-namespace:1234"
 			assert.Equal(t, expected, leaseAddr, "did not receive correct lease")
 		case <-time.After(testTimeoutDuration):
-			assert.Fail(t, "could not acquire a buildkit endpoint within 3s")
+			assert.Fail(t, "could not acquire a buildkit endpoint within %s", testTimeoutDuration)
 		}
 	})
 
@@ -355,7 +355,7 @@ func TestPoolGet(t *testing.T) {
 				t.Errorf("Received error attempting to create test setup: %s", e.Error())
 			}
 		case <-time.After(testTimeoutDuration):
-			t.Error("Could not acquire a buildkit endpoint within 3s")
+			t.Errorf("Could not acquire a buildkit endpoint within %s", testTimeoutDuration)
 		}
 	})
 }
@@ -419,7 +419,7 @@ func TestPoolGetFailedScaleUp(t *testing.T) {
 			}
 		}
 	case <-time.After(testTimeoutDuration):
-		t.Error("Could not acquire a buildkit endpoint within 3s")
+		t.Errorf("Could not acquire a buildkit endpoint within %s", testTimeoutDuration)
 	}
 }
 
@@ -449,7 +449,7 @@ func TestPoolGetAndClose(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(testTimeoutDuration):
-		assert.Fail(t, "worker pool was not closed within 3s")
+		assert.Fail(t, "worker pool was not closed within %s", testTimeoutDuration)
 	}
 }
 
@@ -481,7 +481,7 @@ func TestPoolGetAndCancel(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(testTimeoutDuration):
-		assert.Fail(t, "worker pool was not closed within 3s")
+		assert.Fail(t, "worker pool was not closed within %s", testTimeoutDuration)
 	}
 }
 
@@ -550,237 +550,195 @@ func TestPoolRelease(t *testing.T) {
 }
 
 func TestPoolPodReconciliation(t *testing.T) {
+	garbageClientHack = true
+	t.Cleanup(func() {
+		garbageClientHack = false
+	})
+
 	tests := []struct {
-		name     string
-		objects  func() []runtime.Object
-		requests int
-		expected int32
+		name             string
+		objects          func() []runtime.Object
+		buildRequests    int
+		expectedReplicas int32
 	}{
+		{
+			name: "no_pods",
+			objects: func() []runtime.Object {
+				return nil
+			},
+			expectedReplicas: 0,
+		},
+		{
+			name: "no_pods_with_requests",
+			objects: func() []runtime.Object {
+				return nil
+			},
+			buildRequests:    1,
+			expectedReplicas: 1,
+		},
 		{
 			name: "unmanaged",
 			objects: func() []runtime.Object {
-				p := leasedPod()
-				p.ObjectMeta.Annotations[managerIDAnnotation] = string(uuid.NewUUID())
-
-				return []runtime.Object{p}
+				return []runtime.Object{unmanagedPod()}
 			},
-			expected: 0,
+			expectedReplicas: 0,
+		},
+		{
+			name: "unmanaged_with_requests",
+			objects: func() []runtime.Object {
+				return []runtime.Object{unmanagedPod()}
+			},
+			buildRequests:    1,
+			expectedReplicas: 0,
 		},
 		{
 			name: "leased",
 			objects: func() []runtime.Object {
 				return []runtime.Object{leasedPod()}
 			},
-			expected: 1,
+			expectedReplicas: 1,
 		},
 		{
-			name: "unleased_new",
+			name: "leased_with_requests",
 			objects: func() []runtime.Object {
-				p := validPod()
-				p.CreationTimestamp = metav1.Time{Time: time.Now()}
-
-				return []runtime.Object{p}
+				return []runtime.Object{leasedPod()}
 			},
-			expected: 1,
+			buildRequests:    1,
+			expectedReplicas: 2,
 		},
 		{
-			name: "unleased_old",
+			name: "pending",
 			objects: func() []runtime.Object {
-				p := validPod()
-				p.CreationTimestamp = metav1.Time{Time: time.Now().Add(-20 * time.Minute)}
-
-				return []runtime.Object{p}
+				return []runtime.Object{pendingPod()}
 			},
-			expected: 0,
+			expectedReplicas: 1,
 		},
 		{
-			name: "pending_new",
+			name: "pending_with_requests",
 			objects: func() []runtime.Object {
-				p := validPod()
-				p.Status.Phase = corev1.PodPending
-				p.CreationTimestamp = metav1.NewTime(time.Now())
-
-				return []runtime.Object{p}
+				return []runtime.Object{pendingPod()}
 			},
-			expected: 1,
+			buildRequests:    1,
+			expectedReplicas: 1,
 		},
 		{
 			name: "pending_old",
 			objects: func() []runtime.Object {
-				p := validPod()
-				p.Status.Phase = corev1.PodPending
-				p.CreationTimestamp = metav1.NewTime(time.Now().Add(-15 * time.Minute))
-
+				p := pendingPod()
+				p.CreationTimestamp = metav1.NewTime(time.Now().Add(-10 * time.Minute))
 				return []runtime.Object{p}
 			},
-			expected: 0,
+			expectedReplicas: 0,
 		},
 		{
-			name: "running_containers_not_ready_no_requests",
+			name: "pending_old_with_requests",
+			objects: func() []runtime.Object {
+				p := pendingPod()
+				p.CreationTimestamp = metav1.NewTime(time.Now().Add(-10 * time.Minute))
+				return []runtime.Object{p}
+			},
+			buildRequests:    1,
+			expectedReplicas: 0,
+		},
+		{
+			name: "starting",
 			objects: func() []runtime.Object {
 				p := validPod()
-				p.CreationTimestamp = metav1.NewTime(time.Now())
 				p.Status.Conditions[2].Status = corev1.ConditionFalse
-
 				return []runtime.Object{p}
 			},
-			requests: 0,
-			expected: 1,
+			expectedReplicas: 1,
 		},
 		{
-			name: "running_containers_not_ready_no_requests_old",
+			name: "starting_old",
 			objects: func() []runtime.Object {
 				p := validPod()
-				p.CreationTimestamp = metav1.NewTime(time.Now().Add(-15 * time.Minute))
+				p.CreationTimestamp = metav1.NewTime(time.Now().Add(-10 * time.Minute))
 				p.Status.Conditions[2].Status = corev1.ConditionFalse
-
 				return []runtime.Object{p}
 			},
-			requests: 0,
-			expected: 0,
+			expectedReplicas: 0,
 		},
 		{
-			name: "running_containers_not_ready",
+			name: "starting_with_requests",
 			objects: func() []runtime.Object {
 				p := validPod()
-				p.CreationTimestamp = metav1.NewTime(time.Now())
 				p.Status.Conditions[2].Status = corev1.ConditionFalse
-
 				return []runtime.Object{p}
 			},
-			requests: 1,
-			expected: 1,
+			buildRequests:    1,
+			expectedReplicas: 1,
 		},
 		{
-			name: "phase_unknown",
+			name: "operational",
 			objects: func() []runtime.Object {
 				p := validPod()
-				p.Status.Phase = ""
-
-				return []runtime.Object{p}
-			},
-			expected: 1,
-			requests: 1,
-		},
-		{
-			name: "expiry_upcoming",
-			objects: func() []runtime.Object {
-				p := validPod()
-				p.CreationTimestamp = metav1.Time{Time: time.Now()}
 				p.ObjectMeta.Annotations = map[string]string{
-					expiryTimeAnnotation: time.Now().Add(20 * time.Minute).Format(time.RFC3339),
+					expiryTimeAnnotation: time.Now().Add(10 * time.Minute).Format(time.RFC3339),
 				}
-
 				return []runtime.Object{p}
 			},
-			expected: 1,
+			expectedReplicas: 1,
 		},
 		{
-			name: "expiry_past",
+			name: "operational_with_requests",
 			objects: func() []runtime.Object {
 				p := validPod()
-				p.CreationTimestamp = metav1.Time{Time: time.Now()}
 				p.ObjectMeta.Annotations = map[string]string{
-					expiryTimeAnnotation: time.Now().Add(-20 * time.Minute).Format(time.RFC3339),
+					expiryTimeAnnotation: time.Now().Add(10 * time.Minute).Format(time.RFC3339),
 				}
-
 				return []runtime.Object{p}
 			},
-			expected: 0,
+			buildRequests:    1,
+			expectedReplicas: 1,
 		},
 		{
-			name: "expiry_invalid",
+			name: "operational_past_expiry",
 			objects: func() []runtime.Object {
 				p := validPod()
-				p.CreationTimestamp = metav1.Time{Time: time.Now()}
+				p.ObjectMeta.Annotations = map[string]string{
+					expiryTimeAnnotation: time.Now().Add(-10 * time.Minute).Format(time.RFC3339),
+				}
+				return []runtime.Object{p}
+			},
+			expectedReplicas: 0,
+		},
+		{
+			name: "operational_invalid_expiry",
+			objects: func() []runtime.Object {
+				p := validPod()
 				p.ObjectMeta.Annotations = map[string]string{
 					expiryTimeAnnotation: "garbage",
 				}
-
 				return []runtime.Object{p}
 			},
-			expected: 0,
+			expectedReplicas: 0,
 		},
 		{
-			name: "no_pods",
+			name: "unknown",
 			objects: func() []runtime.Object {
-				return nil
+				p := validPod()
+				p.Status.Phase = ""
+				return []runtime.Object{p}
 			},
-			expected: 0,
+			expectedReplicas: 0,
 		},
 		{
-			name: "combination_trim",
+			name: "unknown_with_requests",
 			objects: func() []runtime.Object {
-				leased := leasedPod()
-				leased.Name = "buildkit-0"
-
-				unexpired := validPod()
-				unexpired.Name = "buildkit-1"
-				unexpired.CreationTimestamp = metav1.Time{Time: time.Now()}
-				unexpired.ObjectMeta.Annotations = map[string]string{
-					expiryTimeAnnotation: time.Now().Add(20 * time.Minute).Format(time.RFC3339),
-				}
-
-				fresh := validPod()
-				fresh.Name = "buildkit-2"
-				fresh.CreationTimestamp = metav1.Time{Time: time.Now()}
-
-				unmanaged := leasedPod()
-				unmanaged.Name = "buildkit-3"
-				unmanaged.ObjectMeta.Annotations[managerIDAnnotation] = string(uuid.NewUUID())
-
-				expired := validPod()
-				expired.Name = "buildkit-4"
-				expired.CreationTimestamp = metav1.Time{Time: time.Now()}
-				expired.ObjectMeta.Annotations = map[string]string{
-					expiryTimeAnnotation: time.Now().Add(-20 * time.Minute).Format(time.RFC3339),
-				}
-
-				pending := validPod()
-				pending.Name = "buildkit-5"
-				pending.Status.Phase = corev1.PodPending
-
-				return []runtime.Object{leased, unexpired, fresh, unmanaged, expired, pending}
+				p := validPod()
+				p.Status.Phase = ""
+				return []runtime.Object{p}
 			},
-			expected: 3,
+			buildRequests:    1,
+			expectedReplicas: 0,
 		},
 		{
-			name: "combination_halt",
-			objects: func() []runtime.Object {
-				unmanaged := leasedPod()
-				unmanaged.Name = "buildkit-0"
-				unmanaged.ObjectMeta.Annotations[managerIDAnnotation] = string(uuid.NewUUID())
-
-				expired := validPod()
-				expired.Name = "buildkit-1"
-				expired.CreationTimestamp = metav1.Time{Time: time.Now()}
-				expired.ObjectMeta.Annotations = map[string]string{
-					expiryTimeAnnotation: time.Now().Add(-20 * time.Minute).Format(time.RFC3339),
-				}
-
-				leased := leasedPod()
-				leased.Name = "buildkit-2"
-
-				fresh := validPod()
-				fresh.Name = "buildkit-3"
-				fresh.CreationTimestamp = metav1.Time{Time: time.Now()}
-
-				pending := validPod()
-				pending.Name = "buildkit-4"
-				pending.Status.Phase = corev1.PodPending
-
-				return []runtime.Object{unmanaged, expired, leased, fresh, pending}
-			},
-			expected: 4,
-		},
-		{
-			name: "combination_stand",
+			name: "combo_preserve_all",
 			objects: func() []runtime.Object {
 				unexpired := validPod()
-				unexpired.Name = "buildkit-0"
-				unexpired.CreationTimestamp = metav1.Time{Time: time.Now()}
 				unexpired.ObjectMeta.Annotations = map[string]string{
-					expiryTimeAnnotation: time.Now().Add(20 * time.Minute).Format(time.RFC3339),
+					expiryTimeAnnotation: time.Now().Add(10 * time.Minute).Format(time.RFC3339),
 				}
 
 				leased := leasedPod()
@@ -788,40 +746,186 @@ func TestPoolPodReconciliation(t *testing.T) {
 
 				fresh := validPod()
 				fresh.Name = "buildkit-2"
-				fresh.CreationTimestamp = metav1.Time{Time: time.Now()}
 
 				return []runtime.Object{unexpired, leased, fresh}
 			},
-			expected: 3,
+			expectedReplicas: 3,
 		},
 		{
-			name: "combination_flush",
+			name: "combo_remove_all",
 			objects: func() []runtime.Object {
 				expired := validPod()
-				expired.Name = "buildkit-0"
-				expired.CreationTimestamp = metav1.Time{Time: time.Now()}
+				expired.ObjectMeta.Annotations = map[string]string{
+					expiryTimeAnnotation: time.Now().Add(-10 * time.Minute).Format(time.RFC3339),
+				}
+
+				oldPending := pendingPod()
+				oldPending.Name = "buildkit-1"
+				oldPending.CreationTimestamp = metav1.NewTime(time.Now().Add(-10 * time.Minute))
+
+				oldUnused := validPod()
+				oldUnused.Name = "buildkit-2"
+				oldUnused.CreationTimestamp = metav1.NewTime(time.Now().Add(-10 * time.Minute))
+
+				return []runtime.Object{expired, oldPending, oldUnused}
+			},
+			expectedReplicas: 0,
+		},
+		{
+			name: "combo_wait_for_pending",
+			objects: func() []runtime.Object {
+				leased0 := leasedPod()
+
+				pending1 := pendingPod()
+				pending1.Name = "buildkit-1"
+
+				pending2 := pendingPod()
+				pending2.Name = "buildkit-2"
+
+				return []runtime.Object{leased0, pending1, pending2}
+			},
+			expectedReplicas: 3,
+		},
+		{
+			name: "combo_wait_for_pending_with_requests",
+			objects: func() []runtime.Object {
+				leased0 := leasedPod()
+
+				pending1 := pendingPod()
+				pending1.Name = "buildkit-1"
+
+				pending2 := pendingPod()
+				pending2.Name = "buildkit-2"
+
+				return []runtime.Object{leased0, pending1, pending2}
+			},
+			buildRequests:    2,
+			expectedReplicas: 3,
+		},
+		{
+			name: "combo_grow_pending_with_requests",
+			objects: func() []runtime.Object {
+				leased0 := leasedPod()
+
+				pending1 := pendingPod()
+				pending1.Name = "buildkit-1"
+
+				pending2 := pendingPod()
+				pending2.Name = "buildkit-2"
+
+				return []runtime.Object{leased0, pending1, pending2}
+			},
+			buildRequests:    3,
+			expectedReplicas: 4,
+		},
+		{
+			name: "combo_trim_tail",
+			objects: func() []runtime.Object {
+				leased := leasedPod()
+				leased.Name = "buildkit-0"
+
+				unexpired := validPod()
+				unexpired.Name = "buildkit-1"
+				unexpired.ObjectMeta.Annotations = map[string]string{
+					expiryTimeAnnotation: time.Now().Add(10 * time.Minute).Format(time.RFC3339),
+				}
+
+				fresh := validPod()
+				fresh.Name = "buildkit-2"
+
+				unmanaged := leasedPod()
+				unmanaged.Name = "buildkit-3"
+				unmanaged.ObjectMeta.Annotations[managerIDAnnotation] = string(uuid.NewUUID())
+
+				expired := validPod()
+				expired.Name = "buildkit-4"
 				expired.ObjectMeta.Annotations = map[string]string{
 					expiryTimeAnnotation: time.Now().Add(-20 * time.Minute).Format(time.RFC3339),
 				}
 
-				pending := validPod()
-				pending.Name = "buildkit-1"
-				pending.Status.Phase = corev1.PodPending
+				expiredPending := validPod()
+				expiredPending.Name = "buildkit-5"
+				expiredPending.Status.Phase = corev1.PodPending
+				expiredPending.CreationTimestamp = metav1.NewTime(time.Now().Add(-20 * time.Minute))
 
-				old := validPod()
-				old.Name = "buildkit-2"
-				old.CreationTimestamp = metav1.Time{Time: time.Now().Add(-20 * time.Minute)}
-
-				return []runtime.Object{expired, pending, old}
+				return []runtime.Object{leased, unexpired, fresh, unmanaged, expired, expiredPending}
 			},
-			expected: 0,
+			expectedReplicas: 3,
 		},
 		{
-			name: "combination_embedded_failure_no_growth",
+			name: "combo_trim_tail_with_equal_requests",
 			objects: func() []runtime.Object {
-				p0 := validPod()
+				leased := leasedPod()
+				leased.Name = "buildkit-0"
+
+				unexpired := validPod()
+				unexpired.Name = "buildkit-1"
+				unexpired.ObjectMeta.Annotations = map[string]string{
+					expiryTimeAnnotation: time.Now().Add(20 * time.Minute).Format(time.RFC3339),
+				}
+
+				fresh := validPod()
+				fresh.Name = "buildkit-2"
+
+				unmanaged := leasedPod()
+				unmanaged.Name = "buildkit-3"
+				unmanaged.ObjectMeta.Annotations[managerIDAnnotation] = string(uuid.NewUUID())
+
+				expired := validPod()
+				expired.Name = "buildkit-4"
+				expired.ObjectMeta.Annotations = map[string]string{
+					expiryTimeAnnotation: time.Now().Add(-20 * time.Minute).Format(time.RFC3339),
+				}
+
+				expiredPending := validPod()
+				expiredPending.Name = "buildkit-5"
+				expiredPending.Status.Phase = corev1.PodPending
+				expiredPending.CreationTimestamp = metav1.NewTime(time.Now().Add(-20 * time.Minute))
+
+				return []runtime.Object{leased, unexpired, fresh, unmanaged, expired, expiredPending}
+			},
+			buildRequests:    2,
+			expectedReplicas: 3,
+		},
+		{
+			name: "combo_trim_tail_with_extended_requests",
+			objects: func() []runtime.Object {
+				leased0 := leasedPod()
+				leased0.Name = "buildkit-0"
+
+				unexpired1 := validPod()
+				unexpired1.Name = "buildkit-1"
+				unexpired1.ObjectMeta.Annotations = map[string]string{
+					expiryTimeAnnotation: time.Now().Add(10 * time.Minute).Format(time.RFC3339),
+				}
+
+				fresh2 := validPod()
+				fresh2.Name = "buildkit-2"
+
+				unmanaged3 := leasedPod()
+				unmanaged3.Name = "buildkit-3"
+				unmanaged3.ObjectMeta.Annotations[managerIDAnnotation] = string(uuid.NewUUID())
+
+				expired4 := validPod()
+				expired4.Name = "buildkit-4"
+				expired4.ObjectMeta.Annotations = map[string]string{
+					expiryTimeAnnotation: time.Now().Add(-10 * time.Minute).Format(time.RFC3339),
+				}
+
+				expiredPending5 := pendingPod()
+				expiredPending5.Name = "buildkit-5"
+				expiredPending5.CreationTimestamp = metav1.NewTime(time.Now().Add(-10 * time.Minute))
+
+				return []runtime.Object{leased0, unexpired1, fresh2, unmanaged3, expired4, expiredPending5}
+			},
+			buildRequests:    3,
+			expectedReplicas: 5,
+		},
+		{
+			name: "combo_embedded_failure_no_growth",
+			objects: func() []runtime.Object {
+				p0 := pendingPod()
 				p0.Name = "buildkit-0"
-				p0.Status.Phase = corev1.PodPending
 
 				p1 := validPod()
 				p1.Name = "buildkit-1"
@@ -831,21 +935,18 @@ func TestPoolPodReconciliation(t *testing.T) {
 				p2.Name = "buildkit-2"
 				p2.Status.Phase = corev1.PodFailed
 
-				p3 := validPod()
+				p3 := pendingPod()
 				p3.Name = "buildkit-3"
-				p3.Status.Phase = corev1.PodPending
 
 				return []runtime.Object{p0, p1, p2, p3}
 			},
-			requests: 4,
-			expected: 4,
+			buildRequests:    4,
+			expectedReplicas: 4,
 		},
 		{
-			name: "combination_embedded_failure_trim",
+			name: "combo_embedded_failure_trim",
 			objects: func() []runtime.Object {
-				p0 := validPod()
-				p0.Name = "buildkit-0"
-				p0.Status.Phase = corev1.PodPending
+				p0 := pendingPod()
 
 				p1 := validPod()
 				p1.Name = "buildkit-1"
@@ -855,34 +956,14 @@ func TestPoolPodReconciliation(t *testing.T) {
 				p2.Name = "buildkit-2"
 				p2.Status.Phase = corev1.PodFailed
 
-				p3 := validPod()
+				p3 := pendingPod()
 				p3.Name = "buildkit-3"
-				p3.Status.Phase = corev1.PodPending
+				p3.CreationTimestamp = metav1.NewTime(time.Now().Add(-10 * time.Minute))
 
 				return []runtime.Object{p0, p1, p2, p3}
 			},
-			requests: 1,
-			expected: 1,
-		},
-		{
-			name: "combination_embedded_new_pending",
-			objects: func() []runtime.Object {
-				p0 := validPod()
-				p0.Name = "buildkit-0"
-				p0.CreationTimestamp = metav1.Time{Time: time.Now()}
-
-				p1 := validPod()
-				p1.Name = "buildkit-1"
-				p1.Status.Phase = corev1.PodPending
-				p1.CreationTimestamp = metav1.Time{Time: time.Now().Add(-5 * time.Minute)}
-
-				p2 := validPod()
-				p2.Name = "buildkit-2"
-				p2.CreationTimestamp = metav1.Time{Time: time.Now()}
-
-				return []runtime.Object{p0, p1, p2}
-			},
-			expected: 3,
+			buildRequests:    1,
+			expectedReplicas: 1,
 		},
 	}
 
@@ -903,19 +984,19 @@ func TestPoolPodReconciliation(t *testing.T) {
 				return true, nil, nil
 			})
 
-			wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond), MaxIdleTime(10*time.Minute))
-			for i := 0; i < tc.requests; i++ {
+			wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(500*time.Millisecond), MaxIdleTime(5*time.Minute))
+			for i := 0; i < tc.buildRequests; i++ {
 				wp.requests.Enqueue(&PodRequest{result: make(chan PodRequestResult, 1)})
 			}
 			defer wp.Close()
 
 			select {
 			case actual := <-replicasCh:
-				if tc.expected != actual {
-					t.Errorf("expected statefulset update with %d replicas, got %d", tc.expected, actual)
+				if tc.expectedReplicas != actual {
+					t.Errorf("expected statefulset update with %d replicas, got %d", tc.expectedReplicas, actual)
 				}
 			case <-time.After(testTimeoutDuration):
-				t.Error("worker pool update not received within 3s")
+				t.Errorf("worker pool update not received within %s", testTimeoutDuration)
 			}
 		})
 	}
@@ -973,9 +1054,10 @@ func validEndpointSlice() *discoveryv1.EndpointSlice {
 func validPod() *corev1.Pod {
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "buildkit-0",
-			Namespace: namespace,
-			Labels:    testLabels,
+			Name:              "buildkit-0",
+			Namespace:         namespace,
+			Labels:            testLabels,
+			CreationTimestamp: metav1.Now(),
 		},
 		Spec: corev1.PodSpec{},
 		Status: corev1.PodStatus{
@@ -1011,6 +1093,38 @@ func leasedPod() *corev1.Pod {
 	}
 
 	return leased
+}
+
+func unmanagedPod() *corev1.Pod {
+	unmanaged := leasedPod()
+	unmanaged.ObjectMeta.Annotations[managerIDAnnotation] = string(uuid.NewUUID())
+
+	return unmanaged
+}
+
+func pendingPod() *corev1.Pod {
+	pending := validPod()
+	pending.Status.Phase = corev1.PodPending
+	pending.Status.Conditions = []corev1.PodCondition{
+		{
+			Type:   corev1.PodScheduled,
+			Status: corev1.ConditionFalse,
+		},
+		{
+			Type:   corev1.PodInitialized,
+			Status: corev1.ConditionFalse,
+		},
+		{
+			Type:   corev1.ContainersReady,
+			Status: corev1.ConditionFalse,
+		},
+		{
+			Type:   corev1.PodReady,
+			Status: corev1.ConditionFalse,
+		},
+	}
+
+	return pending
 }
 
 func assertLeasedPod(t *testing.T, action k8stesting.Action, ret *corev1.Pod) {
