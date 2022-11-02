@@ -45,7 +45,7 @@ resource "google_compute_subnetwork" "kubernetes" {
 
 module "gke" {
   source  = "terraform-google-modules/kubernetes-engine/google"
-  version = "~> 23.2"
+  version = "~> 23.3"
 
   name               = local.name
   region             = var.region
@@ -57,11 +57,18 @@ module "gke" {
 
   ip_range_pods     = local.pod_range_name
   ip_range_services = local.service_range_name
+
+  node_pools = [
+    {
+      name         = "default-node-pool"
+      machine_type = "e2-standard-4"
+    }
+  ]
 }
 
 module "gke_auth" {
   source  = "terraform-google-modules/kubernetes-engine/google//modules/auth"
-  version = "~> 23.2"
+  version = "~> 23.3"
 
   location     = module.gke.location
   project_id   = var.project_id
