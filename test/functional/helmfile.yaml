@@ -127,6 +127,9 @@ releases:
             http: true
         buildkit:
           rootless: false
+          gcKeepStorage: 75000000000
+          persistence:
+            size: 100Gi
         controller:
           manager:
             image:
