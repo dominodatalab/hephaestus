@@ -3,8 +3,28 @@ name: Functional Tests
 on:
   issue_comment:
     types: [created]
+  # NOTE: remove me when finished testing
+  pull_request: {}
 
 jobs:
+  eks:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: ${{ secrets.AWS_IAM_ROLE }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Smoke test
+        run: aws eks list-clusters
+
   gke:
     if: ${{ github.event.issue.pull_request && github.event.comment.body == '/functional-test' }}
     name: GKE image building
@@ -83,6 +103,7 @@ jobs:
           path: |
             test/functional/testenv
             !test/functional/testenv/**/.terraform/
+
 
   aks:
     name: AKS image building
