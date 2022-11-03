@@ -372,13 +372,11 @@ func (p *AutoscalingPool) reconcileWorkers(ctx context.Context) error {
 		return getOrdinal(podList.Items[i].Name) < getOrdinal(podList.Items[j].Name)
 	})
 
-	arbiter := NewScaleArbiter(p.podClient, p.podMaxIdleTime)
+	arbiter := NewScaleArbiter(p.log, p.podClient, p.podMaxIdleTime)
 
 	for _, pod := range podList.Items {
-		log := p.log.WithValues("podName", pod.Name)
-
-		log.Info("Evaluating pod metadata and status")
-		arbiter.EvaluatePod(ctx, log, p.uuid, pod)
+		p.log.Info("Evaluating pod metadata and status", "podName", pod.Name)
+		arbiter.EvaluatePod(ctx, p.uuid, pod)
 	}
 	for _, observation := range arbiter.LeasablePods() {
 		req := p.requests.Dequeue()
@@ -392,7 +390,7 @@ func (p *AutoscalingPool) reconcileWorkers(ctx context.Context) error {
 		}
 	}
 
-	replicas := arbiter.DetermineReplicas(p.log, p.requests.Len())
+	replicas := arbiter.DetermineReplicas(p.requests.Len())
 
 	p.log.Info("Using statefulset scale", "replicas", replicas)
 	_, err = p.statefulSetClient.UpdateScale(

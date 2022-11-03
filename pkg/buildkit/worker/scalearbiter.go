@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -36,6 +37,22 @@ const (
 	BuilderStateUnusable
 )
 
+// String representation of the builder state.
+func (bs BuilderState) String() string {
+	return [...]string{
+		"Unmanaged",
+		"Leased",
+		"Pending",
+		"PendingExpired",
+		"Starting",
+		"StartingExpired",
+		"Operational",
+		"OperationalExpired",
+		"OperationalInvalidExpiry",
+		"Unusable",
+	}[bs]
+}
+
 // PodObservation records the builder state for a single pod.
 type PodObservation struct {
 	Pod   corev1.Pod
@@ -47,24 +64,33 @@ func (m *PodObservation) MarkLeased() {
 	m.State = BuilderStateLeased
 }
 
+// String renders the name and state of the observed pod.
+func (m *PodObservation) String() string {
+	return fmt.Sprintf("%v - %v", m.Pod.Name, m.State)
+}
+
 // ScaleArbiter can be used to determine the proper number of replicas for a
 // buildkit statefulset based on the number of build requests and existing pods.
 type ScaleArbiter struct {
+	log          logr.Logger
 	podClient    corev1typed.PodInterface
 	podExpiry    time.Duration
 	observations []*PodObservation
 }
 
 // NewScaleArbiter initializes
-func NewScaleArbiter(podClient corev1typed.PodInterface, podExpiry time.Duration) *ScaleArbiter {
+func NewScaleArbiter(log logr.Logger, podClient corev1typed.PodInterface, podExpiry time.Duration) *ScaleArbiter {
 	return &ScaleArbiter{
+		log:       log,
 		podClient: podClient,
 		podExpiry: podExpiry,
 	}
 }
 
 // EvaluatePod builder state and store the observation for use when determining the scale replicas.
-func (a *ScaleArbiter) EvaluatePod(ctx context.Context, log logr.Logger, uuid string, pod corev1.Pod) {
+func (a *ScaleArbiter) EvaluatePod(ctx context.Context, uuid string, pod corev1.Pod) {
+	log := a.log.WithValues("podName", pod.Name)
+
 	// mark pods when their manager ID is different from the current one
 	if id, ok := pod.Annotations[managerIDAnnotation]; ok && id != uuid {
 		log.Info("Eligible for termination, manager id mismatch", "expected", uuid, "actual", id)
@@ -154,13 +180,16 @@ func (a *ScaleArbiter) LeasablePods() (observations []*PodObservation) {
 }
 
 // DetermineReplicas calculates the number of buildkit replicas required to service the incoming requests.
-func (a *ScaleArbiter) DetermineReplicas(log logr.Logger, requests int) int {
+func (a *ScaleArbiter) DetermineReplicas(requests int) int {
 	noRequests := requests == 0
 	stopIdx := 0
 	count := requests
 
-	for idx, meta := range a.observations {
-		switch meta.State {
+	var output []string
+	for idx, observation := range a.observations {
+		output = append(output, observation.String())
+
+		switch observation.State {
 		case BuilderStatePending, BuilderStateStarting:
 			stopIdx = idx
 			if noRequests {
@@ -184,6 +213,13 @@ func (a *ScaleArbiter) DetermineReplicas(log logr.Logger, requests int) int {
 	case count < 0:
 		count = 0
 	}
+
+	a.log.Info(
+		"Pod scale determination complete",
+		"requests", requests,
+		"podObservations", output,
+		"suggestedReplicas", count,
+	)
 
 	return count
 }
