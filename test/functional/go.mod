@@ -6,7 +6,7 @@ go 1.19
 
 require (
 	github.com/dominodatalab/hephaestus v0.1.21
-	github.com/dominodatalab/testenv v0.0.0-20221020210456-3275dc58c941
+	github.com/dominodatalab/testenv v0.0.0-20221102225811-ae1286c64f8c
 	github.com/go-playground/validator/v10 v10.11.1
 	github.com/go-redis/redis/v9 v9.0.0-rc.1
 	github.com/heroku/docker-registry-client v0.0.0-20211012143308-9463674c8930
