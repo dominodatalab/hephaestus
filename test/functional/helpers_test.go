@@ -40,6 +40,7 @@ const (
 	contextServer = "https://raw.githubusercontent.com/dominodatalab/hephaestus/complete-gke-testing/test/functional/testdata/docker-context/%s/archive.tgz"
 
 	buildArgBuildContext remoteDockerBuildContext = iota
+	dseBuildContext
 	errorBuildContext
 	python39JupyterBuildContext
 	multiStageBuildContext
@@ -48,6 +49,7 @@ const (
 func (c remoteDockerBuildContext) String() string {
 	return [...]string{
 		"build-arg",
+		"dse",
 		"error",
 		"python39-jupyter",
 		"multi-stage",
@@ -89,7 +91,7 @@ func createBuild(t *testing.T, ctx context.Context, client clientset.Interface, 
 	require.NoError(t, err, "failed to create build watch")
 	defer watcher.Stop()
 
-	ctxTimeout, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	ctxTimeout, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 
 	var result *hephv1.ImageBuild
@@ -153,7 +155,7 @@ func testLogDelivery(t *testing.T, ctx context.Context, client kubernetes.Interf
 		var data logEvent
 
 		require.NoError(t, json.Unmarshal([]byte(event), &data))
-		require.NoError(t, validate.Struct(data))
+		assert.NoErrorf(t, validate.Struct(data), "invalid log event: %v", data)
 	}
 }
 
@@ -171,8 +173,8 @@ func testMessageDelivery(t *testing.T, ctx context.Context, client kubernetes.In
 	conn, channel, err := amqp.Dial(rmqURL)
 	require.NoError(t, err, "failed to connet to rabbitmq service")
 	defer func() {
-		channel.Close()
-		conn.Close()
+		_ = channel.Close()
+		_ = conn.Close()
 	}()
 
 	queue, err := channel.QueueInspect("hephaestus.imagebuilds.status")

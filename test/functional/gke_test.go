@@ -463,7 +463,7 @@ func (suite *GKETestSuite) TestImageBuilding() {
 				defer wg.Done()
 
 				build := newImageBuild(
-					python39JupyterBuildContext,
+					dseBuildContext,
 					"docker-registry:5000/test-ns/test-repo",
 					nil,
 				)
