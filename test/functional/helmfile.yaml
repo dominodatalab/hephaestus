@@ -147,7 +147,7 @@ releases:
                     - hephaestus_output
                   source: |-
                     message = parse_json!(.message)
-                    if !exists(message.logKey) || is_nullish(message.logKey) {
+                    if !exists(message.logKey) || is_nullish(message.logKey) || is_nullish(message.msg) {
                       abort
                     }
                     . = {
