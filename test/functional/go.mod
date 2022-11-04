@@ -6,7 +6,7 @@ go 1.19
 
 require (
 	github.com/dominodatalab/hephaestus v0.1.21
-	github.com/dominodatalab/testenv v0.0.0-20221017202832-3c4e9a11fcc4
+	github.com/dominodatalab/testenv v0.0.0-20221104201451-cd130c18f010
 	github.com/heroku/docker-registry-client v0.0.0-20211012143308-9463674c8930
 	github.com/stretchr/testify v1.8.0
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8
