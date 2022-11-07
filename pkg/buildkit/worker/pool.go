@@ -43,7 +43,9 @@ var (
 	newUUID          = uuid.NewUUID
 	statefulPodRegex = regexp.MustCompile(`^.*-(\d+)$`)
 
-	// NOTE:
+	// NOTE: https://github.com/kubernetes/client-go/issues/970
+	// 	we have to hack the client during testing because the current version
+	// 	of the k8s fake client does not support the ApplyPatchType
 	garbageClientHack = false
 )
 
