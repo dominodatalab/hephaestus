@@ -26,7 +26,9 @@ jobs:
         uses: peter-evans/create-or-update-comment@v2
         with:
           comment-id: ${{ github.event.comment.id }}
-          body: \n**Functional tests:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          body: |
+
+            **Launched workflow:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           reactions: rocket
 
       - name: Authenticate with Google Cloud
@@ -61,7 +63,7 @@ jobs:
       - name: Install Helm
         uses: azure/setup-helm@v3
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          version: v3.10.1
 
       - name: Run tests
         env:
