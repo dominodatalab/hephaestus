@@ -35,169 +35,26 @@ type result struct {
 }
 
 var (
-	owner      = "test-owner"
-	namespace  = "test-namespace"
-	testLabels = map[string]string{"owned-by": "testing"}
-	testConfig = config.Buildkit{Namespace: namespace, PodLabels: testLabels, ServiceName: "buildkit", DaemonPort: 1234}
-
-	validSts = &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "buildkit",
-			Namespace: namespace,
-		},
-		Spec: appsv1.StatefulSetSpec{
-			Replicas: pointer.Int32(0),
-			Selector: &metav1.LabelSelector{
-				MatchLabels: testLabels,
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: testLabels,
-				},
-				Spec: corev1.PodSpec{},
-			},
-		},
-	}
-
-	validPod = &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "buildkit-0",
-			Namespace: namespace,
-			Labels:    testLabels,
-		},
-		Spec: corev1.PodSpec{},
-		Status: corev1.PodStatus{
-			Phase: corev1.PodRunning,
-			Conditions: []corev1.PodCondition{
-				{
-					Type:   corev1.PodScheduled,
-					Status: corev1.ConditionTrue,
-				},
-				{
-					Type:   corev1.PodInitialized,
-					Status: corev1.ConditionTrue,
-				},
-				{
-					Type:   corev1.ContainersReady,
-					Status: corev1.ConditionTrue,
-				},
-				{
-					Type:   corev1.PodReady,
-					Status: corev1.ConditionTrue,
-				},
-			},
-		},
-	}
-
-	validEndpointSlice = &discoveryv1.EndpointSlice{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "buildkit-bgk87",
-			Namespace: namespace,
-		},
-		Endpoints: []discoveryv1.Endpoint{
-			{
-				Conditions: discoveryv1.EndpointConditions{
-					Ready:   pointer.Bool(true),
-					Serving: pointer.Bool(true),
-				},
-				Hostname: pointer.String("buildkit-0"),
-				TargetRef: &corev1.ObjectReference{
-					Name:      "buildkit-0",
-					Namespace: namespace,
-				},
-			},
-		},
-		Ports: []discoveryv1.EndpointPort{
-			{
-				Name: pointer.String("daemon"),
-				Port: pointer.Int32(1234),
-			},
-		},
-	}
+	owner               = "test-owner"
+	namespace           = "test-namespace"
+	testLabels          = map[string]string{"owned-by": "testing"}
+	testConfig          = config.Buildkit{Namespace: namespace, PodLabels: testLabels, ServiceName: "buildkit", DaemonPort: 1234}
+	testTimeoutDuration = 5 * time.Second
 )
-
-func leasedPod() *corev1.Pod {
-	leased := validPod.DeepCopy()
-	leased.ObjectMeta.Annotations = map[string]string{
-		leasedAtAnnotation:  time.Now().Format(time.RFC3339),
-		leasedByAnnotation:  owner,
-		managerIDAnnotation: string(newUUID()),
-	}
-
-	return leased
-}
-
-func assertLeasedPod(t *testing.T, action k8stesting.Action, ret *corev1.Pod) {
-	t.Helper()
-
-	patchAction := action.(k8stesting.PatchAction)
-
-	assert.Equal(t, types.ApplyPatchType, patchAction.GetPatchType(), "unexpected patch type")
-
-	pod := corev1.Pod{}
-	patch := patchAction.GetPatch()
-	if err := json.Unmarshal(patch, &pod); err != nil {
-		assert.FailNowf(t, "unable to marshal patch into v1.Pod", "received invalid patch %s", patch)
-	}
-
-	assert.Contains(t, pod.Annotations, leasedByAnnotation)
-	assert.Contains(t, pod.Annotations, managerIDAnnotation)
-	assert.NotContains(t, pod.Annotations, expiryTimeAnnotation)
-
-	ts, ok := pod.Annotations[leasedAtAnnotation]
-	require.True(t, ok, "leased at annotation not found")
-
-	leasedAt, err := time.Parse(time.RFC3339, ts)
-	require.NoError(t, err, "invalid lease at annotation")
-
-	assert.True(t, leasedAt.Before(time.Now()), "leased at is not in the past")
-
-	ret.Annotations = pod.Annotations
-}
-
-// NOTE: this set of assertions is fine, but it's not great. we need a better way of asserting the patching.
-//	ideally, we would make assertions against the API object after the event but client-go doesn't support SSA right
-//	now, which means we have to override the "patch" action with a reactor.
-
-func assertUnleasedPod(t *testing.T, action k8stesting.Action) {
-	t.Helper()
-
-	patchAction := action.(k8stesting.PatchAction)
-
-	assert.Equal(t, types.ApplyPatchType, patchAction.GetPatchType(), "unexpected patch type")
-
-	pp := corev1.Pod{}
-	patch := patchAction.GetPatch()
-	if err := json.Unmarshal(patch, &pp); err != nil {
-		assert.FailNowf(t, "unable to marshal patch into v1.Pod", "received invalid patch %s", patch)
-	}
-
-	assert.NotContains(t, pp.Annotations, leasedAtAnnotation)
-	assert.NotContains(t, pp.Annotations, leasedByAnnotation)
-	assert.NotContains(t, pp.Annotations, managerIDAnnotation)
-
-	ts, ok := pp.Annotations[expiryTimeAnnotation]
-	require.True(t, ok, "expiry time annotation not found")
-
-	expiry, err := time.Parse(time.RFC3339, ts)
-	require.NoError(t, err, "invalid expiry time annotation")
-
-	assert.True(t, expiry.After(time.Now().Add(5*time.Minute)), "expiry time is not in the future")
-}
 
 func TestPoolGet(t *testing.T) {
 	t.Run("running_pod", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		p := validPod.DeepCopy()
+		p := validPod()
 
 		fakeClient := fake.NewSimpleClientset(p)
 		fakeClient.PrependWatchReactor("endpointslices", func(k8stesting.Action) (handled bool, ret watch.Interface, err error) {
 			watcher := watch.NewFake()
 			go func() {
 				defer watcher.Stop()
-				watcher.Add(validEndpointSlice)
+				watcher.Add(validEndpointSlice())
 			}()
 			return true, watcher, nil
 		})
@@ -222,8 +79,8 @@ func TestPoolGet(t *testing.T) {
 			leaseAddr := res.res.(string)
 			expected := "tcp://buildkit-0.buildkit.test-namespace:1234"
 			assert.Equal(t, expected, leaseAddr, "did not receive correct lease")
-		case <-time.After(3 * time.Second):
-			assert.Fail(t, "could not acquire a buildkit endpoint within 3s")
+		case <-time.After(testTimeoutDuration):
+			assert.Fail(t, "could not acquire a buildkit endpoint within %s", testTimeoutDuration)
 		}
 	})
 
@@ -232,7 +89,7 @@ func TestPoolGet(t *testing.T) {
 		defer cancel()
 
 		// non-running phase
-		delivered := validPod.DeepCopy()
+		delivered := validPod()
 		delivered.Status.Phase = ""
 
 		fakeClient := fake.NewSimpleClientset(delivered)
@@ -240,7 +97,7 @@ func TestPoolGet(t *testing.T) {
 			watcher := watch.NewFake()
 			go func() {
 				defer watcher.Stop()
-				watcher.Add(validEndpointSlice)
+				watcher.Add(validEndpointSlice())
 			}()
 			return true, watcher, nil
 		})
@@ -262,7 +119,7 @@ func TestPoolGet(t *testing.T) {
 			// deliver running pod a few reconciliations after get is executed
 			if countDown {
 				if reactionCount == 2 {
-					delivered = validPod.DeepCopy()
+					delivered = validPod()
 					fakeClient.PrependReactor("get", "pods", func(k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 						return true, delivered, nil
 					})
@@ -295,8 +152,8 @@ func TestPoolGet(t *testing.T) {
 			leaseAddr := res.res.(string)
 			expected := "tcp://buildkit-0.buildkit.test-namespace:1234"
 			assert.Equal(t, expected, leaseAddr, "did not receive correct lease")
-		case <-time.After(3 * time.Second):
-			assert.Fail(t, "could not acquire a buildkit endpoint within 3s")
+		case <-time.After(testTimeoutDuration):
+			assert.Fail(t, "could not acquire a buildkit endpoint within %s", testTimeoutDuration)
 		}
 	})
 
@@ -304,7 +161,7 @@ func TestPoolGet(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		fakeClient := fake.NewSimpleClientset(validPod)
+		fakeClient := fake.NewSimpleClientset(validPod())
 		fakeClient.PrependReactor("patch", "pods", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 			return true, nil, errors.New("expected failure")
 		})
@@ -322,8 +179,8 @@ func TestPoolGet(t *testing.T) {
 		case res := <-leaseChannel:
 			assert.Empty(t, res.res.(string), "expected an empty lease address")
 			assert.EqualError(t, res.err, "cannot update pod metadata: expected failure")
-		case <-time.After(3 * time.Second):
-			assert.Fail(t, "could not acquire a buildkit endpoint within 3s")
+		case <-time.After(testTimeoutDuration):
+			assert.Fail(t, "could not acquire a buildkit endpoint within %s", testTimeoutDuration)
 		}
 	})
 
@@ -331,13 +188,13 @@ func TestPoolGet(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		fakeClient := fake.NewSimpleClientset(validPod)
+		fakeClient := fake.NewSimpleClientset(validPod())
 		fakeClient.PrependWatchReactor("endpointslices", func(action k8stesting.Action) (handled bool, ret watch.Interface, err error) {
 			watcher := watch.NewFake()
 			go func() {
 				defer watcher.Stop()
 
-				eps := validEndpointSlice.DeepCopy()
+				eps := validEndpointSlice()
 				eps.Endpoints = nil
 				watcher.Add(eps)
 			}()
@@ -346,7 +203,7 @@ func TestPoolGet(t *testing.T) {
 
 		reactionCount := 0
 		fakeClient.PrependReactor("patch", "pods", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-			p := validPod.DeepCopy()
+			p := validPod()
 
 			switch reactionCount {
 			case 0:
@@ -374,8 +231,8 @@ func TestPoolGet(t *testing.T) {
 		case res := <-leaseChannel:
 			assert.Empty(t, res.res.(string), "expected an empty lease address")
 			assert.EqualError(t, res.err, "failed to extract hostname after 180 seconds")
-		case <-time.After(3 * time.Second):
-			assert.Fail(t, "could not acquire a buildkit endpoint within 3s")
+		case <-time.After(testTimeoutDuration):
+			assert.Fail(t, "could not acquire a buildkit endpoint within %s", testTimeoutDuration)
 		}
 	})
 
@@ -383,9 +240,9 @@ func TestPoolGet(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		fakeClient := fake.NewSimpleClientset(validPod)
+		fakeClient := fake.NewSimpleClientset(validPod())
 		fakeClient.PrependReactor("patch", "pods", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-			p := validPod.DeepCopy()
+			p := validPod()
 			assertLeasedPod(t, action, p)
 			return true, p, nil
 		})
@@ -395,19 +252,19 @@ func TestPoolGet(t *testing.T) {
 			go func() {
 				defer watcher.Stop()
 
-				eps := validEndpointSlice.DeepCopy()
+				eps := validEndpointSlice()
 				eps.Endpoints = nil
 				watcher.Add(eps)
 
-				eps = validEndpointSlice.DeepCopy()
+				eps = validEndpointSlice()
 				eps.Endpoints[0].Conditions.Ready = pointer.Bool(false)
 				watcher.Add(eps)
 
-				eps = validEndpointSlice.DeepCopy()
+				eps = validEndpointSlice()
 				eps.Endpoints[0].Hostname = nil
 				watcher.Add(eps)
 
-				watcher.Add(validEndpointSlice)
+				watcher.Add(validEndpointSlice())
 			}()
 
 			return true, watcher, nil
@@ -429,8 +286,8 @@ func TestPoolGet(t *testing.T) {
 			leaseAddr := res.res.(string)
 			expected := "tcp://buildkit-0.buildkit.test-namespace:1234"
 			assert.Equal(t, expected, leaseAddr, "did not receive correct lease")
-		case <-time.After(3 * time.Second):
-			assert.Fail(t, "could not acquire a buildkit endpoint within 3s")
+		case <-time.After(testTimeoutDuration):
+			assert.Fail(t, "could not acquire a buildkit endpoint within %s", testTimeoutDuration)
 		}
 	})
 
@@ -438,7 +295,7 @@ func TestPoolGet(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		fakeClient := fake.NewSimpleClientset(validSts)
+		fakeClient := fake.NewSimpleClientset(validSts())
 		fakeClient.PrependReactor("patch", "pods", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 			return true, leasedPod(), nil
 		})
@@ -449,7 +306,7 @@ func TestPoolGet(t *testing.T) {
 		go func() {
 			<-stsUpdateChan
 
-			if _, err := fakeClient.CoreV1().Pods(namespace).Create(ctx, validPod, metav1.CreateOptions{}); err != nil {
+			if _, err := fakeClient.CoreV1().Pods(namespace).Create(ctx, validPod(), metav1.CreateOptions{}); err != nil {
 				errorChan <- err
 				return
 			}
@@ -458,7 +315,7 @@ func TestPoolGet(t *testing.T) {
 				watcher := watch.NewFake()
 				go func() {
 					defer watcher.Stop()
-					watcher.Add(validEndpointSlice)
+					watcher.Add(validEndpointSlice())
 				}()
 				return true, watcher, nil
 			})
@@ -497,8 +354,8 @@ func TestPoolGet(t *testing.T) {
 			if e != nil {
 				t.Errorf("Received error attempting to create test setup: %s", e.Error())
 			}
-		case <-time.After(3 * time.Second):
-			t.Error("Could not acquire a buildkit endpoint within 3s")
+		case <-time.After(testTimeoutDuration):
+			t.Errorf("Could not acquire a buildkit endpoint within %s", testTimeoutDuration)
 		}
 	})
 }
@@ -507,13 +364,13 @@ func TestPoolGetFailedScaleUp(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	fakeClient := fake.NewSimpleClientset(validSts, validPod)
+	fakeClient := fake.NewSimpleClientset(validSts(), validPod())
 
 	fakeClient.PrependWatchReactor("endpointslices", func(action k8stesting.Action) (handled bool, ret watch.Interface, err error) {
 		watcher := watch.NewFake()
 		go func() {
 			defer watcher.Stop()
-			watcher.Add(validEndpointSlice)
+			watcher.Add(validEndpointSlice())
 		}()
 		return true, watcher, nil
 	})
@@ -521,7 +378,7 @@ func TestPoolGetFailedScaleUp(t *testing.T) {
 	leased := false
 	fakeClient.PrependReactor("patch", "*", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 		if leased {
-			return true, validPod, nil
+			return true, validPod(), nil
 		}
 
 		leased = !leased
@@ -561,15 +418,15 @@ func TestPoolGetFailedScaleUp(t *testing.T) {
 				t.Errorf("did not received correct lease: %s expected, %s actual", expected, leaseAddr)
 			}
 		}
-	case <-time.After(3 * time.Second):
-		t.Error("Could not acquire a buildkit endpoint within 3s")
+	case <-time.After(testTimeoutDuration):
+		t.Errorf("Could not acquire a buildkit endpoint within %s", testTimeoutDuration)
 	}
 }
 
 func TestPoolGetAndClose(t *testing.T) {
-	fakeClient := fake.NewSimpleClientset(validSts)
+	fakeClient := fake.NewSimpleClientset(validSts())
 	fakeClient.PrependReactor("patch", "*", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-		return true, validPod, nil
+		return true, validPod(), nil
 	})
 	fakeClient.PrependReactor("update", "statefulsets", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 		return true, nil, nil
@@ -591,15 +448,15 @@ func TestPoolGetAndClose(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(3 * time.Second):
-		assert.Fail(t, "worker pool was not closed within 3s")
+	case <-time.After(testTimeoutDuration):
+		assert.Fail(t, "worker pool was not closed within %s", testTimeoutDuration)
 	}
 }
 
 func TestPoolGetAndCancel(t *testing.T) {
-	fakeClient := fake.NewSimpleClientset(validSts)
+	fakeClient := fake.NewSimpleClientset(validSts())
 	fakeClient.PrependReactor("patch", "*", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-		return true, validPod, nil
+		return true, validPod(), nil
 	})
 	fakeClient.PrependReactor("update", "statefulsets", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 		return true, nil, nil
@@ -623,8 +480,8 @@ func TestPoolGetAndCancel(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(3 * time.Second):
-		assert.Fail(t, "worker pool was not closed within 3s")
+	case <-time.After(testTimeoutDuration):
+		assert.Fail(t, "worker pool was not closed within %s", testTimeoutDuration)
 	}
 }
 
@@ -693,303 +550,420 @@ func TestPoolRelease(t *testing.T) {
 }
 
 func TestPoolPodReconciliation(t *testing.T) {
+	garbageClientHack = true
+	t.Cleanup(func() {
+		garbageClientHack = false
+	})
+
 	tests := []struct {
-		name     string
-		objects  func() []runtime.Object
-		requests int
-		expected int32
+		name             string
+		objects          func() []runtime.Object
+		buildRequests    int
+		expectedReplicas int32
 	}{
+		{
+			name: "no_pods",
+			objects: func() []runtime.Object {
+				return nil
+			},
+			expectedReplicas: 0,
+		},
+		{
+			name: "no_pods_with_requests",
+			objects: func() []runtime.Object {
+				return nil
+			},
+			buildRequests:    1,
+			expectedReplicas: 1,
+		},
 		{
 			name: "unmanaged",
 			objects: func() []runtime.Object {
-				p := leasedPod()
-				p.ObjectMeta.Annotations[managerIDAnnotation] = string(uuid.NewUUID())
-
-				return []runtime.Object{p}
+				return []runtime.Object{unmanagedPod()}
 			},
-			expected: 0,
+			expectedReplicas: 0,
+		},
+		{
+			name: "unmanaged_with_requests",
+			objects: func() []runtime.Object {
+				return []runtime.Object{unmanagedPod()}
+			},
+			buildRequests:    1,
+			expectedReplicas: 0,
 		},
 		{
 			name: "leased",
 			objects: func() []runtime.Object {
 				return []runtime.Object{leasedPod()}
 			},
-			expected: 1,
+			expectedReplicas: 1,
 		},
 		{
-			name: "unleased_new",
+			name: "leased_with_requests",
 			objects: func() []runtime.Object {
-				p := validPod.DeepCopy()
-				p.CreationTimestamp = metav1.Time{Time: time.Now()}
-
-				return []runtime.Object{p}
+				return []runtime.Object{leasedPod()}
 			},
-			expected: 1,
+			buildRequests:    1,
+			expectedReplicas: 2,
 		},
 		{
-			name: "unleased_old",
+			name: "pending",
 			objects: func() []runtime.Object {
-				p := validPod.DeepCopy()
-				p.CreationTimestamp = metav1.Time{Time: time.Now().Add(-20 * time.Minute)}
-
-				return []runtime.Object{p}
+				return []runtime.Object{pendingPod()}
 			},
-			expected: 0,
+			expectedReplicas: 1,
 		},
 		{
-			name: "pending_new",
+			name: "pending_with_requests",
 			objects: func() []runtime.Object {
-				p := validPod.DeepCopy()
-				p.Status.Phase = corev1.PodPending
-				p.CreationTimestamp = metav1.NewTime(time.Now())
-
-				return []runtime.Object{p}
+				return []runtime.Object{pendingPod()}
 			},
-			expected: 1,
+			buildRequests:    1,
+			expectedReplicas: 1,
 		},
 		{
 			name: "pending_old",
 			objects: func() []runtime.Object {
-				p := validPod.DeepCopy()
-				p.Status.Phase = corev1.PodPending
-				p.CreationTimestamp = metav1.NewTime(time.Now().Add(-15 * time.Minute))
-
+				p := pendingPod()
+				p.CreationTimestamp = metav1.NewTime(time.Now().Add(-10 * time.Minute))
 				return []runtime.Object{p}
 			},
-			expected: 0,
+			expectedReplicas: 0,
 		},
 		{
-			name: "phase_unknown",
+			name: "pending_old_with_requests",
 			objects: func() []runtime.Object {
-				p := validPod.DeepCopy()
-				p.Status.Phase = ""
-
+				p := pendingPod()
+				p.CreationTimestamp = metav1.NewTime(time.Now().Add(-10 * time.Minute))
 				return []runtime.Object{p}
 			},
-			expected: 1,
-			requests: 1,
+			buildRequests:    1,
+			expectedReplicas: 0,
 		},
 		{
-			name: "expiry_upcoming",
+			name: "starting",
 			objects: func() []runtime.Object {
-				p := validPod.DeepCopy()
-				p.CreationTimestamp = metav1.Time{Time: time.Now()}
+				p := validPod()
+				p.Status.Conditions[2].Status = corev1.ConditionFalse
+				return []runtime.Object{p}
+			},
+			expectedReplicas: 1,
+		},
+		{
+			name: "starting_old",
+			objects: func() []runtime.Object {
+				p := validPod()
+				p.CreationTimestamp = metav1.NewTime(time.Now().Add(-10 * time.Minute))
+				p.Status.Conditions[2].Status = corev1.ConditionFalse
+				return []runtime.Object{p}
+			},
+			expectedReplicas: 0,
+		},
+		{
+			name: "starting_with_requests",
+			objects: func() []runtime.Object {
+				p := validPod()
+				p.Status.Conditions[2].Status = corev1.ConditionFalse
+				return []runtime.Object{p}
+			},
+			buildRequests:    1,
+			expectedReplicas: 1,
+		},
+		{
+			name: "operational",
+			objects: func() []runtime.Object {
+				p := validPod()
 				p.ObjectMeta.Annotations = map[string]string{
-					expiryTimeAnnotation: time.Now().Add(20 * time.Minute).Format(time.RFC3339),
+					expiryTimeAnnotation: time.Now().Add(10 * time.Minute).Format(time.RFC3339),
 				}
-
 				return []runtime.Object{p}
 			},
-			expected: 1,
+			expectedReplicas: 1,
 		},
 		{
-			name: "expiry_past",
+			name: "operational_with_requests",
 			objects: func() []runtime.Object {
-				p := validPod.DeepCopy()
-				p.CreationTimestamp = metav1.Time{Time: time.Now()}
+				p := validPod()
 				p.ObjectMeta.Annotations = map[string]string{
-					expiryTimeAnnotation: time.Now().Add(-20 * time.Minute).Format(time.RFC3339),
+					expiryTimeAnnotation: time.Now().Add(10 * time.Minute).Format(time.RFC3339),
 				}
-
 				return []runtime.Object{p}
 			},
-			expected: 0,
+			buildRequests:    1,
+			expectedReplicas: 1,
 		},
 		{
-			name: "expiry_invalid",
+			name: "operational_past_expiry",
 			objects: func() []runtime.Object {
-				p := validPod.DeepCopy()
-				p.CreationTimestamp = metav1.Time{Time: time.Now()}
+				p := validPod()
+				p.ObjectMeta.Annotations = map[string]string{
+					expiryTimeAnnotation: time.Now().Add(-10 * time.Minute).Format(time.RFC3339),
+				}
+				return []runtime.Object{p}
+			},
+			expectedReplicas: 0,
+		},
+		{
+			name: "operational_invalid_expiry",
+			objects: func() []runtime.Object {
+				p := validPod()
 				p.ObjectMeta.Annotations = map[string]string{
 					expiryTimeAnnotation: "garbage",
 				}
-
 				return []runtime.Object{p}
 			},
-			expected: 0,
+			expectedReplicas: 0,
 		},
 		{
-			name: "no_pods",
+			name: "unknown",
 			objects: func() []runtime.Object {
-				return nil
+				p := validPod()
+				p.Status.Phase = ""
+				return []runtime.Object{p}
 			},
-			expected: 0,
+			expectedReplicas: 0,
 		},
 		{
-			name: "combination_trim",
+			name: "unknown_with_requests",
 			objects: func() []runtime.Object {
-				leased := leasedPod()
-				leased.Name = "buildkit-0"
-
-				unexpired := validPod.DeepCopy()
-				unexpired.Name = "buildkit-1"
-				unexpired.CreationTimestamp = metav1.Time{Time: time.Now()}
+				p := validPod()
+				p.Status.Phase = ""
+				return []runtime.Object{p}
+			},
+			buildRequests:    1,
+			expectedReplicas: 0,
+		},
+		{
+			name: "combo_preserve_all",
+			objects: func() []runtime.Object {
+				unexpired := validPod()
 				unexpired.ObjectMeta.Annotations = map[string]string{
-					expiryTimeAnnotation: time.Now().Add(20 * time.Minute).Format(time.RFC3339),
-				}
-
-				fresh := validPod.DeepCopy()
-				fresh.Name = "buildkit-2"
-				fresh.CreationTimestamp = metav1.Time{Time: time.Now()}
-
-				unmanaged := leasedPod()
-				unmanaged.Name = "buildkit-3"
-				unmanaged.ObjectMeta.Annotations[managerIDAnnotation] = string(uuid.NewUUID())
-
-				expired := validPod.DeepCopy()
-				expired.Name = "buildkit-4"
-				expired.CreationTimestamp = metav1.Time{Time: time.Now()}
-				expired.ObjectMeta.Annotations = map[string]string{
-					expiryTimeAnnotation: time.Now().Add(-20 * time.Minute).Format(time.RFC3339),
-				}
-
-				pending := validPod.DeepCopy()
-				pending.Name = "buildkit-5"
-				pending.Status.Phase = corev1.PodPending
-
-				return []runtime.Object{leased, unexpired, fresh, unmanaged, expired, pending}
-			},
-			expected: 3,
-		},
-		{
-			name: "combination_halt",
-			objects: func() []runtime.Object {
-				unmanaged := leasedPod()
-				unmanaged.Name = "buildkit-0"
-				unmanaged.ObjectMeta.Annotations[managerIDAnnotation] = string(uuid.NewUUID())
-
-				expired := validPod.DeepCopy()
-				expired.Name = "buildkit-1"
-				expired.CreationTimestamp = metav1.Time{Time: time.Now()}
-				expired.ObjectMeta.Annotations = map[string]string{
-					expiryTimeAnnotation: time.Now().Add(-20 * time.Minute).Format(time.RFC3339),
-				}
-
-				leased := leasedPod()
-				leased.Name = "buildkit-2"
-
-				fresh := validPod.DeepCopy()
-				fresh.Name = "buildkit-3"
-				fresh.CreationTimestamp = metav1.Time{Time: time.Now()}
-
-				pending := validPod.DeepCopy()
-				pending.Name = "buildkit-4"
-				pending.Status.Phase = corev1.PodPending
-
-				return []runtime.Object{unmanaged, expired, leased, fresh, pending}
-			},
-			expected: 4,
-		},
-		{
-			name: "combination_stand",
-			objects: func() []runtime.Object {
-				unexpired := validPod.DeepCopy()
-				unexpired.Name = "buildkit-0"
-				unexpired.CreationTimestamp = metav1.Time{Time: time.Now()}
-				unexpired.ObjectMeta.Annotations = map[string]string{
-					expiryTimeAnnotation: time.Now().Add(20 * time.Minute).Format(time.RFC3339),
+					expiryTimeAnnotation: time.Now().Add(10 * time.Minute).Format(time.RFC3339),
 				}
 
 				leased := leasedPod()
 				leased.Name = "buildkit-1"
 
-				fresh := validPod.DeepCopy()
+				fresh := validPod()
 				fresh.Name = "buildkit-2"
-				fresh.CreationTimestamp = metav1.Time{Time: time.Now()}
 
 				return []runtime.Object{unexpired, leased, fresh}
 			},
-			expected: 3,
+			expectedReplicas: 3,
 		},
 		{
-			name: "combination_flush",
+			name: "combo_remove_all",
 			objects: func() []runtime.Object {
-				expired := validPod.DeepCopy()
-				expired.Name = "buildkit-0"
-				expired.CreationTimestamp = metav1.Time{Time: time.Now()}
+				expired := validPod()
+				expired.ObjectMeta.Annotations = map[string]string{
+					expiryTimeAnnotation: time.Now().Add(-10 * time.Minute).Format(time.RFC3339),
+				}
+
+				oldPending := pendingPod()
+				oldPending.Name = "buildkit-1"
+				oldPending.CreationTimestamp = metav1.NewTime(time.Now().Add(-10 * time.Minute))
+
+				oldUnused := validPod()
+				oldUnused.Name = "buildkit-2"
+				oldUnused.CreationTimestamp = metav1.NewTime(time.Now().Add(-10 * time.Minute))
+
+				return []runtime.Object{expired, oldPending, oldUnused}
+			},
+			expectedReplicas: 0,
+		},
+		{
+			name: "combo_wait_for_pending",
+			objects: func() []runtime.Object {
+				leased0 := leasedPod()
+
+				pending1 := pendingPod()
+				pending1.Name = "buildkit-1"
+
+				pending2 := pendingPod()
+				pending2.Name = "buildkit-2"
+
+				return []runtime.Object{leased0, pending1, pending2}
+			},
+			expectedReplicas: 3,
+		},
+		{
+			name: "combo_wait_for_pending_with_requests",
+			objects: func() []runtime.Object {
+				leased0 := leasedPod()
+
+				pending1 := pendingPod()
+				pending1.Name = "buildkit-1"
+
+				pending2 := pendingPod()
+				pending2.Name = "buildkit-2"
+
+				return []runtime.Object{leased0, pending1, pending2}
+			},
+			buildRequests:    2,
+			expectedReplicas: 3,
+		},
+		{
+			name: "combo_grow_pending_with_requests",
+			objects: func() []runtime.Object {
+				leased0 := leasedPod()
+
+				pending1 := pendingPod()
+				pending1.Name = "buildkit-1"
+
+				pending2 := pendingPod()
+				pending2.Name = "buildkit-2"
+
+				return []runtime.Object{leased0, pending1, pending2}
+			},
+			buildRequests:    3,
+			expectedReplicas: 4,
+		},
+		{
+			name: "combo_trim_tail",
+			objects: func() []runtime.Object {
+				leased := leasedPod()
+				leased.Name = "buildkit-0"
+
+				unexpired := validPod()
+				unexpired.Name = "buildkit-1"
+				unexpired.ObjectMeta.Annotations = map[string]string{
+					expiryTimeAnnotation: time.Now().Add(10 * time.Minute).Format(time.RFC3339),
+				}
+
+				fresh := validPod()
+				fresh.Name = "buildkit-2"
+
+				unmanaged := leasedPod()
+				unmanaged.Name = "buildkit-3"
+				unmanaged.ObjectMeta.Annotations[managerIDAnnotation] = string(uuid.NewUUID())
+
+				expired := validPod()
+				expired.Name = "buildkit-4"
 				expired.ObjectMeta.Annotations = map[string]string{
 					expiryTimeAnnotation: time.Now().Add(-20 * time.Minute).Format(time.RFC3339),
 				}
 
-				pending := validPod.DeepCopy()
-				pending.Name = "buildkit-1"
-				pending.Status.Phase = corev1.PodPending
+				expiredPending := validPod()
+				expiredPending.Name = "buildkit-5"
+				expiredPending.Status.Phase = corev1.PodPending
+				expiredPending.CreationTimestamp = metav1.NewTime(time.Now().Add(-20 * time.Minute))
 
-				old := validPod.DeepCopy()
-				old.Name = "buildkit-2"
-				old.CreationTimestamp = metav1.Time{Time: time.Now().Add(-20 * time.Minute)}
-
-				return []runtime.Object{expired, pending, old}
+				return []runtime.Object{leased, unexpired, fresh, unmanaged, expired, expiredPending}
 			},
-			expected: 0,
+			expectedReplicas: 3,
 		},
 		{
-			name: "combination_embedded_failure_no_growth",
+			name: "combo_trim_tail_with_equal_requests",
 			objects: func() []runtime.Object {
-				p0 := validPod.DeepCopy()
-				p0.Name = "buildkit-0"
-				p0.Status.Phase = corev1.PodPending
+				leased := leasedPod()
+				leased.Name = "buildkit-0"
 
-				p1 := validPod.DeepCopy()
+				unexpired := validPod()
+				unexpired.Name = "buildkit-1"
+				unexpired.ObjectMeta.Annotations = map[string]string{
+					expiryTimeAnnotation: time.Now().Add(20 * time.Minute).Format(time.RFC3339),
+				}
+
+				fresh := validPod()
+				fresh.Name = "buildkit-2"
+
+				unmanaged := leasedPod()
+				unmanaged.Name = "buildkit-3"
+				unmanaged.ObjectMeta.Annotations[managerIDAnnotation] = string(uuid.NewUUID())
+
+				expired := validPod()
+				expired.Name = "buildkit-4"
+				expired.ObjectMeta.Annotations = map[string]string{
+					expiryTimeAnnotation: time.Now().Add(-20 * time.Minute).Format(time.RFC3339),
+				}
+
+				expiredPending := validPod()
+				expiredPending.Name = "buildkit-5"
+				expiredPending.Status.Phase = corev1.PodPending
+				expiredPending.CreationTimestamp = metav1.NewTime(time.Now().Add(-20 * time.Minute))
+
+				return []runtime.Object{leased, unexpired, fresh, unmanaged, expired, expiredPending}
+			},
+			buildRequests:    2,
+			expectedReplicas: 3,
+		},
+		{
+			name: "combo_trim_tail_with_extended_requests",
+			objects: func() []runtime.Object {
+				leased0 := leasedPod()
+				leased0.Name = "buildkit-0"
+
+				unexpired1 := validPod()
+				unexpired1.Name = "buildkit-1"
+				unexpired1.ObjectMeta.Annotations = map[string]string{
+					expiryTimeAnnotation: time.Now().Add(10 * time.Minute).Format(time.RFC3339),
+				}
+
+				fresh2 := validPod()
+				fresh2.Name = "buildkit-2"
+
+				unmanaged3 := leasedPod()
+				unmanaged3.Name = "buildkit-3"
+				unmanaged3.ObjectMeta.Annotations[managerIDAnnotation] = string(uuid.NewUUID())
+
+				expired4 := validPod()
+				expired4.Name = "buildkit-4"
+				expired4.ObjectMeta.Annotations = map[string]string{
+					expiryTimeAnnotation: time.Now().Add(-10 * time.Minute).Format(time.RFC3339),
+				}
+
+				expiredPending5 := pendingPod()
+				expiredPending5.Name = "buildkit-5"
+				expiredPending5.CreationTimestamp = metav1.NewTime(time.Now().Add(-10 * time.Minute))
+
+				return []runtime.Object{leased0, unexpired1, fresh2, unmanaged3, expired4, expiredPending5}
+			},
+			buildRequests:    3,
+			expectedReplicas: 5,
+		},
+		{
+			name: "combo_embedded_failure_no_growth",
+			objects: func() []runtime.Object {
+				p0 := pendingPod()
+				p0.Name = "buildkit-0"
+
+				p1 := validPod()
 				p1.Name = "buildkit-1"
 				p1.Status.Phase = corev1.PodReasonUnschedulable
 
-				p2 := validPod.DeepCopy()
+				p2 := validPod()
 				p2.Name = "buildkit-2"
 				p2.Status.Phase = corev1.PodFailed
 
-				p3 := validPod.DeepCopy()
+				p3 := pendingPod()
 				p3.Name = "buildkit-3"
-				p3.Status.Phase = corev1.PodPending
 
 				return []runtime.Object{p0, p1, p2, p3}
 			},
-			requests: 4,
-			expected: 4,
+			buildRequests:    4,
+			expectedReplicas: 4,
 		},
 		{
-			name: "combination_embedded_failure_trim",
+			name: "combo_embedded_failure_trim",
 			objects: func() []runtime.Object {
-				p0 := validPod.DeepCopy()
-				p0.Name = "buildkit-0"
-				p0.Status.Phase = corev1.PodPending
+				p0 := pendingPod()
 
-				p1 := validPod.DeepCopy()
+				p1 := validPod()
 				p1.Name = "buildkit-1"
 				p1.Status.Phase = corev1.PodReasonUnschedulable
 
-				p2 := validPod.DeepCopy()
+				p2 := validPod()
 				p2.Name = "buildkit-2"
 				p2.Status.Phase = corev1.PodFailed
 
-				p3 := validPod.DeepCopy()
+				p3 := pendingPod()
 				p3.Name = "buildkit-3"
-				p3.Status.Phase = corev1.PodPending
+				p3.CreationTimestamp = metav1.NewTime(time.Now().Add(-10 * time.Minute))
 
 				return []runtime.Object{p0, p1, p2, p3}
 			},
-			requests: 1,
-			expected: 1,
-		},
-		{
-			name: "combination_embedded_new_pending",
-			objects: func() []runtime.Object {
-				p0 := validPod.DeepCopy()
-				p0.Name = "buildkit-0"
-				p0.CreationTimestamp = metav1.Time{Time: time.Now()}
-
-				p1 := validPod.DeepCopy()
-				p1.Name = "buildkit-1"
-				p1.Status.Phase = corev1.PodPending
-				p1.CreationTimestamp = metav1.Time{Time: time.Now().Add(-5 * time.Minute)}
-
-				p2 := validPod.DeepCopy()
-				p2.Name = "buildkit-2"
-				p2.CreationTimestamp = metav1.Time{Time: time.Now()}
-
-				return []runtime.Object{p0, p1, p2}
-			},
-			expected: 3,
+			buildRequests:    1,
+			expectedReplicas: 1,
 		},
 	}
 
@@ -1010,20 +984,203 @@ func TestPoolPodReconciliation(t *testing.T) {
 				return true, nil, nil
 			})
 
-			wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond), MaxIdleTime(10*time.Minute))
-			for i := 0; i < tc.requests; i++ {
+			wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(500*time.Millisecond), MaxIdleTime(5*time.Minute))
+			for i := 0; i < tc.buildRequests; i++ {
 				wp.requests.Enqueue(&PodRequest{result: make(chan PodRequestResult, 1)})
 			}
 			defer wp.Close()
 
 			select {
 			case actual := <-replicasCh:
-				if tc.expected != actual {
-					t.Errorf("expected statefulset update with %d replicas, got %d", tc.expected, actual)
+				if tc.expectedReplicas != actual {
+					t.Errorf("expected statefulset update with %d replicas, got %d", tc.expectedReplicas, actual)
 				}
-			case <-time.After(3 * time.Second):
-				t.Error("worker pool update not received within 3s")
+			case <-time.After(testTimeoutDuration):
+				t.Errorf("worker pool update not received within %s", testTimeoutDuration)
 			}
 		})
 	}
+}
+
+func validSts() *appsv1.StatefulSet {
+	return &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "buildkit",
+			Namespace: namespace,
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: pointer.Int32(0),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: testLabels,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: testLabels,
+				},
+				Spec: corev1.PodSpec{},
+			},
+		},
+	}
+}
+
+func validEndpointSlice() *discoveryv1.EndpointSlice {
+	return &discoveryv1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "buildkit-bgk87",
+			Namespace: namespace,
+		},
+		Endpoints: []discoveryv1.Endpoint{
+			{
+				Conditions: discoveryv1.EndpointConditions{
+					Ready:   pointer.Bool(true),
+					Serving: pointer.Bool(true),
+				},
+				Hostname: pointer.String("buildkit-0"),
+				TargetRef: &corev1.ObjectReference{
+					Name:      "buildkit-0",
+					Namespace: namespace,
+				},
+			},
+		},
+		Ports: []discoveryv1.EndpointPort{
+			{
+				Name: pointer.String("daemon"),
+				Port: pointer.Int32(1234),
+			},
+		},
+	}
+}
+
+func validPod() *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "buildkit-0",
+			Namespace:         namespace,
+			Labels:            testLabels,
+			CreationTimestamp: metav1.Now(),
+		},
+		Spec: corev1.PodSpec{},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   corev1.PodScheduled,
+					Status: corev1.ConditionTrue,
+				},
+				{
+					Type:   corev1.PodInitialized,
+					Status: corev1.ConditionTrue,
+				},
+				{
+					Type:   corev1.ContainersReady,
+					Status: corev1.ConditionTrue,
+				},
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				},
+			},
+		},
+	}
+}
+
+func leasedPod() *corev1.Pod {
+	leased := validPod()
+	leased.ObjectMeta.Annotations = map[string]string{
+		leasedAtAnnotation:  time.Now().Format(time.RFC3339),
+		leasedByAnnotation:  owner,
+		managerIDAnnotation: string(newUUID()),
+	}
+
+	return leased
+}
+
+func unmanagedPod() *corev1.Pod {
+	unmanaged := leasedPod()
+	unmanaged.ObjectMeta.Annotations[managerIDAnnotation] = string(uuid.NewUUID())
+
+	return unmanaged
+}
+
+func pendingPod() *corev1.Pod {
+	pending := validPod()
+	pending.Status.Phase = corev1.PodPending
+	pending.Status.Conditions = []corev1.PodCondition{
+		{
+			Type:   corev1.PodScheduled,
+			Status: corev1.ConditionFalse,
+		},
+		{
+			Type:   corev1.PodInitialized,
+			Status: corev1.ConditionFalse,
+		},
+		{
+			Type:   corev1.ContainersReady,
+			Status: corev1.ConditionFalse,
+		},
+		{
+			Type:   corev1.PodReady,
+			Status: corev1.ConditionFalse,
+		},
+	}
+
+	return pending
+}
+
+func assertLeasedPod(t *testing.T, action k8stesting.Action, ret *corev1.Pod) {
+	t.Helper()
+
+	patchAction := action.(k8stesting.PatchAction)
+
+	assert.Equal(t, types.ApplyPatchType, patchAction.GetPatchType(), "unexpected patch type")
+
+	pod := corev1.Pod{}
+	patch := patchAction.GetPatch()
+	if err := json.Unmarshal(patch, &pod); err != nil {
+		assert.FailNowf(t, "unable to marshal patch into v1.Pod", "received invalid patch %s", patch)
+	}
+
+	assert.Contains(t, pod.Annotations, leasedByAnnotation)
+	assert.Contains(t, pod.Annotations, managerIDAnnotation)
+	assert.NotContains(t, pod.Annotations, expiryTimeAnnotation)
+
+	ts, ok := pod.Annotations[leasedAtAnnotation]
+	require.True(t, ok, "leased at annotation not found")
+
+	leasedAt, err := time.Parse(time.RFC3339, ts)
+	require.NoError(t, err, "invalid lease at annotation")
+
+	assert.True(t, leasedAt.Before(time.Now()), "leased at is not in the past")
+
+	ret.Annotations = pod.Annotations
+}
+
+// NOTE: this set of assertions is fine, but it's not great. we need a better way of asserting the patching.
+//	ideally, we would make assertions against the API object after the event but client-go doesn't support SSA right
+//	now, which means we have to override the "patch" action with a reactor.
+
+func assertUnleasedPod(t *testing.T, action k8stesting.Action) {
+	t.Helper()
+
+	patchAction := action.(k8stesting.PatchAction)
+
+	assert.Equal(t, types.ApplyPatchType, patchAction.GetPatchType(), "unexpected patch type")
+
+	pp := corev1.Pod{}
+	patch := patchAction.GetPatch()
+	if err := json.Unmarshal(patch, &pp); err != nil {
+		assert.FailNowf(t, "unable to marshal patch into v1.Pod", "received invalid patch %s", patch)
+	}
+
+	assert.NotContains(t, pp.Annotations, leasedAtAnnotation)
+	assert.NotContains(t, pp.Annotations, leasedByAnnotation)
+	assert.NotContains(t, pp.Annotations, managerIDAnnotation)
+
+	ts, ok := pp.Annotations[expiryTimeAnnotation]
+	require.True(t, ok, "expiry time annotation not found")
+
+	expiry, err := time.Parse(time.RFC3339, ts)
+	require.NoError(t, err, "invalid expiry time annotation")
+
+	assert.True(t, expiry.After(time.Now().Add(5*time.Minute)), "expiry time is not in the future")
 }

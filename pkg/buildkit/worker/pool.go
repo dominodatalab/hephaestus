@@ -42,6 +42,11 @@ var (
 
 	newUUID          = uuid.NewUUID
 	statefulPodRegex = regexp.MustCompile(`^.*-(\d+)$`)
+
+	// NOTE: https://github.com/kubernetes/client-go/issues/970
+	// 	we have to hack the client during testing because the current version
+	// 	of the k8s fake client does not support the ApplyPatchType
+	garbageClientHack = false
 )
 
 const (
@@ -137,7 +142,7 @@ func NewPool(
 		defer ticker.Stop()
 
 		for {
-			if err := wp.updateWorkers(wp.ctx); err != nil {
+			if err := wp.reconcileWorkers(wp.ctx); err != nil {
 				wp.log.Error(err, "Failed to update worker pool")
 			}
 
@@ -354,7 +359,7 @@ func (p *AutoscalingPool) extractHostname(epSlice *discoveryv1.EndpointSlice, po
 }
 
 // reconcile pods in worker pool
-func (p *AutoscalingPool) updateWorkers(ctx context.Context) error {
+func (p *AutoscalingPool) reconcileWorkers(ctx context.Context) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -369,108 +374,25 @@ func (p *AutoscalingPool) updateWorkers(ctx context.Context) error {
 		return getOrdinal(podList.Items[i].Name) < getOrdinal(podList.Items[j].Name)
 	})
 
-	var allPods []string
-	var leased []string
-	var pending []string
-	var removals []string
-	var abnormal []string
+	arbiter := NewScaleArbiter(p.log, p.podClient, p.podMaxIdleTime)
 
-	// mark pods for removal based on state and lease pods when requests exist
 	for _, pod := range podList.Items {
-		allPods = append(allPods, pod.Name)
-
-		log := p.log.WithValues("podName", pod.Name)
-		log.Info("Evaluating pod metadata and status")
-
-		if id, ok := pod.Annotations[managerIDAnnotation]; ok && id != p.uuid { // mark unmanaged pods
-			log.Info("Eligible for termination, manager id mismatch", "expected", p.uuid, "actual", id)
-
-			removals = append(removals, pod.Name)
-		} else if _, hasLease := pod.Annotations[leasedByAnnotation]; hasLease { // mark leased pods
-			log.Info("Ineligible for termination, pod is leased")
-
-			leased = append(leased, pod.Name)
-		} else if pod.Status.Phase == corev1.PodPending { // mark pending pods
-			pending = append(pending, pod.Name)
-
-			if elapsed := time.Since(pod.CreationTimestamp.Time); elapsed < p.podMaxIdleTime {
-				log.Info("Pending pod is not old enough for termination", "gracePeriod", p.podMaxIdleTime-elapsed)
-			} else {
-				removals = append(removals, pod.Name)
-			}
-		} else if p.isOperationalPod(ctx, pod.Name) { // dispatch builds/check expiry/check age on operation pods
-			log.Info("Pod is operational")
-
-			if req := p.requests.Dequeue(); req != nil {
-				log.Info("Processing dequeued pod request with operational pod")
-				if p.processPodRequest(ctx, req, pod) {
-					leased = append(leased, pod.Name)
-				}
-				continue
-			}
-
-			if ts, ok := pod.Annotations[expiryTimeAnnotation]; ok {
-				expiry, err := time.Parse(time.RFC3339, ts)
-
-				if err != nil {
-					log.Info("Cannot parse expiry time, assuming expired", "expiry", expiry)
-					removals = append(removals, pod.Name)
-				} else if time.Now().After(expiry) {
-					log.Info("Eligible for termination, ttl has expired", "expiry", expiry)
-					removals = append(removals, pod.Name)
-				}
-			} else if time.Since(pod.CreationTimestamp.Time) > p.podMaxIdleTime {
-				log.Info("Eligible for termination, missing expiry time and pod age older than max idle time")
-				removals = append(removals, pod.Name)
-			}
-		} else { // mark abnormal pods
-			// TODO: if a buildkit pod is coming up initially and is NOT in a pending state, then the controller never
-			// 	gives it a chances to reach a steady state and terminates it prematurely. this check should be a little
-			// 	bit more robust. i think we need to make this function a little less unwieldy with all its if/else if
-			// 	branches.
-			log.Info(
-				"Unknown phase detected",
-				"phase", pod.Status.Phase,
-				"conditions", pod.Status.Conditions,
-				"containerStatuses", pod.Status.ContainerStatuses,
-			)
-			abnormal = append(abnormal, pod.Name)
-		}
+		p.log.Info("Evaluating pod metadata and status", "podName", pod.Name)
+		arbiter.EvaluatePod(ctx, p.uuid, pod)
 	}
-
-	// collect names of pods that might be terminated
-	subtractionMap := make(map[string]bool)
-	for _, name := range removals {
-		subtractionMap[name] = true
-	}
-	for _, name := range abnormal {
-		subtractionMap[name] = true
-	}
-
-	// calculate which pods can be removed based reverse-ordinal position
-	var subtractions int
-	for idx := range allPods {
-		reverseIdx := len(allPods) - 1 - idx
-
-		if subtractionMap[allPods[reverseIdx]] {
-			subtractions++
-		} else {
+	for _, observation := range arbiter.LeasablePods() {
+		req := p.requests.Dequeue()
+		if req == nil {
 			break
 		}
+
+		p.log.Info("Processing dequeued pod request with operational pod")
+		if p.processPodRequest(ctx, req, observation.Pod) || garbageClientHack {
+			observation.MarkLeased()
+		}
 	}
 
-	podCount := len(allPods)
-	requestCount := p.requests.Len()
-	replicas := int32(podCount + requestCount - subtractions)
-
-	p.log.Info("Pod evaluation complete",
-		"allPods", allPods,
-		"leasedPods", leased,
-		"pendingPods", pending,
-		"removalPods", removals,
-		"abnormalPods", abnormal,
-		"podRequests", requestCount,
-	)
+	replicas := arbiter.DetermineReplicas(p.requests.Len())
 
 	p.log.Info("Using statefulset scale", "replicas", replicas)
 	_, err = p.statefulSetClient.UpdateScale(
@@ -481,7 +403,7 @@ func (p *AutoscalingPool) updateWorkers(ctx context.Context) error {
 				Name:      p.statefulSetName,
 				Namespace: p.namespace,
 			},
-			Spec: autoscalingv1.ScaleSpec{Replicas: replicas},
+			Spec: autoscalingv1.ScaleSpec{Replicas: int32(replicas)},
 		},
 		metav1.UpdateOptions{FieldManager: fieldManagerName},
 	)
@@ -530,46 +452,6 @@ func (p *AutoscalingPool) triggerReconcile() {
 	default:
 		p.log.Info("Aborting notify, notification already present")
 	}
-}
-
-// ensure pod is operational by checking its phase and conditions
-func (p *AutoscalingPool) isOperationalPod(ctx context.Context, podName string) (verdict bool) {
-	// fetch the latest version of the pod
-	pod, err := p.podClient.Get(ctx, podName, metav1.GetOptions{})
-	if err != nil {
-		p.log.Error(err, "Failed to check if pod is operational")
-		return
-	}
-
-	// this does not mean the pod is usable but is a good sanity check
-	if pod.Status.Phase != corev1.PodRunning {
-		return
-	}
-
-	// assert the following:
-	// 	- pod has been scheduled on a node
-	// 	- all init containers have completed successfully
-	// 	- all containers in the pod are ready
-	// 	- the pod is able to serve requests and should be added to the load balancing pools of all matching Services
-	var scheduled, initialized, containersReady, podReady bool
-	for _, condition := range pod.Status.Conditions {
-		switch condition.Type {
-		case corev1.PodScheduled:
-			scheduled = condition.Status == corev1.ConditionTrue
-		case corev1.PodInitialized:
-			initialized = condition.Status == corev1.ConditionTrue
-		case corev1.ContainersReady:
-			containersReady = condition.Status == corev1.ConditionTrue
-		case corev1.PodReady:
-			podReady = condition.Status == corev1.ConditionTrue
-		}
-	}
-
-	// lastly, the status fields are not updated when a pod is terminated, so we have to check the metadata to determine
-	// if the pod was deleted by a scale-down event and the process is taking longer than expected to exit
-	notDeleted := pod.DeletionTimestamp == nil
-
-	return scheduled && initialized && containersReady && podReady && notDeleted
 }
 
 // diagnose elements that could lead to a failure

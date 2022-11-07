@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,7 +22,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/utils/pointer"
@@ -116,7 +116,7 @@ func (suite *GKETestSuite) TearDownSuite() {
 	require.NoError(suite.T(), suite.manager.Destroy(context.Background()))
 }
 
-func (suite *GKETestSuite) TestInvalidImageBuild() {
+func (suite *GKETestSuite) TestImageBuildValidation() {
 	suite.T().Log("Testing image build validation")
 
 	ctx := context.Background()
@@ -147,6 +147,17 @@ func (suite *GKETestSuite) TestInvalidImageBuild() {
 			func(build *hephv1.ImageBuild) {
 				build.Spec.Images = []string{
 					"~cruisin' usa!!!",
+				}
+			},
+		},
+		{
+			"bad_build_args",
+			"spec.buildArgs[0]: Invalid value: \"i have no equals sign\": must use a <key>=<value> format, " +
+				"spec.buildArgs[1]: Invalid value: \"   =value\": must use a <key>=<value> format",
+			func(build *hephv1.ImageBuild) {
+				build.Spec.BuildArgs = []string{
+					"i have no equals sign",
+					"   =value",
 				}
 			},
 		},
@@ -256,7 +267,17 @@ func (suite *GKETestSuite) TestInvalidImageBuild() {
 	for _, tc := range tt {
 		suite.T().Logf("Test case: %s", tc.name)
 		suite.T().Run(tc.name, func(t *testing.T) {
-			build := validImageBuild()
+			build := &hephv1.ImageBuild{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "test-build-",
+				},
+				Spec: hephv1.ImageBuildSpec{
+					Context: "https://nowhere.com/docker-build-context.tgz",
+					Images: []string{
+						"registry/org/repo:tag",
+					},
+				},
+			}
 			tc.mutator(build)
 
 			var statusErr *apierrors.StatusError
@@ -272,48 +293,18 @@ func (suite *GKETestSuite) TestInvalidImageBuild() {
 	}
 }
 
-func (suite *GKETestSuite) TestRegistryPush() {
+func (suite *GKETestSuite) TestImageBuilding() {
 	ctx := context.Background()
-	client := suite.hephClient.HephaestusV1().ImageBuilds(corev1.NamespaceDefault)
 
 	suite.T().Run("no_auth", func(t *testing.T) {
-		tag := RandomString(8)
-		build := validImageBuild()
-		build.Spec.LogKey = tag
-		build.Spec.Images = []string{
-			fmt.Sprintf("docker-registry:5000/test-ns/test-repo:%s", tag),
-		}
+		build := newImageBuild(
+			python39JupyterBuildContext,
+			"docker-registry:5000/test-ns/test-repo",
+			nil,
+		)
+		ib := createBuild(t, ctx, suite.hephClient, build)
+		require.NotEqual(t, hephv1.PhaseFailed, ib.Status.Phase)
 
-		build, err := client.Create(ctx, build, metav1.CreateOptions{})
-		require.NoError(t, err)
-
-		watcher, err := client.Watch(ctx, metav1.SingleObject(build.ObjectMeta))
-		require.NoError(t, err)
-		defer watcher.Stop()
-
-		ctxTimeout, cancel := context.WithTimeout(ctx, 5*time.Minute)
-		defer cancel()
-
-		var ib *hephv1.ImageBuild
-		for loop := true; loop; {
-			select {
-			case <-ctxTimeout.Done():
-				t.Fatal("Build failed to finish within context deadline")
-			case event := <-watcher.ResultChan():
-				if event.Type != watch.Modified {
-					continue
-				}
-
-				ib = event.Object.(*hephv1.ImageBuild)
-				require.NotEqual(t, hephv1.PhaseFailed, ib.Status.Phase)
-
-				if ib.Status.Phase == hephv1.PhaseSucceeded {
-					loop = false
-				}
-			}
-		}
-
-		// assert image delivery
 		svc, err := suite.k8sClient.CoreV1().Services(corev1.NamespaceDefault).Get(
 			ctx,
 			"docker-registry",
@@ -329,63 +320,89 @@ func (suite *GKETestSuite) TestRegistryPush() {
 
 		tags, err := hub.Tags("test-ns/test-repo")
 		require.NoError(t, err)
-		assert.Contains(t, tags, tag)
+		assert.Contains(t, tags, ib.Spec.LogKey)
 
-		// assert message delivery
-
-		// assert log delivery
+		testLogDelivery(t, ctx, suite.k8sClient, ib)
+		testMessageDelivery(t, ctx, suite.k8sClient, ib)
 	})
 
-	suite.T().Run("bad_auth", func(t *testing.T) {})
+	suite.T().Run("bad_auth", func(t *testing.T) {
+		build := newImageBuild(
+			python39JupyterBuildContext,
+			"docker-registry-secure:5000/test-ns/test-repo",
+			&hephv1.RegistryCredentials{
+				Server: "docker-registry-secure:5000",
+				BasicAuth: &hephv1.BasicAuthCredentials{
+					Username: "bad",
+					Password: "stuff",
+				},
+			},
+		)
+		ib := createBuild(t, ctx, suite.hephClient, build)
 
-	suite.T().Run("basic_auth", func(t *testing.T) {})
+		assert.Equal(t, ib.Status.Phase, hephv1.PhaseFailed)
+		assert.Contains(t, ib.Status.Conditions[0].Message, `"docker-registry-secure:5000" client credentials are invalid`)
+	})
 
-	suite.T().Run("secret_auth", func(t *testing.T) {})
+	suite.T().Run("basic_auth", func(t *testing.T) {
+		build := newImageBuild(
+			python39JupyterBuildContext,
+			"docker-registry-secure:5000/test-ns/test-repo",
+			&hephv1.RegistryCredentials{
+				Server: "docker-registry-secure:5000",
+				BasicAuth: &hephv1.BasicAuthCredentials{
+					Username: "test-user",
+					Password: "test-password",
+				},
+			},
+		)
+		ib := createBuild(t, ctx, suite.hephClient, build)
+
+		assert.Equalf(t, ib.Status.Phase, hephv1.PhaseSucceeded, "failed build with message %q", ib.Status.Conditions[0].Message)
+	})
+
+	suite.T().Run("secret_auth", func(t *testing.T) {
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: "test-secret-",
+			},
+			Type: corev1.SecretTypeDockerConfigJson,
+			StringData: map[string]string{
+				corev1.DockerConfigJsonKey: `{"auths":{"docker-registry-secure:5000":{"username":"test-user","password":"test-password"}}}`,
+			},
+		}
+		secretClient := suite.k8sClient.CoreV1().Secrets(corev1.NamespaceDefault)
+		secret, err := secretClient.Create(ctx, secret, metav1.CreateOptions{})
+		require.NoError(t, err, "failed to create docker credentials secret")
+		defer secretClient.Delete(ctx, secret.Name, metav1.DeleteOptions{})
+
+		build := newImageBuild(
+			python39JupyterBuildContext,
+			"docker-registry-secure:5000/test-ns/test-repo",
+			&hephv1.RegistryCredentials{
+				Server: "docker-registry-secure:5000",
+				Secret: &hephv1.SecretCredentials{
+					Name:      secret.Name,
+					Namespace: secret.Namespace,
+				},
+			},
+		)
+		ib := createBuild(t, ctx, suite.hephClient, build)
+
+		assert.Equalf(t, ib.Status.Phase, hephv1.PhaseSucceeded, "failed build with message %q", ib.Status.Conditions[0].Message)
+	})
 
 	suite.T().Run("cloud_auth", func(t *testing.T) {
-		tag := RandomString(8)
 		image := fmt.Sprintf("%s/test-image", suite.gcpRepository)
-
-		build := validImageBuild()
-		build.Spec.LogKey = tag
-		build.Spec.Images = []string{
-			fmt.Sprintf("%s/%s:%s", suite.gcpRegistry, image, tag),
-		}
-		build.Spec.RegistryAuth = []hephv1.RegistryCredentials{
-			{
+		build := newImageBuild(
+			python39JupyterBuildContext,
+			fmt.Sprintf("%s/%s", suite.gcpRegistry, image),
+			&hephv1.RegistryCredentials{
 				Server:        suite.gcpRegistry,
 				CloudProvided: pointer.Bool(true),
 			},
-		}
-
-		build, err := client.Create(ctx, build, metav1.CreateOptions{})
-		require.NoError(t, err)
-
-		watcher, err := client.Watch(ctx, metav1.SingleObject(build.ObjectMeta))
-		require.NoError(t, err)
-		defer watcher.Stop()
-
-		ctxTimeout, cancel := context.WithTimeout(ctx, 5*time.Minute)
-		defer cancel()
-
-		var ib *hephv1.ImageBuild
-		for loop := true; loop; {
-			select {
-			case <-ctxTimeout.Done():
-				t.Fatal("Build failed to finish within context deadline")
-			case event := <-watcher.ResultChan():
-				if event.Type != watch.Modified {
-					continue
-				}
-
-				ib = event.Object.(*hephv1.ImageBuild)
-				require.NotEqual(t, hephv1.PhaseFailed, ib.Status.Phase)
-
-				if ib.Status.Phase == hephv1.PhaseSucceeded {
-					loop = false
-				}
-			}
-		}
+		)
+		ib := createBuild(t, ctx, suite.hephClient, build)
 
 		credentials, err := auth.FindDefaultCredentials(ctx, "https://www.googleapis.com/auth/cloud-platform")
 		require.NoError(t, err)
@@ -398,10 +415,84 @@ func (suite *GKETestSuite) TestRegistryPush() {
 
 		tags, err := hub.Tags(image)
 		require.NoError(t, err)
-		assert.Contains(t, tags, tag)
+		assert.Contains(t, tags, ib.Spec.LogKey)
 	})
 
-	suite.T().Run("build_args", func(t *testing.T) {})
+	suite.T().Run("build_args", func(t *testing.T) {
+		build := newImageBuild(
+			buildArgBuildContext,
+			"docker-registry:5000/test-ns/test-repo",
+			nil,
+		)
+		build.Spec.BuildArgs = []string{"INPUT=VAR=VAL"}
+		ib := createBuild(t, ctx, suite.hephClient, build)
 
-	suite.T().Run("build_failure", func(t *testing.T) {})
+		assert.Equalf(t, ib.Status.Phase, hephv1.PhaseSucceeded, "failed build with message %q", ib.Status.Conditions[0].Message)
+	})
+
+	suite.T().Run("build_failure", func(t *testing.T) {
+		build := newImageBuild(
+			errorBuildContext,
+			"docker-registry:5000/test-ns/test-repo",
+			nil,
+		)
+		ib := createBuild(t, ctx, suite.hephClient, build)
+
+		assert.Equalf(t, ib.Status.Phase, hephv1.PhaseFailed, "expected build with bad Dockerfile to fail")
+	})
+
+	suite.T().Run("multi_stage", func(t *testing.T) {
+		build := newImageBuild(
+			multiStageBuildContext,
+			"docker-registry:5000/test-ns/test-repo",
+			nil,
+		)
+		ib := createBuild(t, ctx, suite.hephClient, build)
+
+		assert.Equalf(t, ib.Status.Phase, hephv1.PhaseSucceeded, "failed build with message %q", ib.Status.Conditions[0].Message)
+	})
+
+	suite.T().Run("concurrent_builds", func(t *testing.T) {
+		var wg sync.WaitGroup
+		ch := make(chan *hephv1.ImageBuild, 3)
+
+		for i := 0; i < 3; i++ {
+			wg.Add(1)
+
+			go func() {
+				defer wg.Done()
+
+				build := newImageBuild(
+					dseBuildContext,
+					"docker-registry:5000/test-ns/test-repo",
+					nil,
+				)
+				build.Spec.DisableLocalBuildCache = true
+
+				ch <- createBuild(t, ctx, suite.hephClient, build)
+			}()
+		}
+		wg.Wait()
+		close(ch)
+
+		var builders []string
+		for ib := range ch {
+			builders = append(builders, ib.Status.BuilderAddr)
+			assert.Equalf(
+				t,
+				ib.Status.Phase,
+				hephv1.PhaseSucceeded,
+				"failed build %q with message %q",
+				ib.Name,
+				ib.Status.Conditions[0].Message,
+			)
+		}
+
+		expected := []string{
+			"tcp://hephaestus-buildkit-0.hephaestus-buildkit.default:1234",
+			"tcp://hephaestus-buildkit-1.hephaestus-buildkit.default:1234",
+			"tcp://hephaestus-buildkit-2.hephaestus-buildkit.default:1234",
+		}
+		assert.ElementsMatch(t, builders, expected, "builds did not execute on unique buildkit pods")
+	})
 }
