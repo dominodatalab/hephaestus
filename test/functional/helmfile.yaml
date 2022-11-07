@@ -8,8 +8,32 @@ repositories:
   - name: twuni
     url: https://helm.twun.io
 
+  - name: istio
+    url: https://istio-release.storage.googleapis.com/charts
+
 releases:
-  # TODO: install istio
+  - name: istio-base
+    namespace: istio-system
+    chart: istio/base
+    version: 1.15.2
+    wait: true
+    waitForJobs: true
+
+  - name: istiod
+    namespace: istio-system
+    chart: istio/istiod
+    version: 1.15.2
+    wait: true
+    waitForJobs: true
+    needs:
+      - istio-base
+    hooks:
+      - events: [postsync]
+        showlogs: true
+        command: sh
+        args:
+          - -c
+          - "kubectl label namespace default istio-injection=enabled"
 
   - name: cert-manager
     namespace: cert-manager
@@ -27,35 +51,59 @@ releases:
     chart: twuni/docker-registry
     version: 2.2.2
     wait: true
+    needs:
+      - istio-system/istiod
     values:
-      - service:
-          type: LoadBalancer
-        secrets:
+      - secrets:
           haSharedSecret: docker-registry-ha-shared-secret
+        service:
+          type: LoadBalancer
+
+  - name: docker-registry-secure
+    namespace: default
+    chart: twuni/docker-registry
+    version: 2.2.2
+    wait: true
+    needs:
+      - istio-system/istiod
+    values:
+      - secrets:
+          htpasswd: "test-user:$2y$05$1eGDzSDRv.qRvDAhZOvFker9bqg06hlQCL3pbnga139jOtjtrdf8e"
+          haSharedSecret: docker-registry-ha-shared-secret
+        service:
+          type: LoadBalancer
 
   - name: rabbitmq
     namespace: default
     chart: bitnami/rabbitmq
     version: 11.0.0
     wait: true
+    needs:
+      - istio-system/istiod
     values:
       - auth:
           password: rabbitmq-password
           erlangCookie: rabbitmq-erlang-cookie
         persistence:
           enabled: false
+        service:
+          type: LoadBalancer
 
   - name: redis
     namespace: default
     chart: bitnami/redis
     version: 17.3.2
     wait: true
+    needs:
+      - istio-system/istiod
     values:
       - auth:
           password: redis-password
         master:
           persistence:
             enabled: false
+          service:
+            type: LoadBalancer
         replica:
           replicaCount: 0
 
@@ -65,17 +113,27 @@ releases:
     wait: true
     waitForJobs: true
     needs:
+      - istio-system/istiod
       - cert-manager/cert-manager
       - rabbitmq
       - redis
     values:
-      - registries:
+      - istio:
+          enabled: true
+        registries:
+          "docker-registry-secure:5000":
+            http: true
           "docker-registry:5000":
             http: true
         buildkit:
           rootless: false
+          gcKeepStorage: 75000000000
+          persistence:
+            size: 100Gi
         controller:
           manager:
+            image:
+              pullPolicy: Always
             messaging:
               enabled: true
               amqp:
@@ -89,7 +147,7 @@ releases:
                     - hephaestus_output
                   source: |-
                     message = parse_json!(.message)
-                    if !exists(message.logKey) || is_nullish(message.logKey) {
+                    if !exists(message.logKey) || is_nullish(message.logKey) || is_nullish(message.msg) {
                       abort
                     }
                     . = {
