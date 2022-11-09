@@ -7,9 +7,8 @@ resource "random_string" "name_suffix" {
 }
 
 locals {
-  name            = "testenv-eks-${random_string.name_suffix.result}"
-  cluster_name    = "${local.name}-cluster"
-  kubeconfig_path = "${path.module}/kubeconfig"
+  name         = "testenv-eks-${random_string.name_suffix.result}"
+  cluster_name = "${local.name}-cluster"
 }
 
 provider "aws" {
@@ -26,12 +25,6 @@ provider "kubernetes" {
     # This requires the awscli to be installed locally where Terraform is executed
     args = ["eks", "get-token", "--cluster-name", module.eks.cluster_id, "--region", var.region]
   }
-}
-
-resource "local_file" "kubeconfig" {
-  content         = file(local.kubeconfig_path)
-  filename        = local.kubeconfig_path
-  file_permission = "0600"
 }
 
 data "aws_availability_zones" "available" {
@@ -187,7 +180,11 @@ resource "null_resource" "kubeconfig" {
   triggers = {
     domino_eks_cluster_ca = module.eks.cluster_certificate_authority_data
     cluster_name          = local.cluster_name
-    kubeconfig_file       = local.kubeconfig_path
+    kubeconfig_file       = "${path.module}/kubeconfig"
     region                = var.region
   }
+}
+
+data "local_file" "kubeconfig" {
+  filename = null_resource.kubeconfig.triggers.kubeconfig_file
 }

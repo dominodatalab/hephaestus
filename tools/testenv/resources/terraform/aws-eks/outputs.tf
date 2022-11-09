@@ -1,7 +1,7 @@
 output "kubeconfig" {
   description = "A kubeconfig file configured to access the EKS cluster."
   sensitive   = true
-  value       = local_file.kubeconfig
+  value       = data.local_file.kubeconfig.content
 }
 
 output "repository" {
