@@ -4,8 +4,10 @@ package functional
 
 import (
 	"context"
+	"fmt"
+	"net/url"
 	"os"
-	"strings"
+	"path/filepath"
 	"testing"
 
 	"github.com/dominodatalab/testenv"
@@ -33,12 +35,12 @@ func (suite *EKSTestSuite) SetupSuite() {
 	}
 
 	suite.VariableFunc = func(ctx context.Context) {
-		repoUrl, err := suite.manager.OutputVar(ctx, "repository")
+		repository, err := suite.manager.OutputVar(ctx, "repository")
 		require.NoError(suite.T(), err)
 
-		repoS := strings.Split(string(repoUrl), "/")
-		require.Equal(suite.T(), 2, len(repoS))
-		suite.cloudRegistry, suite.cloudRepository = repoS[0], repoS[1]
+		url, err := url.Parse(fmt.Sprintf("https://%s", string(repository)))
+		require.NoError(suite.T(), err)
+		suite.cloudRegistry, suite.cloudRepository = url.Host, filepath.Base(repoUrl.Path)
 	}
 	suite.GenericImageBuilderTestSuite.SetupSuite()
 }
