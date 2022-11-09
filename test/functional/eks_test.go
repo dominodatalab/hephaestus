@@ -4,8 +4,8 @@ package functional
 
 import (
 	"context"
-	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/dominodatalab/testenv"
@@ -33,11 +33,12 @@ func (suite *EKSTestSuite) SetupSuite() {
 	}
 
 	suite.VariableFunc = func(ctx context.Context) {
-		repoName, err := suite.manager.OutputVar(ctx, "repository")
+		repoUrl, err := suite.manager.OutputVar(ctx, "repository")
 		require.NoError(suite.T(), err)
 
-		suite.cloudRegistry = fmt.Sprintf("%s-docker.pkg.dev", suite.region)
-		suite.cloudRepository = string(repoName)
+		repoS := strings.Split(string(repoUrl), "/")
+		require.Equal(suite.T(), 2, len(repoS))
+		suite.cloudRegistry, suite.cloudRepository = repoS[0], repoS[1]
 	}
 	suite.GenericImageBuilderTestSuite.SetupSuite()
 }
