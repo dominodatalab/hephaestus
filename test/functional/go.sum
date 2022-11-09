@@ -256,10 +256,8 @@ github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7/go.mod h1:cyGadeNE
 github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815/go.mod h1:WwZ+bS3ebgob9U8Nd0kOddGdZWjyMGR8Wziv+TBNwSE=
 github.com/dominodatalab/hephaestus v0.1.21 h1:3fNkyjxf8OxoViCIJskpqOejXTRVLzp50zEKngZnVX8=
 github.com/dominodatalab/hephaestus v0.1.21/go.mod h1:AVGa+u58L+G8iD+RPgPvQP2OAipDWL3tsqt6Tofo158=
-github.com/dominodatalab/testenv v0.0.0-20221104201451-cd130c18f010 h1:gW64PDyNOwDgEmXFabLc4BEhZ5mBurmZ5dJOAl/CTfQ=
-github.com/dominodatalab/testenv v0.0.0-20221104201451-cd130c18f010/go.mod h1:S6ua68CDPVyaj249bsb4X+ObGr6zjiv23m767hHdFKQ=
-github.com/dominodatalab/testenv v0.0.0-20221102225811-ae1286c64f8c h1:lnOcxf085qWsJ5jyt0XmHojUY3nLBv+TqS2iTMDZfX8=
-github.com/dominodatalab/testenv v0.0.0-20221102225811-ae1286c64f8c/go.mod h1:S6ua68CDPVyaj249bsb4X+ObGr6zjiv23m767hHdFKQ=
+github.com/dominodatalab/testenv v0.0.0-20221109202007-a68dde11c9d4 h1:VfTBIkYhD3rolvZjhH0WIVLPf4aQ0SgZ0IZum+Gj8Bc=
+github.com/dominodatalab/testenv v0.0.0-20221109202007-a68dde11c9d4/go.mod h1:S6ua68CDPVyaj249bsb4X+ObGr6zjiv23m767hHdFKQ=
 github.com/eapache/go-resiliency v1.1.0/go.mod h1:kFI+JgMyC7bLPUVY133qvEBtVayf5mFgVsvEsIPBvNs=
 github.com/eapache/go-xerial-snappy v0.0.0-20180814174437-776d5712da21/go.mod h1:+020luEh2TKB4/GOp8oxxtq0Daoen/Cii55CzbTV6DU=
 github.com/eapache/queue v1.1.0/go.mod h1:6eCeP0CKFpHLu8blIFXhExK/dRa7WDZfr6jVFPTqq+I=

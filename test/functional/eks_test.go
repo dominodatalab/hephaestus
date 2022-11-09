@@ -40,7 +40,7 @@ func (suite *EKSTestSuite) SetupSuite() {
 
 		url, err := url.Parse(fmt.Sprintf("https://%s", string(repository)))
 		require.NoError(suite.T(), err)
-		suite.cloudRegistry, suite.cloudRepository = url.Host, filepath.Base(repoUrl.Path)
+		suite.cloudRegistry, suite.cloudRepository = url.Host, filepath.Base(url.Path)
 	}
 	suite.GenericImageBuilderTestSuite.SetupSuite()
 }
