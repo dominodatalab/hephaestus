@@ -102,7 +102,10 @@ func (suite *GenericImageBuilderTestSuite) SetupSuite() {
 
 func (suite *GenericImageBuilderTestSuite) TearDownSuite() {
 	suite.T().Log("Tearing down test cluster")
-	// require.NoError(suite.T(), suite.manager.Destroy(context.Background()))
+
+	// NOTE: add helmfile and pvc destroy bits here with the proper conditions
+
+	require.NoError(suite.T(), suite.manager.Destroy(context.Background()))
 }
 
 func (suite *GenericImageBuilderTestSuite) TestImageBuildResourceValidation() {
