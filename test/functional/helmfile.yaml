@@ -45,6 +45,8 @@ releases:
       - installCRDs: true
         extraArgs:
           - --enable-certificate-owner-ref
+        webhook:
+          securePort: 10260
 
   - name: docker-registry
     namespace: default
