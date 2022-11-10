@@ -21,7 +21,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	auth "golang.org/x/oauth2/google"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,12 +28,12 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/utils/pointer"
 )
 
 type GenericImageBuilderTestSuite struct {
 	suite.Suite
 
+	CloudAuthTest   func(context.Context, *testing.T)
 	CloudConfigFunc func() testenv.CloudConfig
 	VariableFunc    func(context.Context)
 
@@ -42,16 +41,13 @@ type GenericImageBuilderTestSuite struct {
 	hephClient clientset.Interface
 	k8sClient  kubernetes.Interface
 
-	cloudRegistry   string
-	cloudRepository string
-	helmfileValues  []string
-	suiteSetupDone  bool
+	helmfileValues []string
+	suiteSetupDone bool
 }
 
 func (suite *GenericImageBuilderTestSuite) SetupSuite() {
 	ctx := context.Background()
 	verbose := os.Getenv("VERBOSE_TESTING") == "true"
-	managerImageTag := os.Getenv("MANAGER_IMAGE_TAG")
 
 	if suite.CloudConfigFunc == nil {
 		suite.T().Fatal("CloudConfigFunc is nil")
@@ -72,14 +68,13 @@ func (suite *GenericImageBuilderTestSuite) SetupSuite() {
 	require.NoError(suite.T(), suite.manager.Create(ctx))
 	suite.T().Logf("Total cluster creation time: %s", time.Since(start))
 
-	if suite.VariableFunc == nil {
-		suite.T().Fatal("VariableFunc is nil")
+	if suite.VariableFunc != nil {
+		suite.VariableFunc(ctx)
 	}
-	suite.VariableFunc(ctx)
 
-	require.NotEmpty(suite.T(), suite.cloudRegistry)
-	require.NotEmpty(suite.T(), suite.cloudRepository)
-	suite.helmfileValues = append(suite.helmfileValues, fmt.Sprintf("controller.manager.image.tag=%s", managerImageTag))
+	if managerImageTag, ok := os.LookupEnv("MANAGER_IMAGE_TAG"); ok {
+		suite.helmfileValues = append(suite.helmfileValues, fmt.Sprintf("controller.manager.image.tag=%s", managerImageTag))
+	}
 
 	suite.T().Log("Installing cluster applications")
 	start = time.Now()
@@ -107,7 +102,7 @@ func (suite *GenericImageBuilderTestSuite) SetupSuite() {
 
 func (suite *GenericImageBuilderTestSuite) TearDownSuite() {
 	suite.T().Log("Tearing down test cluster")
-	require.NoError(suite.T(), suite.manager.Destroy(context.Background()))
+	// require.NoError(suite.T(), suite.manager.Destroy(context.Background()))
 }
 
 func (suite *GenericImageBuilderTestSuite) TestImageBuildResourceValidation() {
@@ -306,7 +301,11 @@ func (suite *GenericImageBuilderTestSuite) TestImageBuilding() {
 		)
 		require.NoError(t, err)
 
-		registryURL, err := url.Parse(fmt.Sprintf("http://%s:%d", svc.Status.LoadBalancer.Ingress[0].IP, 5000))
+		hostname := svc.Status.LoadBalancer.Ingress[0].Hostname
+		if hostname == "" {
+			hostname = svc.Status.LoadBalancer.Ingress[0].IP
+		}
+		registryURL, err := url.Parse(fmt.Sprintf("http://%s:%d", hostname, 5000))
 		require.NoError(t, err)
 
 		hub, err := registry.New(registryURL.String(), "", "")
@@ -387,29 +386,11 @@ func (suite *GenericImageBuilderTestSuite) TestImageBuilding() {
 	})
 
 	suite.T().Run("cloud_auth", func(t *testing.T) {
-		image := fmt.Sprintf("%s/test-image", suite.cloudRepository)
-		build := newImageBuild(
-			python39JupyterBuildContext,
-			fmt.Sprintf("%s/%s", suite.cloudRegistry, image),
-			&hephv1.RegistryCredentials{
-				Server:        suite.cloudRegistry,
-				CloudProvided: pointer.Bool(true),
-			},
-		)
-		ib := createBuild(t, ctx, suite.hephClient, build)
+		if suite.CloudAuthTest == nil {
+			t.Skip("cloud auth test not configured")
+		}
 
-		credentials, err := auth.FindDefaultCredentials(ctx, "https://www.googleapis.com/auth/cloud-platform")
-		require.NoError(t, err)
-
-		token, err := credentials.TokenSource.Token()
-		require.NoError(t, err)
-
-		hub, err := registry.New(fmt.Sprintf("https://%s", suite.cloudRegistry), "oauth2accesstoken", token.AccessToken)
-		require.NoError(t, err)
-
-		tags, err := hub.Tags(image)
-		require.NoError(t, err)
-		assert.Contains(t, tags, ib.Spec.LogKey)
+		suite.CloudAuthTest(ctx, t)
 	})
 
 	suite.T().Run("build_args", func(t *testing.T) {
@@ -447,6 +428,8 @@ func (suite *GenericImageBuilderTestSuite) TestImageBuilding() {
 	})
 
 	suite.T().Run("concurrent_builds", func(t *testing.T) {
+		t.Skip("figure out a way to ensure that the builds are actually running concurrently")
+
 		var wg sync.WaitGroup
 		ch := make(chan *hephv1.ImageBuild, 3)
 
@@ -602,8 +585,12 @@ func testLogDelivery(t *testing.T, ctx context.Context, client kubernetes.Interf
 	)
 	require.NoError(t, err)
 
+	hostname := svc.Status.LoadBalancer.Ingress[0].Hostname
+	if hostname == "" {
+		hostname = svc.Status.LoadBalancer.Ingress[0].IP
+	}
 	rdb := redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:6379", svc.Status.LoadBalancer.Ingress[0].IP),
+		Addr:     fmt.Sprintf("%s:6379", hostname),
 		Password: "redis-password",
 	})
 
@@ -638,7 +625,11 @@ func testMessageDelivery(t *testing.T, ctx context.Context, client kubernetes.In
 	)
 	require.NoError(t, err, "failed to get rabbitmq service")
 
-	rmqURL := fmt.Sprintf("amqp://user:rabbitmq-password@%s:5672/", svc.Status.LoadBalancer.Ingress[0].IP)
+	hostname := svc.Status.LoadBalancer.Ingress[0].Hostname
+	if hostname == "" {
+		hostname = svc.Status.LoadBalancer.Ingress[0].IP
+	}
+	rmqURL := fmt.Sprintf("amqp://user:rabbitmq-password@%s:5672/", hostname)
 	conn, channel, err := amqp.Dial(rmqURL)
 	require.NoError(t, err, "failed to connet to rabbitmq service")
 	defer func() {
