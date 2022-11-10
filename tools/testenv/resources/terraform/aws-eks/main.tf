@@ -153,7 +153,9 @@ module "ecr" {
   source  = "terraform-aws-modules/ecr/aws"
   version = "~> 1.4"
 
-  repository_name = "${local.name}-ecr-repository"
+  repository_name         = "${local.name}-ecr-repository"
+  repository_force_delete = true
+
   repository_lifecycle_policy = jsonencode({
     rules = [
       {
