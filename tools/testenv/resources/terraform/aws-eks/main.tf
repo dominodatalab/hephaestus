@@ -76,7 +76,67 @@ module "eks" {
     }
   }
 
+  cluster_addons = {
+    aws-ebs-csi-driver = {
+      resolve_conflicts = "OVERWRITE"
+    }
+  }
+
+  # NOTE: This may not be required but requires testing
+  cluster_security_group_additional_rules = {
+    ingress_self_all = {
+      description = "Cluster to node all ports/protocols"
+      protocol    = "-1"
+      from_port   = 0
+      to_port     = 0
+      type        = "ingress"
+      self        = true
+    }
+    egress_all = {
+      description      = "Cluster all egress"
+      protocol         = "-1"
+      from_port        = 0
+      to_port          = 0
+      type             = "egress"
+      cidr_blocks      = ["0.0.0.0/0"]
+      ipv6_cidr_blocks = ["::/0"]
+    }
+  }
+
   node_security_group_additional_rules = {
+    ingress_cluster_istio_webhooks = {
+      description                   = "Cluster API to node Istio webhooks"
+      protocol                      = "TCP"
+      from_port                     = 15017
+      to_port                       = 15017
+      type                          = "ingress"
+      source_cluster_security_group = true
+    }
+    ingress_cluster_hephaestus_webhooks = {
+      description                   = "Cluster API to node Hephaestus webhooks"
+      protocol                      = "TCP"
+      from_port                     = 9443
+      to_port                       = 9443
+      type                          = "ingress"
+      source_cluster_security_group = true
+    }
+    ingress_cluster_cert_manager_webhooks = {
+      description                   = "Cluster API to node cert-manager webhooks"
+      protocol                      = "TCP"
+      from_port                     = 10260
+      to_port                       = 10260
+      type                          = "ingress"
+      source_cluster_security_group = true
+    }
+    # NOTE: this may not be required but requires testing
+    ingress_self_all = {
+      description = "Node to node all ports/protocols"
+      protocol    = "-1"
+      from_port   = 0
+      to_port     = 0
+      type        = "ingress"
+      self        = true
+    }
     egress_all = {
       description      = "Node all egress"
       protocol         = "-1"
@@ -159,6 +219,11 @@ resource "aws_iam_policy" "node_policy" {
 resource "aws_iam_policy" "ecr_policy" {
   name   = "${local.name}-ecr-access-policy"
   policy = data.aws_iam_policy_document.ecr_access_policy_document.json
+}
+
+resource "aws_iam_role_policy_attachment" "ebs_csi_driver" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+  role       = module.eks.eks_managed_node_groups["default"].iam_role_name
 }
 
 resource "aws_iam_role_policy_attachment" "ecr_access" {
