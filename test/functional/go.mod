@@ -5,8 +5,11 @@ go 1.19
 //replace github.com/dominodatalab/testenv => ../../../testenv
 
 require (
+	github.com/aws/aws-sdk-go-v2 v1.11.2
+	github.com/aws/aws-sdk-go-v2/config v1.11.1
+	github.com/aws/aws-sdk-go-v2/service/ecr v1.12.0
 	github.com/dominodatalab/hephaestus v0.1.21
-	github.com/dominodatalab/testenv v0.0.0-20221102225811-ae1286c64f8c
+	github.com/dominodatalab/testenv v0.0.0-20221110225415-2dc11cfd48f5
 	github.com/go-playground/validator/v10 v10.11.1
 	github.com/go-redis/redis/v9 v9.0.0-rc.1
 	github.com/heroku/docker-registry-client v0.0.0-20211012143308-9463674c8930
@@ -50,6 +53,15 @@ require (
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/avast/retry-go/v4 v4.0.2 // indirect
 	github.com/aws/aws-sdk-go v1.40.28 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.6.5 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.8.2 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.2 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.0.2 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/ini v1.3.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.5.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.7.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.12.0 // indirect
+	github.com/aws/smithy-go v1.9.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
