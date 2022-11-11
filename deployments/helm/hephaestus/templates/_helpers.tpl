@@ -208,7 +208,7 @@ Return the buildkit image name.
 {{- $imageRoot := .Values.buildkit.image }}
 {{- $tag := .Values.buildkit.image.tag | default .Chart.AppVersion }}
 {{- if not .Values.buildkit.rootless }}
-{{- $tag = trimSuffix "-rootless" $tag }}
+{{- $tag = replace "-rootless" "" $tag }}
 {{- end }}
 {{- $_ := set $imageRoot "tag" $tag }}
 {{- include "common.images.image" (dict "imageRoot" $imageRoot "global" $) }}
