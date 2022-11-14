@@ -37,9 +37,10 @@ type CloudConfig interface {
 
 // CloudEnvManager is a Terraform-based Manager used to create Kubernetes clusters in the cloud.
 type CloudEnvManager struct {
-	log       *golog.Logger
-	installer removableInstall
-	terraform *tfexec.Terraform
+	log                *golog.Logger
+	installer          removableInstall
+	terraform          *tfexec.Terraform
+	helmfileGlobalImpl *config.GlobalImpl
 }
 
 // NewCloudEnvManager creates a CloudEnvManager with the resources necessary to invoke Terraform.
@@ -95,25 +96,11 @@ func (m *CloudEnvManager) Create(ctx context.Context) error {
 }
 
 func (m *CloudEnvManager) HelmfileApply(ctx context.Context, helmfilePath string, values []string) error {
-	kubeconfig, err := m.KubeconfigBytes(ctx)
+	cleanup, err := m.exposeKubeconfig(ctx)
 	if err != nil {
 		return err
 	}
-
-	f, err := os.CreateTemp("", "testenv-kubeconfig-")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-
-	if _, err = f.Write(kubeconfig); err != nil {
-		return err
-	}
-
-	if err = os.Setenv("KUBECONFIG", f.Name()); err != nil {
-		return err
-	}
-	defer os.Unsetenv("KUBECONFIG")
+	defer cleanup()
 
 	globalOpts := &config.GlobalOptions{File: helmfilePath}
 	globalOpts.SetLogger(helmexec.NewLogger(os.Stdout, "WARN"))
@@ -122,6 +109,7 @@ func (m *CloudEnvManager) HelmfileApply(ctx context.Context, helmfilePath string
 	applyImpl := config.NewApplyImpl(globalImpl, &config.ApplyOptions{SkipDiffOnInstall: true, Set: values})
 	helmfile := app.New(applyImpl)
 
+	m.helmfileGlobalImpl = globalImpl
 	return helmfile.Apply(applyImpl)
 }
 
@@ -149,7 +137,20 @@ func (m *CloudEnvManager) KubeconfigBytes(ctx context.Context) ([]byte, error) {
 }
 
 func (m *CloudEnvManager) Destroy(ctx context.Context) error {
-	// TODO: destroy helmfile apps to clean up garbage
+	if m.helmfileGlobalImpl != nil {
+		cleanup, err := m.exposeKubeconfig(ctx)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+
+		destroyImpl := config.NewDestroyImpl(m.helmfileGlobalImpl, &config.DestroyOptions{SkipDeps: true})
+		helmfile := app.New(destroyImpl)
+
+		if err := helmfile.Destroy(destroyImpl); err != nil {
+			return fmt.Errorf("helfmile destroy failed: %w", err)
+		}
+	}
 
 	if err := m.terraform.Destroy(ctx); err != nil {
 		return fmt.Errorf("terraform destroy failed: %w", err)
@@ -160,6 +161,32 @@ func (m *CloudEnvManager) Destroy(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (m *CloudEnvManager) exposeKubeconfig(ctx context.Context) (func(), error) {
+	kubeconfig, err := m.KubeconfigBytes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	f, err := os.CreateTemp("", "testenv-kubeconfig-")
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	if _, err = f.Write(kubeconfig); err != nil {
+		return nil, err
+	}
+
+	if err = os.Setenv("KUBECONFIG", f.Name()); err != nil {
+		return nil, err
+	}
+
+	return func() {
+		os.Remove(f.Name())
+		os.Unsetenv("KUBECONFIG")
+	}, nil
 }
 
 func verifyTerraformInstall(ctx context.Context, verbose bool) (removableInstall, string, error) {
