@@ -15,7 +15,6 @@ import (
 	"github.com/Azure/go-autorest/autorest/to"
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/testenv"
-	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -103,10 +102,10 @@ func (suite *AKSTestSuite) testCloudAuth(ctx context.Context, t *testing.T) {
 	tags, err := crane.ListTags(
 		image,
 		crane.WithContext(ctx),
-		crane.WithAuth(newTestRegistryAuthenticator(&authn.AuthConfig{
-			Username: "00000000-0000-0000-0000-000000000000",
-			Password: to.String(refreshToken.RefreshToken),
-		})),
+		crane.WithAuth(newTestRegistryAuthenticator(
+			"00000000-0000-0000-0000-000000000000",
+			to.String(refreshToken.RefreshToken),
+		)),
 	)
 	require.NoError(t, err)
 	assert.Contains(t, tags, ib.Spec.LogKey)

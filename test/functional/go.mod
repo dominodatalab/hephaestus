@@ -18,7 +18,6 @@ require (
 	github.com/go-playground/validator/v10 v10.11.1
 	github.com/go-redis/redis/v9 v9.0.0-rc.1
 	github.com/google/go-containerregistry v0.12.1
-	github.com/heroku/docker-registry-client v0.0.0-20211012143308-9463674c8930
 	github.com/stretchr/testify v1.8.0
 	golang.org/x/oauth2 v0.1.0
 	k8s.io/api v0.25.0
@@ -83,7 +82,6 @@ require (
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-metrics v0.0.1 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
-	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7 // indirect
 	github.com/emicklei/go-restful/v3 v3.8.0 // indirect
 	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.6.0 // indirect

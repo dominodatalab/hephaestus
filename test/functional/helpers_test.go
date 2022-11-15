@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
-	"net/url"
 	"os"
 	"sync"
 	"testing"
@@ -18,7 +17,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/go-redis/redis/v9"
 	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/heroku/docker-registry-client/registry"
+	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -306,13 +305,12 @@ func (suite *GenericImageBuilderTestSuite) TestImageBuilding() {
 		if hostname == "" {
 			hostname = svc.Status.LoadBalancer.Ingress[0].IP
 		}
-		registryURL, err := url.Parse(fmt.Sprintf("http://%s:%d", hostname, 5000))
-		require.NoError(t, err)
 
-		hub, err := registry.New(registryURL.String(), "", "")
-		require.NoError(t, err)
-
-		tags, err := hub.Tags("test-ns/test-repo")
+		tags, err := crane.ListTags(
+			fmt.Sprintf("%s:%d/test-ns/test-repo", hostname, 5000),
+			crane.WithContext(ctx),
+			crane.Insecure,
+		)
 		require.NoError(t, err)
 		assert.Contains(t, tags, ib.Spec.LogKey)
 
@@ -671,9 +669,12 @@ func testMessageDelivery(t *testing.T, ctx context.Context, client kubernetes.In
 	}
 }
 
-func newTestRegistryAuthenticator(ac *authn.AuthConfig) *testRegistryAuthenticator {
+func newTestRegistryAuthenticator(username, password string) *testRegistryAuthenticator {
 	return &testRegistryAuthenticator{
-		ac: ac,
+		ac: &authn.AuthConfig{
+			Username: username,
+			Password: password,
+		},
 	}
 }
 
