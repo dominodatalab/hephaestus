@@ -119,6 +119,13 @@ releases:
       - cert-manager/cert-manager
       - rabbitmq
       - redis
+    hooks:
+      - events: [postuninstall]
+        showlogs: true
+        command: sh
+        args:
+          - -c
+          - "kubectl delete pvc -l app.kubernetes.io/instance=hephaestus"
     values:
       - istio:
           enabled: true

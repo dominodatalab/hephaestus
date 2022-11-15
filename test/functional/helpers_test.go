@@ -17,6 +17,7 @@ import (
 	"github.com/dominodatalab/testenv"
 	"github.com/go-playground/validator/v10"
 	"github.com/go-redis/redis/v9"
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/heroku/docker-registry-client/registry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -102,9 +103,6 @@ func (suite *GenericImageBuilderTestSuite) SetupSuite() {
 
 func (suite *GenericImageBuilderTestSuite) TearDownSuite() {
 	suite.T().Log("Tearing down test cluster")
-
-	// NOTE: add helmfile and pvc destroy bits here with the proper conditions
-
 	require.NoError(suite.T(), suite.manager.Destroy(context.Background()))
 }
 
@@ -671,4 +669,18 @@ func testMessageDelivery(t *testing.T, ctx context.Context, client kubernetes.In
 	} else {
 		assert.NotEmpty(t, finalTransition.ErrorMessage)
 	}
+}
+
+func newTestRegistryAuthenticator(ac *authn.AuthConfig) *testRegistryAuthenticator {
+	return &testRegistryAuthenticator{
+		ac: ac,
+	}
+}
+
+type testRegistryAuthenticator struct {
+	ac *authn.AuthConfig
+}
+
+func (a *testRegistryAuthenticator) Authorization() (*authn.AuthConfig, error) {
+	return a.ac, nil
 }
