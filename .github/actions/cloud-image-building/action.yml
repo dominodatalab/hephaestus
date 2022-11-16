@@ -14,12 +14,14 @@ runs:
   using: composite
   steps:
     - name: Checkout pull request
+      if: github.event_name != 'pull_request'
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
       run: hub pr checkout ${{ github.event.issue.number }}
       shell: bash
 
     - name: Update PR Comment
+      if: github.event_name != 'pull_request'
       uses: peter-evans/create-or-update-comment@v2
       with:
         comment-id: ${{ github.event.comment.id }}
