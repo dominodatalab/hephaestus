@@ -26,6 +26,8 @@ jobs:
 
       - name: Run functional test suite
         uses: ./.github/actions/cloud-image-building
+        env:
+          AZURE_LOCATION: ${{ secrets.AZURE_LOCATION }}
         with:
           target: aks
           github_token: ${{ secrets.GITHUB_TOKEN }}
