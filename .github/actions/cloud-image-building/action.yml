@@ -1,0 +1,78 @@
+name: Cloud Image Building
+description: FILL_ME_IN
+inputs:
+  verbose:
+    description: FILL_ME_IN
+    default: "true"
+  github_token:
+    description: FILL_ME_IN
+    required: true
+  target:
+    description: FILL_ME_IN
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Checkout pull request
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+      run: hub pr checkout ${{ github.event.issue.number }}
+      shell: bash
+
+    - name: Update PR Comment
+      uses: peter-evans/create-or-update-comment@v2
+      with:
+        comment-id: ${{ github.event.comment.id }}
+        reactions: rocket
+        body: |
+          **Launched workflow:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    - name: Install Go
+      uses: actions/setup-go@v3
+      with:
+        go-version-file: test/functional/go.mod
+
+    - id: go-cache-paths
+      name: Gather Go cache paths
+      run: |
+        echo "::set-output name=go-build::$(go env GOCACHE)"
+        echo "::set-output name=go-mod::$(go env GOMODCACHE)"
+      shell: bash
+
+    - name: Go build cache
+      uses: actions/cache@v3
+      with:
+        path: ${{ steps.go-cache-paths.outputs.go-build }}
+        key: ${{ runner.os }}-go-build-${{ hashFiles('test/functional/**/*.go') }}
+
+    - name: Go mod cache
+      uses: actions/cache@v3
+      with:
+        path: ${{ steps.go-cache-paths.outputs.go-mod }}
+        key: ${{ runner.os }}-go-mod-${{ hashFiles('test/functional/go.sum') }}
+
+    - name: Install Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: v3.10.2
+
+#    - name: Run tests
+#      env:
+#        VERBOSE_TESTING: "true"
+#        MANAGER_IMAGE_TAG: pr-${{ github.event.issue.number }}
+#      run: |
+#        cd test/functional
+#        go test -timeout 0 -tags functional,gke
+#      shell: bash
+#
+#    - name: Save testenv files
+#      if: ${{ always() }}
+#      uses: actions/upload-artifact@v3
+#      with:
+#        name: testenv-gke
+#        path: |
+#          test/functional/testenv
+#          !test/functional/testenv/**/.terraform/

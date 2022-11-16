@@ -6,6 +6,27 @@ on:
   pull_request: {}
 
 jobs:
+  aks:
+    name: AKS image building
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    steps:
+      - name: Authenticate with Azure
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Run functional test suite
+        uses: ./github/actions/cloud-image-building
+        with:
+          target: aks
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
 #  eks:
 #    if: ${{ github.event.issue.pull_request && github.event.comment.body == '/functional-test' }}
 #    name: EKS image building
@@ -163,23 +184,3 @@ jobs:
 #            test/functional/testenv
 #            !test/functional/testenv/**/.terraform/
 #
-
-  aks:
-    name: AKS image building
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-      pull-requests: write
-    steps:
-      - name: Authenticate with Azure
-        uses: azure/login@v1
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Smoke test
-        run: |
-          az account show
-          az group list
