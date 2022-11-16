@@ -167,6 +167,10 @@ jobs:
   aks:
     name: AKS image building
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
     steps:
       - name: Authenticate with Azure
         uses: azure/login@v1
