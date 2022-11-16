@@ -79,7 +79,7 @@ func (suite *GKETestSuite) testCloudAuth(ctx context.Context, t *testing.T) {
 	require.NoError(t, err)
 
 	tags, err := crane.ListTags(
-		cloudRegistry,
+		fmt.Sprintf("%s/%s", cloudRegistry, image),
 		crane.WithContext(ctx),
 		crane.WithAuth(newTestRegistryAuthenticator(
 			"oauth2accesstoken",
