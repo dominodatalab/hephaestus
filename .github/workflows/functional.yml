@@ -22,7 +22,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Run functional test suite
-        uses: ./github/actions/cloud-image-building
+        uses: ./.github/actions/cloud-image-building
         with:
           target: aks
           github_token: ${{ secrets.GITHUB_TOKEN }}
