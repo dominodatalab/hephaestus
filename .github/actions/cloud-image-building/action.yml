@@ -64,7 +64,7 @@ runs:
 #        MANAGER_IMAGE_TAG: pr-${{ github.event.issue.number }}
       run: |
         cd test/functional
-        go test -timeout 0 -tags functional,${{ inputs.target }}
+        go test -v -timeout 0 -tags functional,${{ inputs.target }}
       shell: bash
 
     - name: Save testenv files
