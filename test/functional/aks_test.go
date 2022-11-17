@@ -79,7 +79,9 @@ func (suite *AKSTestSuite) testCloudAuth(ctx context.Context, t *testing.T) {
 	)
 	ib := createBuild(t, ctx, suite.hephClient, build)
 
-	cred, err := azidentity.NewDefaultAzureCredential(nil)
+	cred, err := azidentity.NewDefaultAzureCredential(&azidentity.DefaultAzureCredentialOptions{
+		TenantID: tenantID,
+	})
 	require.NoError(t, err)
 
 	aadToken, err := cred.GetToken(ctx, policy.TokenRequestOptions{
