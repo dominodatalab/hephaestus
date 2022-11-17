@@ -1,14 +1,14 @@
 name: Cloud Image Building
-description: FILL_ME_IN
+description: Run functional test suite against a specified cloud provider
 inputs:
   verbose:
-    description: FILL_ME_IN
-    default: "true"
+    description: Enable debug logging when running tests
+    default: "false"
   github_token:
-    description: FILL_ME_IN
+    description: GitHub token provided by workflow or PAT
     required: true
   target:
-    description: FILL_ME_IN
+    description: Target cloud-provided Kubernetes (e.g. aks, eks, gke)
     required: true
 runs:
   using: composite

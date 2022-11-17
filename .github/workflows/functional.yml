@@ -27,6 +27,9 @@ jobs:
       - name: Run functional test suite
         uses: ./.github/actions/cloud-image-building
         env:
+          # https://github.com/Azure/login/issues/180 oh boy!!!
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          
           ARM_USE_OIDC: true
           ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
