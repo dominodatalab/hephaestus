@@ -17,6 +17,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: Authenticate with Azure
+        uses: azure/login@v1
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+
+
       - name: Run functional test suite
         uses: ./.github/actions/cloud-image-building
         env:
@@ -26,9 +32,9 @@ jobs:
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
           AZURE_LOCATION: ${{ secrets.AZURE_LOCATION }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+#          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+#          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+#          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
         with:
           target: aks
           github_token: ${{ secrets.GITHUB_TOKEN }}
