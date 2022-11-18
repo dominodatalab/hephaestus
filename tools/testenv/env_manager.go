@@ -27,6 +27,8 @@ type Manager interface {
 	OutputVar(ctx context.Context, key string) ([]byte, error)
 	// HelmfileApply all resources from helmfile only when there are changes.
 	HelmfileApply(ctx context.Context, helmfilePath string, values []string) error
+	// HelmfileDestroy all releases that have been installed.
+	HelmfileDestroy(ctx context.Context) error
 	// KubeconfigBytes can be written to disk or used to initialize a Kubernetes client.
 	KubeconfigBytes(ctx context.Context) ([]byte, error)
 }

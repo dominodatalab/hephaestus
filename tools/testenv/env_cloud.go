@@ -113,6 +113,28 @@ func (m *CloudEnvManager) HelmfileApply(ctx context.Context, helmfilePath string
 	return helmfile.Apply(applyImpl)
 }
 
+func (m *CloudEnvManager) HelmfileDestroy(ctx context.Context) error {
+	if m.helmfileGlobalImpl == nil {
+		m.log.Println("Helmfile was never applied, aborting destroy")
+		return nil
+	}
+
+	cleanup, err := m.exposeKubeconfig(ctx)
+	if err != nil {
+		return fmt.Errorf("cannot fetch kubeconfig: %w", err)
+	}
+	defer cleanup()
+
+	destroyImpl := config.NewDestroyImpl(m.helmfileGlobalImpl, &config.DestroyOptions{SkipDeps: true})
+	helmfile := app.New(destroyImpl)
+
+	if err = helmfile.Destroy(destroyImpl); err != nil {
+		return fmt.Errorf("helmfile destroy failed: %w", err)
+	}
+
+	return nil
+}
+
 func (m *CloudEnvManager) OutputVar(ctx context.Context, key string) ([]byte, error) {
 	output, err := m.terraform.Output(ctx)
 	if err != nil {
@@ -137,21 +159,6 @@ func (m *CloudEnvManager) KubeconfigBytes(ctx context.Context) ([]byte, error) {
 }
 
 func (m *CloudEnvManager) Destroy(ctx context.Context) error {
-	if m.helmfileGlobalImpl != nil {
-		cleanup, err := m.exposeKubeconfig(ctx)
-		if err != nil {
-			return err
-		}
-		defer cleanup()
-
-		destroyImpl := config.NewDestroyImpl(m.helmfileGlobalImpl, &config.DestroyOptions{SkipDeps: true})
-		helmfile := app.New(destroyImpl)
-
-		if err := helmfile.Destroy(destroyImpl); err != nil {
-			return fmt.Errorf("helfmile destroy failed: %w", err)
-		}
-	}
-
 	if err := m.terraform.Destroy(ctx); err != nil {
 		return fmt.Errorf("terraform destroy failed: %w", err)
 	}
