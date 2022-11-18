@@ -17,27 +17,44 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Authenticate with Azure
-        uses: azure/login@v1
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
       - name: Run functional test suite
         uses: ./.github/actions/cloud-image-building
         env:
-          # https://github.com/Azure/login/issues/180 oh boy!!!
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          
-          ARM_USE_OIDC: true
           ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
           AZURE_LOCATION: ${{ secrets.AZURE_LOCATION }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
         with:
           target: aks
           github_token: ${{ secrets.GITHUB_TOKEN }}
+
+#      # NOTE: https://github.com/Azure/login/issues/180
+#      # the following setup will use OIDC to retrieve a short-lived access token but, unfortunately, those access tokens
+#      # are only valid for 10m and there is currently no way to configure the expiry. use these steps once this issue is
+#      # resolved; it may require a config change either here or on the Azure SP. #azureisdumb
+#      - name: Authenticate with Azure
+#        uses: azure/login@v1
+#        with:
+#          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+#          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+#          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+#
+#      - name: Run functional test suite
+#        uses: ./.github/actions/cloud-image-building
+#        env:
+#          ARM_USE_OIDC: true
+#          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+#          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+#          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+#          AZURE_LOCATION: ${{ secrets.AZURE_LOCATION }}
+#        with:
+#          target: aks
+#          github_token: ${{ secrets.GITHUB_TOKEN }}
 
 #  gke:
 #    name: GKE image building

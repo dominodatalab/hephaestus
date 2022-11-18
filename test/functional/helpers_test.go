@@ -102,7 +102,10 @@ func (suite *GenericImageBuilderTestSuite) SetupSuite() {
 
 func (suite *GenericImageBuilderTestSuite) TearDownSuite() {
 	suite.T().Log("Tearing down test cluster")
-	require.NoError(suite.T(), suite.manager.Destroy(context.Background()))
+
+	ctx := context.Background()
+	assert.NoError(suite.T(), suite.manager.HelmfileDestroy(ctx))
+	require.NoError(suite.T(), suite.manager.Destroy(ctx))
 }
 
 func (suite *GenericImageBuilderTestSuite) TestImageBuildResourceValidation() {

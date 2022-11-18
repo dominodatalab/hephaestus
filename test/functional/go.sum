@@ -298,8 +298,8 @@ github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7 h1:UhxFibDNY/bfvqU
 github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815/go.mod h1:WwZ+bS3ebgob9U8Nd0kOddGdZWjyMGR8Wziv+TBNwSE=
 github.com/dominodatalab/hephaestus v0.1.21 h1:3fNkyjxf8OxoViCIJskpqOejXTRVLzp50zEKngZnVX8=
 github.com/dominodatalab/hephaestus v0.1.21/go.mod h1:AVGa+u58L+G8iD+RPgPvQP2OAipDWL3tsqt6Tofo158=
-github.com/dominodatalab/testenv v0.0.0-20221114164247-c02fa0c20f0a h1:502flej3PFbp3OoUCJE2qwhzKEW2lrLCljLKmwJGtok=
-github.com/dominodatalab/testenv v0.0.0-20221114164247-c02fa0c20f0a/go.mod h1:S6ua68CDPVyaj249bsb4X+ObGr6zjiv23m767hHdFKQ=
+github.com/dominodatalab/testenv v0.0.0-20221118170829-a1ed846e2c41 h1:QmbvExxDCtl4Tt/xyEbzag34Hd6nC8nrbakYlRNJPoI=
+github.com/dominodatalab/testenv v0.0.0-20221118170829-a1ed846e2c41/go.mod h1:S6ua68CDPVyaj249bsb4X+ObGr6zjiv23m767hHdFKQ=
 github.com/eapache/go-resiliency v1.1.0/go.mod h1:kFI+JgMyC7bLPUVY133qvEBtVayf5mFgVsvEsIPBvNs=
 github.com/eapache/go-xerial-snappy v0.0.0-20180814174437-776d5712da21/go.mod h1:+020luEh2TKB4/GOp8oxxtq0Daoen/Cii55CzbTV6DU=
 github.com/eapache/queue v1.1.0/go.mod h1:6eCeP0CKFpHLu8blIFXhExK/dRa7WDZfr6jVFPTqq+I=
