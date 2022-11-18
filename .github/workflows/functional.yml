@@ -3,7 +3,6 @@ name: Functional Tests
 on:
   issue_comment:
     types: [created]
-  pull_request: {}
 
 jobs:
   aks:
@@ -22,7 +21,6 @@ jobs:
         with:
           creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
 
-
       - name: Run functional test suite
         uses: ./.github/actions/cloud-image-building
         env:
@@ -30,11 +28,7 @@ jobs:
           ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
           AZURE_LOCATION: ${{ secrets.AZURE_LOCATION }}
-#          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-#          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-#          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
         with:
           target: aks
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -62,53 +56,53 @@ jobs:
 #          target: aks
 #          github_token: ${{ secrets.GITHUB_TOKEN }}
 
-#  gke:
-#    name: GKE image building
-#    runs-on: ubuntu-latest
-#    permissions:
-#      contents: read
-#      id-token: write
-#      pull-requests: write
-#    steps:
-#      - name: Checkout repository
-#        uses: actions/checkout@v3
-#
-#      - name: Authenticate with Google Cloud
-#        uses: google-github-actions/auth@v0
-#        with:
-#          service_account: ${{ secrets.GCP_IAM_SERVICE_ACCOUNT }}
-#          workload_identity_provider: ${{ secrets.GCP_IAM_WORKLOAD_IDENTITY_PROVIDER }}
-#
-#      - name: Run functional test suite
-#        uses: ./.github/actions/cloud-image-building
-#        env:
-#          GCP_REGION: ${{ secrets.GCP_REGION }}
-#          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-#        with:
-#          target: gke
-#          github_token: ${{ secrets.GITHUB_TOKEN }}
-#
-#  eks:
-#    name: EKS image building
-#    runs-on: ubuntu-latest
-#    permissions:
-#      contents: read
-#      id-token: write
-#      pull-requests: write
-#    steps:
-#      - name: Checkout repository
-#        uses: actions/checkout@v3
-#
-#      - name: Authenticate with AWS
-#        uses: aws-actions/configure-aws-credentials@v1
-#        with:
-#          role-to-assume: ${{ secrets.AWS_IAM_ROLE }}
-#          aws-region: ${{ secrets.AWS_REGION }}
-#
-#      - name: Run functional test suite
-#        uses: ./.github/actions/cloud-image-building
-#        env:
-#          AWS_REGION: ${{ secrets.AWS_REGION }}
-#        with:
-#          target: eks
-#          github_token: ${{ secrets.GITHUB_TOKEN }}
+  gke:
+    name: GKE image building
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Authenticate with Google Cloud
+        uses: google-github-actions/auth@v0
+        with:
+          service_account: ${{ secrets.GCP_IAM_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.GCP_IAM_WORKLOAD_IDENTITY_PROVIDER }}
+
+      - name: Run functional test suite
+        uses: ./.github/actions/cloud-image-building
+        env:
+          GCP_REGION: ${{ secrets.GCP_REGION }}
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        with:
+          target: gke
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+  eks:
+    name: EKS image building
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Authenticate with AWS
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: ${{ secrets.AWS_IAM_ROLE }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Run functional test suite
+        uses: ./.github/actions/cloud-image-building
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        with:
+          target: eks
+          github_token: ${{ secrets.GITHUB_TOKEN }}
