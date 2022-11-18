@@ -10,7 +10,7 @@ import (
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/testenv"
-	"github.com/heroku/docker-registry-client/registry"
+	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -78,10 +78,14 @@ func (suite *GKETestSuite) testCloudAuth(ctx context.Context, t *testing.T) {
 	token, err := credentials.TokenSource.Token()
 	require.NoError(t, err)
 
-	hub, err := registry.New(fmt.Sprintf("https://%s", cloudRegistry), "oauth2accesstoken", token.AccessToken)
-	require.NoError(t, err)
-
-	tags, err := hub.Tags(image)
+	tags, err := crane.ListTags(
+		fmt.Sprintf("%s/%s", cloudRegistry, image),
+		crane.WithContext(ctx),
+		crane.WithAuth(newTestRegistryAuthenticator(
+			"oauth2accesstoken",
+			token.AccessToken,
+		)),
+	)
 	require.NoError(t, err)
 	assert.Contains(t, tags, ib.Spec.LogKey)
 }

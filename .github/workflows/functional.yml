@@ -5,9 +5,8 @@ on:
     types: [created]
 
 jobs:
-  eks:
-    if: ${{ github.event.issue.pull_request && github.event.comment.body == '/functional-test' }}
-    name: EKS image building
+  aks:
+    name: AKS image building
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -17,75 +16,47 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Checkout pull request
-        run: hub pr checkout ${{ github.event.issue.number }}
+      - name: Authenticate with Azure
+        uses: azure/login@v1
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+
+      - name: Run functional test suite
+        uses: ./.github/actions/cloud-image-building
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Update PR Comment
-        uses: peter-evans/create-or-update-comment@v2
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_LOCATION: ${{ secrets.AZURE_LOCATION }}
         with:
-          comment-id: ${{ github.event.comment.id }}
-          body: |
+          target: aks
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
-            **Launched workflow:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          reactions: rocket
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          role-to-assume: ${{ secrets.AWS_IAM_ROLE }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Install Go
-        uses: actions/setup-go@v3
-        with:
-          go-version-file: test/functional/go.mod
-
-      - id: go-cache-paths
-        name: Gather Go cache paths
-        run: |
-          echo "::set-output name=go-build::$(go env GOCACHE)"
-          echo "::set-output name=go-mod::$(go env GOMODCACHE)"
-
-      - name: Go build cache
-        uses: actions/cache@v3
-        with:
-          path: ${{ steps.go-cache-paths.outputs.go-build }}
-          key: ${{ runner.os }}-go-build-${{ hashFiles('test/functional/**/*.go') }}
-
-      - name: Go mod cache
-        uses: actions/cache@v3
-        with:
-          path: ${{ steps.go-cache-paths.outputs.go-mod }}
-          key: ${{ runner.os }}-go-mod-${{ hashFiles('test/functional/go.sum') }}
-
-      - name: Install Helm
-        uses: azure/setup-helm@v3
-        with:
-          version: v3.10.1
-
-      - name: Run tests
-        env:
-          VERBOSE_TESTING: true
-          GCP_REGION: ${{ secrets.GCP_REGION }}
-          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-          MANAGER_IMAGE_TAG: pr-${{ github.event.issue.number }}
-        run: |
-          cd test/functional
-          go test -timeout 0 -tags functional,eks
-
-      - name: Save testenv files
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v3
-        with:
-          name: testenv-eks
-          path: |
-            test/functional/testenv
-            !test/functional/testenv/**/.terraform/
+#      # NOTE: https://github.com/Azure/login/issues/180
+#      # the following setup will use OIDC to retrieve a short-lived access token but, unfortunately, those access tokens
+#      # are only valid for 10m and there is currently no way to configure the expiry. use these steps once this issue is
+#      # resolved; it may require a config change either here or on the Azure SP. #azureisdumb
+#      - name: Authenticate with Azure
+#        uses: azure/login@v1
+#        with:
+#          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+#          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+#          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+#
+#      - name: Run functional test suite
+#        uses: ./.github/actions/cloud-image-building
+#        env:
+#          ARM_USE_OIDC: true
+#          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+#          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+#          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+#          AZURE_LOCATION: ${{ secrets.AZURE_LOCATION }}
+#        with:
+#          target: aks
+#          github_token: ${{ secrets.GITHUB_TOKEN }}
 
   gke:
-    if: ${{ github.event.issue.pull_request && github.event.comment.body == '/functional-test' }}
     name: GKE image building
     runs-on: ubuntu-latest
     permissions:
@@ -96,83 +67,42 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Checkout pull request
-        run: hub pr checkout ${{ github.event.issue.number }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Update PR Comment
-        uses: peter-evans/create-or-update-comment@v2
-        with:
-          comment-id: ${{ github.event.comment.id }}
-          body: |
-
-            **Launched workflow:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          reactions: rocket
-
       - name: Authenticate with Google Cloud
         uses: google-github-actions/auth@v0
         with:
           service_account: ${{ secrets.GCP_IAM_SERVICE_ACCOUNT }}
           workload_identity_provider: ${{ secrets.GCP_IAM_WORKLOAD_IDENTITY_PROVIDER }}
 
-      - name: Install Go
-        uses: actions/setup-go@v3
-        with:
-          go-version-file: test/functional/go.mod
-
-      - id: go-cache-paths
-        name: Gather Go cache paths
-        run: |
-          echo "::set-output name=go-build::$(go env GOCACHE)"
-          echo "::set-output name=go-mod::$(go env GOMODCACHE)"
-
-      - name: Go build cache
-        uses: actions/cache@v3
-        with:
-          path: ${{ steps.go-cache-paths.outputs.go-build }}
-          key: ${{ runner.os }}-go-build-${{ hashFiles('test/functional/**/*.go') }}
-
-      - name: Go mod cache
-        uses: actions/cache@v3
-        with:
-          path: ${{ steps.go-cache-paths.outputs.go-mod }}
-          key: ${{ runner.os }}-go-mod-${{ hashFiles('test/functional/go.sum') }}
-
-      - name: Install Helm
-        uses: azure/setup-helm@v3
-        with:
-          version: v3.10.1
-
-      - name: Run tests
+      - name: Run functional test suite
+        uses: ./.github/actions/cloud-image-building
         env:
-          VERBOSE_TESTING: true
           GCP_REGION: ${{ secrets.GCP_REGION }}
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-          MANAGER_IMAGE_TAG: pr-${{ github.event.issue.number }}
-        run: |
-          cd test/functional
-          go test -timeout 0 -tags functional,gke
-
-      - name: Save testenv files
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v3
         with:
-          name: testenv-gke
-          path: |
-            test/functional/testenv
-            !test/functional/testenv/**/.terraform/
+          target: gke
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
-
-  aks:
-    name: AKS image building
+  eks:
+    name: EKS image building
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      # TODO:
-      #   - auth with Azure cloud (need SP and regular AAD auth mechanisms)
-      #   - create aks cluster
-      #   - run tests
-      #   - profit
+      - name: Authenticate with AWS
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: ${{ secrets.AWS_IAM_ROLE }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Run functional test suite
+        uses: ./.github/actions/cloud-image-building
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        with:
+          target: eks
+          github_token: ${{ secrets.GITHUB_TOKEN }}

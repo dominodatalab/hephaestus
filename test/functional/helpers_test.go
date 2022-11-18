@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
-	"net/url"
 	"os"
 	"sync"
 	"testing"
@@ -17,7 +16,8 @@ import (
 	"github.com/dominodatalab/testenv"
 	"github.com/go-playground/validator/v10"
 	"github.com/go-redis/redis/v9"
-	"github.com/heroku/docker-registry-client/registry"
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -103,9 +103,9 @@ func (suite *GenericImageBuilderTestSuite) SetupSuite() {
 func (suite *GenericImageBuilderTestSuite) TearDownSuite() {
 	suite.T().Log("Tearing down test cluster")
 
-	// NOTE: add helmfile and pvc destroy bits here with the proper conditions
-
-	require.NoError(suite.T(), suite.manager.Destroy(context.Background()))
+	ctx := context.Background()
+	assert.NoError(suite.T(), suite.manager.HelmfileDestroy(ctx))
+	require.NoError(suite.T(), suite.manager.Destroy(ctx))
 }
 
 func (suite *GenericImageBuilderTestSuite) TestImageBuildResourceValidation() {
@@ -308,13 +308,12 @@ func (suite *GenericImageBuilderTestSuite) TestImageBuilding() {
 		if hostname == "" {
 			hostname = svc.Status.LoadBalancer.Ingress[0].IP
 		}
-		registryURL, err := url.Parse(fmt.Sprintf("http://%s:%d", hostname, 5000))
-		require.NoError(t, err)
 
-		hub, err := registry.New(registryURL.String(), "", "")
-		require.NoError(t, err)
-
-		tags, err := hub.Tags("test-ns/test-repo")
+		tags, err := crane.ListTags(
+			fmt.Sprintf("%s:%d/test-ns/test-repo", hostname, 5000),
+			crane.WithContext(ctx),
+			crane.Insecure,
+		)
 		require.NoError(t, err)
 		assert.Contains(t, tags, ib.Spec.LogKey)
 
@@ -671,4 +670,21 @@ func testMessageDelivery(t *testing.T, ctx context.Context, client kubernetes.In
 	} else {
 		assert.NotEmpty(t, finalTransition.ErrorMessage)
 	}
+}
+
+func newTestRegistryAuthenticator(username, password string) *testRegistryAuthenticator {
+	return &testRegistryAuthenticator{
+		ac: &authn.AuthConfig{
+			Username: username,
+			Password: password,
+		},
+	}
+}
+
+type testRegistryAuthenticator struct {
+	ac *authn.AuthConfig
+}
+
+func (a *testRegistryAuthenticator) Authorization() (*authn.AuthConfig, error) {
+	return a.ac, nil
 }

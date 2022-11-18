@@ -5,7 +5,6 @@ package functional
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -15,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/testenv"
-	"github.com/heroku/docker-registry-client/registry"
+	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -51,7 +50,6 @@ func (suite *EKSTestSuite) testCloudAuth(ctx context.Context, t *testing.T) {
 
 	canonicalImage := string(fullRepo)
 	cloudRegistry := strings.SplitN(canonicalImage, "/", 2)[0]
-	cloudRepository := strings.SplitN(canonicalImage, "/", 2)[1]
 
 	build := newImageBuild(
 		python39JupyterBuildContext,
@@ -76,11 +74,14 @@ func (suite *EKSTestSuite) testCloudAuth(ctx context.Context, t *testing.T) {
 	require.NoError(t, err)
 
 	credentials := strings.SplitN(string(decoded), ":", 2)
-
-	hub, err := registry.New(fmt.Sprintf("https://%s", cloudRegistry), credentials[0], credentials[1])
-	require.NoError(t, err)
-
-	tags, err := hub.Tags(cloudRepository)
+	tags, err := crane.ListTags(
+		canonicalImage,
+		crane.WithContext(ctx),
+		crane.WithAuth(newTestRegistryAuthenticator(
+			credentials[0],
+			credentials[1],
+		)),
+	)
 	require.NoError(t, err)
 	assert.Contains(t, tags, ib.Spec.LogKey)
 }
