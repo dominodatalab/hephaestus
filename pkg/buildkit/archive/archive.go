@@ -28,12 +28,15 @@ const (
 	mimeTypeGzip = mimeType("application/gzip")
 )
 
-var defaultBackoff = wait.Backoff{ // retries after 1s 2s 4s 8s 16s 32s 64s 128s with jitter
-	Duration: time.Second,
-	Factor:   2,
-	Jitter:   0.1,
-	Steps:    8,
-}
+var (
+	defaultHTTPClient fileDownloader = http.DefaultClient
+	defaultBackoff                   = wait.Backoff{ // retries after 1s 2s 4s 8s 16s 32s 64s 128s with jitter
+		Duration: time.Second,
+		Factor:   2,
+		Jitter:   0.1,
+		Steps:    8,
+	}
+)
 
 type fileDownloader interface {
 	Get(string) (*http.Response, error)
@@ -46,18 +49,6 @@ type Extraction struct {
 	ContentsDir string
 }
 
-func AssertDir(path string) error {
-	fi, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
-	if !fi.IsDir() {
-		return fmt.Errorf("%q is not a directory", path)
-	}
-
-	return nil
-}
-
 func FetchAndExtract(ctx context.Context, log logr.Logger, url, wd string, timeout time.Duration) (*Extraction, error) {
 	if timeout > 0 {
 		var cancel context.CancelFunc
@@ -65,17 +56,20 @@ func FetchAndExtract(ctx context.Context, log logr.Logger, url, wd string, timeo
 		defer cancel()
 	}
 
-	if err := AssertDir(wd); err != nil {
-		return nil, fmt.Errorf("invalid build context directory: %w", err)
+	if err := assertDir(wd); err != nil {
+		return nil, fmt.Errorf("invalid docker working dir: %w", err)
 	}
 
 	archive := filepath.Join(wd, "archive")
 
 	err := wait.ExponentialBackoffWithContext(ctx, defaultBackoff, func() (bool, error) {
-		return downloadFile(log, http.DefaultClient, url, archive)
+		return downloadFile(log, defaultHTTPClient, url, archive)
 	})
 	if err != nil {
-		return nil, err
+		if err == wait.ErrWaitTimeout {
+			err = errors.New("maximum number of retries exceeded")
+		}
+		return nil, fmt.Errorf("failed to download remote docker context: %w", err)
 	}
 
 	ct, err := getFileContentType(archive)
@@ -146,6 +140,18 @@ func downloadFile(log logr.Logger, c fileDownloader, fileURL, fp string) (bool, 
 	return true, err
 }
 
+func assertDir(path string) error {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !fi.IsDir() {
+		return fmt.Errorf("%q is not a directory", path)
+	}
+
+	return nil
+}
+
 func getFileContentType(fp string) (ct mimeType, err error) {
 	f, err := os.Open(fp)
 	if err != nil {
@@ -155,6 +161,11 @@ func getFileContentType(fp string) (ct mimeType, err error) {
 
 	buf := make([]byte, 512)
 	if _, err = f.Read(buf); err != nil {
+		if err == io.EOF {
+			fi, _ := f.Stat()
+			err = fmt.Errorf("cannot sniff content type for file with %d bytes", fi.Size())
+		}
+
 		return
 	}
 
