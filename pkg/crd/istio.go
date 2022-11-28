@@ -31,7 +31,9 @@ func waitForIstioSidecar() (func(), error) {
 	log.Info("Istio sidecar available")
 	fn := func() {
 		log.Info("Triggering istio termination")
-		_, _ = retryClient.Post(finishURL, "", nil)
+		if resp, err := retryClient.Post(finishURL, "", nil); err == nil {
+			_ = resp.Body.Close()
+		}
 	}
 
 	return fn, err

@@ -89,8 +89,8 @@ func TestApply(t *testing.T) {
 			retryClient = defaultRetryClient
 		})
 		mockClient := new(mockHeadPostClient)
-		mockClient.On("Head", "http://localhost:15021/healthz/ready").Return(&http.Response{Body: io.NopCloser(strings.NewReader("success"))}, nil)
-		mockClient.On("Post", "http://localhost:15020/quitquitquit", "", nil).Return(nil, nil)
+		mockClient.On("Head", "http://localhost:15021/healthz/ready").Return(&http.Response{Body: io.NopCloser(strings.NewReader("ready"))}, nil)
+		mockClient.On("Post", "http://localhost:15020/quitquitquit", "", nil).Return(&http.Response{Body: io.NopCloser(strings.NewReader("closed"))}, nil)
 		retryClient = mockClient
 
 		_ = Apply(context.Background(), true)
@@ -161,8 +161,8 @@ func TestDelete(t *testing.T) {
 			retryClient = defaultRetryClient
 		})
 		mockClient := new(mockHeadPostClient)
-		mockClient.On("Head", "http://localhost:15021/healthz/ready").Return(&http.Response{Body: io.NopCloser(strings.NewReader("success"))}, nil)
-		mockClient.On("Post", "http://localhost:15020/quitquitquit", "", nil).Return(nil, nil)
+		mockClient.On("Head", "http://localhost:15021/healthz/ready").Return(&http.Response{Body: io.NopCloser(strings.NewReader("ready"))}, nil)
+		mockClient.On("Post", "http://localhost:15020/quitquitquit", "", nil).Return(&http.Response{Body: io.NopCloser(strings.NewReader("closed"))}, nil)
 		retryClient = mockClient
 
 		_ = Delete(context.Background(), true)
