@@ -10,7 +10,6 @@ import (
 	apixv1client "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/discovery"
 	ctrlzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/yaml"
 
@@ -46,30 +45,6 @@ func Apply(ctx context.Context, istioEnabled bool) error {
 // Delete will remove all project CRDs from a Kubernetes cluster.
 func Delete(ctx context.Context, istioEnabled bool) error {
 	return operate(ctx, deleteFn, istioEnabled)
-}
-
-// Exists will check for the existence of a specific groupversion.
-func Exists(gv metav1.GroupVersion) (bool, error) {
-	config, err := kubernetes.RestConfig()
-	if err != nil {
-		return false, err
-	}
-
-	client, err := discovery.NewDiscoveryClientForConfig(config)
-	if err != nil {
-		return false, err
-	}
-
-	_, err = client.ServerResourcesForGroupVersion(gv.String())
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return false, nil
-		}
-
-		return false, err
-	}
-
-	return true, nil
 }
 
 // operate will read all available CRDS and apply state changes to the cluster using the processor func.

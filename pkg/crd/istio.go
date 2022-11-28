@@ -1,6 +1,7 @@
 package crd
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
@@ -11,7 +12,12 @@ const (
 	finishURL = "http://localhost:15020/quitquitquit"
 )
 
-var retryClient *retryablehttp.Client
+type headPostClient interface {
+	Head(url string) (*http.Response, error)
+	Post(url string, bodyType string, body interface{}) (*http.Response, error)
+}
+
+var retryClient headPostClient
 
 func waitForIstioSidecar() (func(), error) {
 	log.Info("Checking istio sidecar")
@@ -32,8 +38,10 @@ func waitForIstioSidecar() (func(), error) {
 }
 
 func init() {
-	retryClient = retryablehttp.NewClient()
-	retryClient.RetryMax = 10
-	retryClient.RetryWaitMin = 1 * time.Second
-	retryClient.RetryWaitMax = 1 * time.Second
+	client := retryablehttp.NewClient()
+	client.RetryMax = 10
+	client.RetryWaitMin = 1 * time.Second
+	client.RetryWaitMax = 1 * time.Second
+
+	retryClient = client
 }

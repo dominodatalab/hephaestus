@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	apixv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/fake"
@@ -79,6 +82,33 @@ func TestApply(t *testing.T) {
 		err := Apply(context.Background(), false)
 		assert.Equalf(t, expected, err, "Received error %v did not match %v", err, expected)
 	})
+
+	t.Run("istio_ready", func(t *testing.T) {
+		defaultRetryClient := retryClient
+		t.Cleanup(func() {
+			retryClient = defaultRetryClient
+		})
+		mockClient := new(mockHeadPostClient)
+		mockClient.On("Head", "http://localhost:15021/healthz/ready").Return(&http.Response{Body: io.NopCloser(strings.NewReader("success"))}, nil)
+		mockClient.On("Post", "http://localhost:15020/quitquitquit", "", nil).Return(nil, nil)
+		retryClient = mockClient
+
+		_ = Apply(context.Background(), true)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("istio_not_ready", func(t *testing.T) {
+		defaultRetryClient := retryClient
+		t.Cleanup(func() {
+			retryClient = defaultRetryClient
+		})
+		mockClient := new(mockHeadPostClient)
+		mockClient.On("Head", "http://localhost:15021/healthz/ready").Return(nil, errors.New("istio issue"))
+		retryClient = mockClient
+
+		assert.EqualError(t, Apply(context.Background(), true), "istio issue")
+		mockClient.AssertExpectations(t)
+	})
 }
 
 func TestDelete(t *testing.T) {
@@ -124,6 +154,53 @@ func TestDelete(t *testing.T) {
 		err := Delete(context.Background(), false)
 		assert.Equalf(t, expected, err, "Received error %v did not match %v", err, expected)
 	})
+
+	t.Run("istio_ready", func(t *testing.T) {
+		defaultRetryClient := retryClient
+		t.Cleanup(func() {
+			retryClient = defaultRetryClient
+		})
+		mockClient := new(mockHeadPostClient)
+		mockClient.On("Head", "http://localhost:15021/healthz/ready").Return(&http.Response{Body: io.NopCloser(strings.NewReader("success"))}, nil)
+		mockClient.On("Post", "http://localhost:15020/quitquitquit", "", nil).Return(nil, nil)
+		retryClient = mockClient
+
+		_ = Delete(context.Background(), true)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("istio_not_ready", func(t *testing.T) {
+		defaultRetryClient := retryClient
+		t.Cleanup(func() {
+			retryClient = defaultRetryClient
+		})
+		mockClient := new(mockHeadPostClient)
+		mockClient.On("Head", "http://localhost:15021/healthz/ready").Return(nil, errors.New("istio issue"))
+		retryClient = mockClient
+
+		assert.EqualError(t, Delete(context.Background(), true), "istio issue")
+		mockClient.AssertExpectations(t)
+	})
+}
+
+type mockHeadPostClient struct {
+	mock.Mock
+}
+
+func (c *mockHeadPostClient) Head(url string) (*http.Response, error) {
+	args := c.Called(url)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*http.Response), args.Error(1)
+}
+
+func (c *mockHeadPostClient) Post(url string, bodyType string, body interface{}) (*http.Response, error) {
+	args := c.Called(url, bodyType, body)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*http.Response), args.Error(1)
 }
 
 func overrideCRDClient(clientset *fake.Clientset) (reset func()) {
