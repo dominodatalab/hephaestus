@@ -34,7 +34,7 @@ func NewZap(cfg config.Logging) (*zap.Logger, error) {
 
 	ll, err := parseLevel(cfg.Container.LogLevel)
 	if err != nil {
-		return nil, fmt.Errorf("invalid container log level: %w", err)
+		return nil, fmt.Errorf("invalid container log config: %w", err)
 	}
 
 	cores := []zapcore.Core{
@@ -50,7 +50,7 @@ func NewZap(cfg config.Logging) (*zap.Logger, error) {
 
 		level, err := parseLevel(cfg.Logfile.LogLevel)
 		if err != nil {
-			return nil, fmt.Errorf("invalid logfile log level: %w", err)
+			return nil, fmt.Errorf("invalid logfile log config: %w", err)
 		}
 		fileCore := zapcore.NewCore(
 			&ctrlzap.KubeAwareEncoder{Encoder: jsonEncoder},
@@ -68,7 +68,7 @@ func NewZap(cfg config.Logging) (*zap.Logger, error) {
 	// process options, join cores and construct a logger
 	sl, err := parseLevel(cfg.StacktraceLevel)
 	if err != nil {
-		return nil, fmt.Errorf("invalid stacktrace log level: %w", err)
+		return nil, fmt.Errorf("invalid stacktrace log config: %w", err)
 	}
 
 	opts := []zap.Option{
@@ -84,7 +84,7 @@ func NewZap(cfg config.Logging) (*zap.Logger, error) {
 func parseLevel(name string) (zapcore.LevelEnabler, error) {
 	lvl := zap.NewAtomicLevel()
 	if err := lvl.UnmarshalText([]byte(name)); err != nil {
-		return nil, fmt.Errorf("%q is an invalid log level: %w", name, err)
+		return nil, err
 	}
 
 	return lvl, nil
