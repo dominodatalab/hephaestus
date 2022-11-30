@@ -941,7 +941,7 @@ func TestPoolPodReconciliation(t *testing.T) {
 				return []runtime.Object{p0, p1, p2, p3}
 			},
 			buildRequests:    4,
-			expectedReplicas: 6,
+			expectedReplicas: 4,
 		},
 		{
 			name: "combo_embedded_failure_trim",

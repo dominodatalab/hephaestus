@@ -182,6 +182,7 @@ func (a *ScaleArbiter) LeasablePods() (observations []*PodObservation) {
 // DetermineReplicas calculates the number of buildkit replicas required to service the incoming requests.
 func (a *ScaleArbiter) DetermineReplicas(requests int) int {
 	count := 0
+	hasInvalidPods := false
 
 	var output []string
 	for idx, observation := range a.observations {
@@ -195,6 +196,8 @@ func (a *ScaleArbiter) DetermineReplicas(requests int) int {
 			if requests > 0 {
 				requests--
 			}
+		default:
+			hasInvalidPods = true
 		}
 	}
 
@@ -202,7 +205,7 @@ func (a *ScaleArbiter) DetermineReplicas(requests int) int {
 
 	// count is the absolute minimum number of replicas we can set
 	// all current replicas >= count are invalid or expired
-	if len(a.observations)-count > 0 {
+	if hasInvalidPods {
 		// we prioritize removal of invalid pods over servicing of build requests
 		// the build request will be serviced on the next reconciliation loop
 		desiredReplicas = count
