@@ -922,7 +922,7 @@ func TestPoolPodReconciliation(t *testing.T) {
 			expectedReplicas: 5,
 		},
 		{
-			name: "combo_embedded_failure_no_growth",
+			name: "combo_embedded_failure_growth",
 			objects: func() []runtime.Object {
 				p0 := pendingPod()
 				p0.Name = "buildkit-0"
@@ -941,7 +941,7 @@ func TestPoolPodReconciliation(t *testing.T) {
 				return []runtime.Object{p0, p1, p2, p3}
 			},
 			buildRequests:    4,
-			expectedReplicas: 4,
+			expectedReplicas: 6,
 		},
 		{
 			name: "combo_embedded_failure_trim",

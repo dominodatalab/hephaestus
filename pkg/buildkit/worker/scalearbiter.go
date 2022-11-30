@@ -181,47 +181,43 @@ func (a *ScaleArbiter) LeasablePods() (observations []*PodObservation) {
 
 // DetermineReplicas calculates the number of buildkit replicas required to service the incoming requests.
 func (a *ScaleArbiter) DetermineReplicas(requests int) int {
-	noRequests := requests == 0
-	stopIdx := 0
-	count := requests
+	count := 0
 
 	var output []string
 	for idx, observation := range a.observations {
 		output = append(output, observation.String())
 
 		switch observation.State {
-		case BuilderStatePending, BuilderStateStarting:
-			stopIdx = idx
-			if noRequests {
-				count++
-			}
-		case BuilderStateOperational:
-			stopIdx = idx
-			count++
 		case BuilderStateLeased:
-			stopIdx = idx
-			count++
-		case BuilderStateUnmanaged, BuilderStateUnusable, BuilderStatePendingExpired, BuilderStateStartingExpired,
-			BuilderStateOperationalExpired:
-			count--
+			count = idx + 1
+		case BuilderStatePending, BuilderStateStarting, BuilderStateOperational:
+			count = idx + 1
+			if requests > 0 {
+				requests--
+			}
 		}
 	}
 
-	switch {
-	case noRequests && stopIdx != 0, requests == stopIdx+1 && count != 0 && stopIdx+1 > count:
-		count = stopIdx + 1
-	case count < 0:
-		count = 0
+	desiredReplicas := 0
+
+	// count is the absolute minimum number of replicas we can set
+	// all current replicas >= count are invalid or expired
+	if len(a.observations)-count > 0 {
+		// we prioritize removal of invalid pods over servicing of build requests
+		// the build request will be serviced on the next reconciliation loop
+		desiredReplicas = count
+	} else {
+		desiredReplicas = count + requests
 	}
 
 	a.log.Info(
 		"Pod scale determination complete",
 		"requests", requests,
 		"podObservations", output,
-		"suggestedReplicas", count,
+		"suggestedReplicas", desiredReplicas,
 	)
 
-	return count
+	return desiredReplicas
 }
 
 // ensure pod is operational by checking its phase and conditions
