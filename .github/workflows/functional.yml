@@ -6,6 +6,7 @@ on:
 
 jobs:
   aks:
+    if: ${{ github.event.issue.pull_request && github.event.comment.body == '/functional-test' }}
     name: AKS image building
     runs-on: ubuntu-latest
     permissions:
@@ -57,6 +58,7 @@ jobs:
 #          github_token: ${{ secrets.GITHUB_TOKEN }}
 
   gke:
+    if: ${{ github.event.issue.pull_request && github.event.comment.body == '/functional-test' }}
     name: GKE image building
     runs-on: ubuntu-latest
     permissions:
@@ -83,6 +85,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
   eks:
+    if: ${{ github.event.issue.pull_request && github.event.comment.body == '/functional-test' }}
     name: EKS image building
     runs-on: ubuntu-latest
     permissions:

@@ -20,6 +20,13 @@ runs:
       run: hub pr checkout ${{ github.event.issue.number }}
       shell: bash
 
+    - id: jobid
+      name: Generate Github job url
+      uses: Tiryoh/gha-jobid-action@v0
+      with:
+        github_token: ${{ inputs.github_token }}
+        job_name: ${{ github.job }}
+
     - name: Update PR Comment
       if: github.event_name != 'pull_request'
       uses: peter-evans/create-or-update-comment@v2
@@ -27,7 +34,8 @@ runs:
         comment-id: ${{ github.event.comment.id }}
         reactions: rocket
         body: |
-          **Launched workflow:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          <br>
+          **Launched job:** [${{ inputs.target }} tests](${{ steps.jobid.outputs.html_url }})
 
     - name: Install Go
       uses: actions/setup-go@v3
