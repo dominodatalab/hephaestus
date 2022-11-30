@@ -965,6 +965,23 @@ func TestPoolPodReconciliation(t *testing.T) {
 			buildRequests:    1,
 			expectedReplicas: 1,
 		},
+		{
+			name: "combo_trim_expired",
+			objects: func() []runtime.Object {
+				leased0 := leasedPod()
+				leased0.Name = "buildkit-0"
+
+				expired1 := validPod()
+				expired1.Name = "buildkit-1"
+				expired1.ObjectMeta.Annotations = map[string]string{
+					expiryTimeAnnotation: time.Now().Add(-10 * time.Minute).Format(time.RFC3339),
+				}
+
+				return []runtime.Object{leased0, expired1}
+			},
+			buildRequests:    0,
+			expectedReplicas: 1,
+		},
 	}
 
 	for _, tc := range tests {
