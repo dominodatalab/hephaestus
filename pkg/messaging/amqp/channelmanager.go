@@ -90,37 +90,35 @@ func (m *Manager) handleNotifications() {
 	chanCloses := m.channel.NotifyClose(make(chan *amqp.Error, 1))
 	chanCancels := m.channel.NotifyCancel(make(chan string, 1))
 
-	// TODO: this design seems a little silly
-	// 	it turns out that calling ...Passive() will close both the channel and connection
-	//  so both need to be re-established. i think a better design would be to perform a
-	//  series of checks inside reconnect() and (a) re-establish the connection if conn.IsClosed()
-	//  or (b) just the channel when the former is still open.
-
 	select {
 	case err := <-connCloses:
-		m.log.Error(err, "Connection closed, attempting full reconnect")
-		m.reconnectWithRetry(true)
+		m.log.Error(err, "Connection closed")
 	case err := <-chanCloses:
-		m.log.Error(err, "Channel closed, attempting to reconnect")
-		m.reconnectWithRetry(true) // NOTE: changed to accommodate Passive() funcs behavior
+		m.log.Error(err, "Channel closed")
 	case msg := <-chanCancels:
-		m.log.Error(errors.New(msg), "Channel canceled, attempting to reconnect")
-		m.reconnectWithRetry(false)
+		m.log.Error(errors.New(msg), "Channel canceled")
 	case <-m.shutdown:
 		m.log.V(1).Info("Shutting down")
 		return
 	}
 
-	m.log.Info("Successfully reconnected after close")
+	select {
+	case <-m.shutdown:
+		m.log.V(1).Info("Shutting down")
+	default:
+		m.log.Info("Attemtping to reconnect")
+		m.reconnectWithRetry()
+		m.log.Info("Successfully reconnected after close")
+	}
 }
 
-func (m *Manager) reconnectWithRetry(full bool) {
+func (m *Manager) reconnectWithRetry() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	_ = retry.Do(
 		func() error {
-			return m.reconnect(full)
+			return m.reconnect()
 		},
 		retry.OnRetry(func(n uint, err error) {
 			m.log.Error(err, "Reconnect failed", "attempt", n)
@@ -131,27 +129,28 @@ func (m *Manager) reconnectWithRetry(full bool) {
 	)
 }
 
-func (m *Manager) reconnect(full bool) error {
-	if full {
+func (m *Manager) reconnect() error {
+	_ = m.channel.Close()
+
+	if m.conn.IsClosed() {
+		_ = m.conn.Close()
+
 		conn, ch, err := Dial(m.url)
 		if err != nil {
 			return err
 		}
 
-		_ = m.channel.Close()
-		_ = m.conn.Close()
-
 		m.conn = conn
 		m.channel = ch
-	} else {
+	} else if m.channel.IsClosed() {
 		ch, err := m.conn.Channel()
 		if err != nil {
 			return err
 		}
 
-		_ = m.channel.Close()
 		m.channel = ch
 	}
+
 	go m.handleNotifications()
 
 	return nil
