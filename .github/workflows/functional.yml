@@ -5,12 +5,25 @@ on:
     types: [created]
 
 jobs:
-  aks:
+  gate:
     if: ${{ github.event.issue.pull_request && github.event.comment.body == '/functional-test' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update PR Comment
+        if: github.event_name != 'pull_request'
+        uses: peter-evans/create-or-update-comment@v2
+        with:
+          comment-id: ${{ github.event.comment.id }}
+          reactions: rocket
+          body: |
+            <br>
+            **Launched workflow:** [Functional tests](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+  aks:
     name: AKS image building
     runs-on: ubuntu-latest
+    needs: [gate]
     permissions:
-      actions: read
       contents: read
       id-token: write
       pull-requests: write
@@ -59,9 +72,9 @@ jobs:
 #          github_token: ${{ secrets.GITHUB_TOKEN }}
 
   gke:
-    if: ${{ github.event.issue.pull_request && github.event.comment.body == '/functional-test' }}
     name: GKE image building
     runs-on: ubuntu-latest
+    needs: [gate]
     permissions:
       contents: read
       id-token: write
@@ -86,9 +99,9 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
   eks:
-    if: ${{ github.event.issue.pull_request && github.event.comment.body == '/functional-test' }}
     name: EKS image building
     runs-on: ubuntu-latest
+    needs: [gate]
     permissions:
       contents: read
       id-token: write
