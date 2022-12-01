@@ -20,49 +20,49 @@ runs:
       run: hub pr checkout ${{ github.event.issue.number }}
       shell: bash
 
-#    - name: Install Go
-#      uses: actions/setup-go@v3
-#      with:
-#        go-version-file: test/functional/go.mod
-#
-#    - id: go-cache-paths
-#      name: Gather Go cache paths
-#      run: |
-#        echo "go-build=$(go env GOCACHE)" >> $GITHUB_OUTPUT
-#        echo "go-mod=$(go env GOMODCACHE)" >> $GITHUB_OUTPUT
-#      shell: bash
-#
-#    - name: Go build cache
-#      uses: actions/cache@v3
-#      with:
-#        path: ${{ steps.go-cache-paths.outputs.go-build }}
-#        key: ${{ runner.os }}-go-build-${{ hashFiles('test/functional/**/*.go') }}
-#
-#    - name: Go mod cache
-#      uses: actions/cache@v3
-#      with:
-#        path: ${{ steps.go-cache-paths.outputs.go-mod }}
-#        key: ${{ runner.os }}-go-mod-${{ hashFiles('test/functional/go.sum') }}
-#
-#    - name: Install Helm
-#      uses: azure/setup-helm@v3
-#      with:
-#        version: v3.10.2
-#
-#    - name: Run tests
-#      env:
-#        VERBOSE_TESTING: ${{ inputs.verbose }}
-##        MANAGER_IMAGE_TAG: pr-${{ github.event.issue.number }}
-#      run: |
-#        cd test/functional
-#        go test -v -timeout 0 -tags functional,${{ inputs.target }}
-#      shell: bash
-#
-#    - name: Save testenv files
-#      if: ${{ always() }}
-#      uses: actions/upload-artifact@v3
-#      with:
-#        name: testenv-${{ inputs.target }}
-#        path: |
-#          test/functional/testenv
-#          !test/functional/testenv/**/.terraform/
+    - name: Install Go
+      uses: actions/setup-go@v3
+      with:
+        go-version-file: test/functional/go.mod
+
+    - id: go-cache-paths
+      name: Gather Go cache paths
+      run: |
+        echo "go-build=$(go env GOCACHE)" >> $GITHUB_OUTPUT
+        echo "go-mod=$(go env GOMODCACHE)" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - name: Go build cache
+      uses: actions/cache@v3
+      with:
+        path: ${{ steps.go-cache-paths.outputs.go-build }}
+        key: ${{ runner.os }}-go-build-${{ hashFiles('test/functional/**/*.go') }}
+
+    - name: Go mod cache
+      uses: actions/cache@v3
+      with:
+        path: ${{ steps.go-cache-paths.outputs.go-mod }}
+        key: ${{ runner.os }}-go-mod-${{ hashFiles('test/functional/go.sum') }}
+
+    - name: Install Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: v3.10.2
+
+    - name: Run tests
+      env:
+        VERBOSE_TESTING: ${{ inputs.verbose }}
+#        MANAGER_IMAGE_TAG: pr-${{ github.event.issue.number }}
+      run: |
+        cd test/functional
+        go test -v -timeout 0 -tags functional,${{ inputs.target }}
+      shell: bash
+
+    - name: Save testenv files
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v3
+      with:
+        name: testenv-${{ inputs.target }}
+        path: |
+          test/functional/testenv
+          !test/functional/testenv/**/.terraform/
