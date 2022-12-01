@@ -30,20 +30,18 @@ runs:
     - name: Test things
       shell: bash
       run: |
-        echo $GITHUB_RUN_ID
-        echo "${{ steps.jobid }}"
-        echo "${{ steps.jobid.outputs }}"
+        echo "job_id: ${{ steps.jobid.outputs.html_url }}"
+        echo "html_url: ${{ steps.jobid.outputs.job_id }}"
 
-#    - name: Update PR Comment
-#      if: github.event_name != 'pull_request'
-#      uses: peter-evans/create-or-update-comment@v2
-#      with:
-#        comment-id: ${{ github.event.comment.id }}
-#        reactions: rocket
-#        body: |
-#          <br>
-#          **Launched job:** [${{ inputs.target }} tests](${{ steps.jobid.outputs.html_url }})
-#
+    - name: Update PR Comment
+      if: github.event_name != 'pull_request'
+      uses: peter-evans/create-or-update-comment@v2
+      with:
+        comment-id: ${{ github.event.comment.id }}
+        reactions: rocket
+        body: |
+          **Launched job:** [${{ inputs.target }} tests](${{ steps.jobid.outputs.html_url }})
+
 #    - name: Install Go
 #      uses: actions/setup-go@v3
 #      with:
