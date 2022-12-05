@@ -48,7 +48,7 @@ require (
 )
 
 require (
-	github.com/dominodatalab/amqp-client v0.1.0
+	github.com/dominodatalab/amqp-client v0.1.1
 	github.com/hashicorp/go-retryablehttp v0.7.0
 	github.com/newrelic/go-agent/v3 v3.16.1
 	github.com/newrelic/go-agent/v3/integrations/nrzap v1.0.1
