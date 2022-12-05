@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/docker/distribution/reference"
+	amqpclient "github.com/dominodatalab/amqp-client"
 	"github.com/dominodatalab/controller-util/core"
 	"github.com/newrelic/go-agent/v3/newrelic"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -26,7 +27,6 @@ import (
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/hephaestus/pkg/config"
-	"github.com/dominodatalab/hephaestus/pkg/messaging/amqp"
 )
 
 const publishContentType = "application/json"
@@ -80,7 +80,7 @@ func (c *AMQPMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 		return ctrl.Result{}, err
 	}
 
-	publishOpts := amqp.PublishOptions{
+	amqpMsg := amqpclient.SimpleMessage{
 		ExchangeName: c.cfg.AMQP.Exchange,
 		QueueName:    c.cfg.AMQP.Queue,
 		ContentType:  publishContentType,
@@ -89,16 +89,16 @@ func (c *AMQPMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 	if ov := ib.Spec.AMQPOverrides; ov != nil {
 		if ov.ExchangeName != "" {
 			log.Info("Overriding target AMQP Exchange", "name", ov.ExchangeName)
-			publishOpts.ExchangeName = ov.ExchangeName
+			amqpMsg.ExchangeName = ov.ExchangeName
 		}
 
 		if ov.QueueName != "" {
 			log.Info("Overriding target AMQP Queue", "name", ov.QueueName)
-			publishOpts.QueueName = ov.QueueName
+			amqpMsg.QueueName = ov.QueueName
 		}
 	}
-	txn.AddAttribute("queue", publishOpts.QueueName)
-	txn.AddAttribute("exchange", publishOpts.ExchangeName)
+	txn.AddAttribute("queue", amqpMsg.QueueName)
+	txn.AddAttribute("exchange", amqpMsg.ExchangeName)
 
 	var ibm hephv1.ImageBuildMessage
 	if err := ctx.Client.Get(ctx, objKey, &ibm); err != nil {
@@ -116,8 +116,8 @@ func (c *AMQPMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 			Spec: hephv1.ImageBuildMessageSpec{
 				AMQP: hephv1.ImageBuildMessageAMQPConnection{
 					URI:      u.Redacted(),
-					Queue:    publishOpts.QueueName,
-					Exchange: publishOpts.ExchangeName,
+					Queue:    amqpMsg.QueueName,
+					Exchange: amqpMsg.ExchangeName,
 				},
 			},
 		}
@@ -133,7 +133,7 @@ func (c *AMQPMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 
 	log.Info("Creating AMQP message publisher")
 	connectSeg := txn.StartSegment("broker-connect")
-	publisher, err := amqp.NewPublisher(log, c.cfg.AMQP.URL)
+	amqpClient, err := amqpclient.NewSimpleClient(log, c.cfg.AMQP.URL)
 	if err != nil {
 		txn.NoticeError(newrelic.Error{
 			Message: err.Error(),
@@ -145,7 +145,7 @@ func (c *AMQPMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 
 	defer func() {
 		log.V(1).Info("Closing message publisher")
-		if err := publisher.Close(); err != nil {
+		if err := amqpClient.Close(); err != nil {
 			log.Error(err, "Failed to close message publisher")
 		}
 
@@ -223,10 +223,10 @@ func (c *AMQPMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 			})
 			return ctrl.Result{}, err
 		}
-		publishOpts.Body = content
+		amqpMsg.Body = content
 
 		log.Info("Publishing transition message")
-		if err = publisher.Publish(ctx, publishOpts); err != nil {
+		if err = amqpClient.Publish(ctx, amqpMsg); err != nil {
 			txn.NoticeError(newrelic.Error{
 				Message: err.Error(),
 				Class:   "MessagePublishError",
