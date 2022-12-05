@@ -280,7 +280,7 @@ buildkit:
   image:
     registry: ""
     repository: moby/buildkit
-    tag: v0.10.5-rootless
+    tag: v0.10.6-rootless
     pullPolicy: IfNotPresent
     pullSecrets: []
 
