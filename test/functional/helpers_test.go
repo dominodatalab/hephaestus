@@ -634,7 +634,7 @@ func testMessageDelivery(t *testing.T, ctx context.Context, client kubernetes.In
 	}
 	rmqURL := fmt.Sprintf("amqp://user:rabbitmq-password@%s:5672/", hostname)
 	conn, err := amqp091.Dial(rmqURL)
-	require.NoError(t, err, "failed to connet to rabbitmq service")
+	require.NoError(t, err, "failed to connect to rabbitmq service")
 	channel, err := conn.Channel()
 	require.NoError(t, err, "failed to connet to rabbitmq service")
 	defer func() {
