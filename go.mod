@@ -13,7 +13,7 @@ require (
 	github.com/Azure/go-autorest/autorest/adal v0.9.20
 	github.com/Azure/go-autorest/autorest/azure/auth v0.5.8
 	github.com/Azure/go-autorest/autorest/to v0.4.0
-	github.com/avast/retry-go/v4 v4.0.2
+	github.com/avast/retry-go/v4 v4.3.1 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.11.2
 	github.com/aws/aws-sdk-go-v2/config v1.11.1
 	github.com/aws/aws-sdk-go-v2/service/ecr v1.12.0
@@ -27,11 +27,11 @@ require (
 	github.com/go-logr/zapr v1.2.3
 	github.com/gofrs/flock v0.7.3
 	github.com/h2non/filetype v1.1.1
-	github.com/moby/buildkit v0.10.5
+	github.com/moby/buildkit v0.10.6
 	github.com/pkg/errors v0.9.1
-	github.com/rabbitmq/amqp091-go v1.5.0
+	github.com/rabbitmq/amqp091-go v1.5.0 // indirect
 	github.com/spf13/cobra v1.6.0
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.8.1
 	go.uber.org/zap v1.21.0
 	golang.org/x/crypto v0.0.0-20220315160706-3147a52a75dd
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8
@@ -48,6 +48,7 @@ require (
 )
 
 require (
+	github.com/dominodatalab/amqp-client v0.1.2
 	github.com/hashicorp/go-retryablehttp v0.7.0
 	github.com/newrelic/go-agent/v3 v3.16.1
 	github.com/newrelic/go-agent/v3/integrations/nrzap v1.0.1
@@ -134,7 +135,7 @@ require (
 	github.com/prometheus/procfs v0.7.3 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/tonistiigi/fsutil v0.0.0-20220115021204-b19f7f9cb274 // indirect
+	github.com/tonistiigi/fsutil v0.0.0-20220315205639-9ed612626da3 // indirect
 	github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea // indirect
 	github.com/tonistiigi/vt100 v0.0.0-20210615222946-8066bb97264f // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.29.0 // indirect

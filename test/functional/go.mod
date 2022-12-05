@@ -4,6 +4,8 @@ go 1.19
 
 //replace github.com/dominodatalab/testenv => ../../../testenv
 
+replace github.com/dominodatalab/hephaestus => ../../
+
 require (
 	github.com/Azure/azure-sdk-for-go v58.2.0+incompatible
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.2.0
@@ -13,12 +15,13 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.11.2
 	github.com/aws/aws-sdk-go-v2/config v1.11.1
 	github.com/aws/aws-sdk-go-v2/service/ecr v1.12.0
-	github.com/dominodatalab/hephaestus v0.1.21
+	github.com/dominodatalab/hephaestus v0.1.26
 	github.com/dominodatalab/testenv v0.0.0-20221118170829-a1ed846e2c41
 	github.com/go-playground/validator/v10 v10.11.1
 	github.com/go-redis/redis/v9 v9.0.0-rc.1
 	github.com/google/go-containerregistry v0.12.1
-	github.com/stretchr/testify v1.8.0
+	github.com/rabbitmq/amqp091-go v1.5.0
+	github.com/stretchr/testify v1.8.1
 	golang.org/x/oauth2 v0.1.0
 	k8s.io/api v0.25.0
 	k8s.io/apimachinery v0.25.2
@@ -55,7 +58,6 @@ require (
 	github.com/agext/levenshtein v1.2.1 // indirect
 	github.com/alecthomas/participle v0.4.2-0.20191220090139-9fbceec1d131 // indirect
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
-	github.com/avast/retry-go/v4 v4.0.2 // indirect
 	github.com/aws/aws-sdk-go v1.40.28 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.6.5 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.8.2 // indirect
@@ -182,7 +184,6 @@ require (
 	github.com/prometheus/common v0.32.1 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
 	github.com/r3labs/diff v1.1.0 // indirect
-	github.com/rabbitmq/amqp091-go v1.5.0 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect
 	github.com/sergi/go-diff v1.2.0 // indirect
