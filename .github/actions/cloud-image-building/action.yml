@@ -20,15 +20,6 @@ runs:
       run: hub pr checkout ${{ github.event.issue.number }}
       shell: bash
 
-    - name: Update PR Comment
-      if: github.event_name != 'pull_request'
-      uses: peter-evans/create-or-update-comment@v2
-      with:
-        comment-id: ${{ github.event.comment.id }}
-        reactions: rocket
-        body: |
-          **Launched workflow:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
     - name: Install Go
       uses: actions/setup-go@v3
       with:

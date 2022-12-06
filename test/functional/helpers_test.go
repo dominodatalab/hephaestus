@@ -10,14 +10,12 @@ import (
 	"testing"
 	"time"
 
-	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
-	"github.com/dominodatalab/hephaestus/pkg/clientset"
-	"github.com/dominodatalab/hephaestus/pkg/messaging/amqp"
 	"github.com/dominodatalab/testenv"
 	"github.com/go-playground/validator/v10"
 	"github.com/go-redis/redis/v9"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
+	"github.com/rabbitmq/amqp091-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -28,6 +26,9 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+
+	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
+	"github.com/dominodatalab/hephaestus/pkg/clientset"
 )
 
 type GenericImageBuilderTestSuite struct {
@@ -632,7 +633,9 @@ func testMessageDelivery(t *testing.T, ctx context.Context, client kubernetes.In
 		hostname = svc.Status.LoadBalancer.Ingress[0].IP
 	}
 	rmqURL := fmt.Sprintf("amqp://user:rabbitmq-password@%s:5672/", hostname)
-	conn, channel, err := amqp.Dial(rmqURL)
+	conn, err := amqp091.Dial(rmqURL)
+	require.NoError(t, err, "failed to connect to rabbitmq service")
+	channel, err := conn.Channel()
 	require.NoError(t, err, "failed to connet to rabbitmq service")
 	defer func() {
 		_ = channel.Close()
