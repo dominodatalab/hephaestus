@@ -18,6 +18,7 @@ type Controller struct {
 	Buildkit  Buildkit  `json:"buildkit" yaml:"buildkit"`
 	Messaging Messaging `json:"messaging" yaml:"messaging"`
 	NewRelic  NewRelic  `json:"newRelic" yaml:"newRelic"`
+	CleanUp   CleanUp   `json:"cleanUp" yaml:"cleanUp"`
 
 	ImageBuildMaxConcurrency int `json:"imageBuildMaxConcurrency" yaml:"imageBuildMaxConcurrency"`
 }
@@ -133,6 +134,12 @@ type Messaging struct {
 	Enabled bool            `json:"enabled" yaml:"enabled"`
 	AMQP    *AMQPMessaging  `json:"amqp" yaml:"amqp"`
 	Kafka   *KafkaMessaging `json:"kafka" yaml:"kafka"`
+}
+
+type CleanUp struct {
+	Enabled           bool `json:"enabled" yaml:"enabled"`
+	IBCleanUpInterval int  `json:"ibCleanUpInterval" yaml:"ibCleanUpInterval"`
+	MaxIBRetention    int  `json:"maxIBRetention" yaml:"maxIBRetention"`
 }
 
 type AMQPMessaging struct {

@@ -174,6 +174,12 @@ controller:
         enabled: false
         serviceAccount: ""
 
+    # Configuration for the IB polling clean up.
+    cleanUp:
+      enabled: true
+      ibCleanUpInterval: 1 # in minutes
+      maxIBRetention: 5
+
     # Build status messaging configuration
     messaging:
       # Enable message publisher
