@@ -83,8 +83,6 @@ type Manager struct {
 	WebhookPort          int      `json:"webhookPort" yaml:"webhookPort"`
 	WatchNamespaces      []string `json:"watchNamespaces" yaml:"watchNamespaces,omitempty"`
 	EnableLeaderElection bool     `json:"enableLeaderElection" yaml:"enableLeaderElection"`
-	MaxIBRetentionCount  int      `json:"maxIBRetentionCount" yaml:"maxIBRetentionCount"`
-	IBCleanUpInterval    int      `json:"ibCleanUpInterval" yaml:"ibCleanUpInterval"`
 }
 
 // Buildkit communication and discovery configuration.

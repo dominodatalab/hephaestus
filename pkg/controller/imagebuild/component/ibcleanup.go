@@ -36,6 +36,10 @@ func (c *IBCleanUpComponent) Reconcile(ctx *core.Context) (ctrl.Result, error) {
 			errCount := 0
 			for range ticker.C {
 				err := c.CleanUpPolling(ctx)
+				if err == nil {
+					// TODO: There is probably a better way to do this.
+					continue
+				}
 				if errCount <= 10 {
 					log.Info("Polling failed with", "error, ", err.Error(),
 						"RetryIn: ", strconv.Itoa(c.IBCleanUpInterval))
@@ -70,6 +74,7 @@ func (c *IBCleanUpComponent) CleanUpPolling(ctx *core.Context) error {
 	}
 
 	listLen := len(ibList.Items)
+
 	if listLen == 0 {
 		log.V(1).Info("No build resources found, aborting")
 		return nil
@@ -79,7 +84,7 @@ func (c *IBCleanUpComponent) CleanUpPolling(ctx *core.Context) error {
 		hephv1.PhaseSucceeded, hephv1.PhaseFailed,
 	})
 
-	var builds []hephv1.ImageBuild
+	builds := make([]hephv1.ImageBuild, 0)
 	for _, ib := range ibList.Items {
 		state := ib.Status.Phase
 		if state == hephv1.PhaseSucceeded || state == hephv1.PhaseFailed {
@@ -88,7 +93,7 @@ func (c *IBCleanUpComponent) CleanUpPolling(ctx *core.Context) error {
 	}
 
 	if len(builds) <= c.RetentionCount {
-		log.Info("Total resources are less than or equal to retention limit, aborting",
+		log.V(1).Info("Total resources are less than or equal to retention limit, aborting",
 			"resourceCount", len(builds), "RetentionCount", c.RetentionCount)
 		return nil
 	}

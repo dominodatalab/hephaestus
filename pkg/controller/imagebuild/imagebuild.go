@@ -39,7 +39,8 @@ func RegisterImageBuildCleanup(mgr ctrl.Manager, cfg config.Controller) error {
 		For(&hephv1.ImageBuild{}).
 		Named("imagebuildcleanuppolling").
 		Component("delete-completed-ibs",
-			component.IBCleanUp(cfg.Manager.MaxIBRetentionCount, cfg.Manager.IBCleanUpInterval)).
+			// TODO: Need to find a better way to configure this
+			component.IBCleanUp(2, 1)).
 		ReconcileNotFound().
 		Complete()
 }
