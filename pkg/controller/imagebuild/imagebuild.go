@@ -38,7 +38,8 @@ func RegisterImageBuildCleanup(mgr ctrl.Manager, cfg config.Controller) error {
 	return core.NewReconciler(mgr).
 		For(&hephv1.ImageBuild{}).
 		Named("imagebuildcleanuppolling").
-		Component("delete-completed-ibs", component.IBCleanUp(cfg.Manager.MaxIBRetentionCount, cfg.Manager.IBCleanUpInterval)).
+		Component("delete-completed-ibs",
+			component.IBCleanUp(cfg.Manager.MaxIBRetentionCount, cfg.Manager.IBCleanUpInterval)).
 		ReconcileNotFound().
 		Complete()
 }

@@ -1,11 +1,12 @@
 package component
 
 import (
+	"strconv"
+	"time"
+
 	"github.com/dominodatalab/controller-util/core"
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"strconv"
-	"time"
 )
 
 type IBCleanUpComponent struct {
@@ -21,7 +22,6 @@ func IBCleanUp(retCount int, cleanupInterval int) *IBCleanUpComponent {
 }
 
 func (c *IBCleanUpComponent) Reconcile(ctx *core.Context) (ctrl.Result, error) {
-
 	cleanUpDisabled := make(chan bool)
 	log := ctx.Log
 	ticker := time.NewTicker(time.Duration(c.IBCleanUpInterval) * time.Minute)
@@ -37,15 +37,15 @@ func (c *IBCleanUpComponent) Reconcile(ctx *core.Context) (ctrl.Result, error) {
 			for range ticker.C {
 				err := c.CleanUpPolling(ctx)
 				if errCount <= 10 {
-					log.Info("Polling failed with error, ", err.Error(), "Trying again in: ", strconv.Itoa(c.IBCleanUpInterval))
-					errCount += 1
+					log.Info("Polling failed with", "error, ", err.Error(),
+						"RetryIn: ", strconv.Itoa(c.IBCleanUpInterval))
+					errCount++
 				} else {
-					log.Info("Polling failed, max error count reached, ", errCount)
+					log.Info("Polling failed, max error count reached, ", "MaxErrorCount: ", errCount)
 					cleanUpDisabled <- true
 				}
 			}
 		}()
-
 	} else {
 		cleanUpDisabled <- true
 	}
@@ -88,14 +88,15 @@ func (c *IBCleanUpComponent) CleanUpPolling(ctx *core.Context) error {
 	}
 
 	if len(builds) <= c.RetentionCount {
-		log.Info("Total resources are less than or equal to retention limit, aborting", "resourceCount", len(builds), "RetentionCount", c.RetentionCount)
+		log.Info("Total resources are less than or equal to retention limit, aborting",
+			"resourceCount", len(builds), "RetentionCount", c.RetentionCount)
 		return nil
 	}
 
 	log.Info("Total resources eligible for deletion", "count", len(builds))
 
-	for _, build := range builds[:len(builds)-c.RetentionCount] {
-		if err := ctx.Client.Delete(ctx, &build); err != nil {
+	for i, build := range builds[:len(builds)-c.RetentionCount] {
+		if err := ctx.Client.Delete(ctx, &builds[i]); err != nil {
 			log.Error(err, "Failed to delete build", "name", build.Name, "namespace", build.Namespace)
 		}
 		log.Info("Deleted build", "name", build.Name, "namespace", build.Namespace)
