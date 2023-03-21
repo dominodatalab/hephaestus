@@ -197,5 +197,10 @@ func registerControllers(
 		return err
 	}
 
+	log.Info("Registering ImageBuild clean up polling")
+	if err := imagebuild.RegisterImageBuildCleanup(mgr, cfg); err != nil {
+		return err
+	}
+
 	return nil
 }
