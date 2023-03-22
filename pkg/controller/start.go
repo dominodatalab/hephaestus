@@ -197,13 +197,9 @@ func registerControllers(
 		return err
 	}
 
-	if !cfg.CleanUp.Enabled {
-		log.Info("Auto destroy of IB's is disabled, please manually clean up your Image Build resources")
-	} else {
-		log.Info("Registering ImageBuild clean up polling")
-		if err := imagebuild.RegisterImageBuildCleanup(mgr, cfg); err != nil {
-			return err
-		}
+	log.Info("Registering ImageBuild clean up polling")
+	if err := imagebuild.RegisterImageBuildCleanup(mgr, cfg); err != nil {
+		return err
 	}
 
 	return nil
