@@ -20,6 +20,7 @@ func NewCommand() *cobra.Command {
 	cmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "hephaestus.yaml", "configuration file")
 	cmd.AddCommand(
 		newStartCommand(),
+		newRunGCCommand(),
 		newCRDApplyCommand(),
 		newCRDDeleteCommand(),
 	)
@@ -47,6 +48,36 @@ func newStartCommand() *cobra.Command {
 			}
 
 			return controller.Start(cfg)
+		},
+	}
+}
+
+func newRunGCCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "run-gc",
+		Short: "Start the image builder automatic cleanup",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			enabled, _ := cmd.Flags().GetBool("enabled")
+			maxIBRetention, _ := cmd.Flags().GetInt("maxRetention")
+			cfgFile, err := cmd.Flags().GetString("config")
+			if err != nil {
+				return err
+			}
+
+			cfg, err := config.LoadFromFile(cfgFile)
+			if err != nil {
+				return err
+			}
+
+			if err = cfg.Validate(); err != nil {
+				return err
+			}
+
+			cmd.Flags().Bool("enabled", false, "Enable the auto image builder clean up.")
+			cmd.Flags().Int("maxRetention", 5, "Maximum number of image builds to retain."+
+				"We will retain the newest builds.")
+
+			return controller.RunGC(enabled, maxIBRetention, cfg)
 		},
 	}
 }
