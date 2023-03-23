@@ -18,6 +18,7 @@ func NewCommand() *cobra.Command {
 		Short: "OCI image build controller using buildkit",
 	}
 	cmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "hephaestus.yaml", "configuration file")
+
 	cmd.AddCommand(
 		newStartCommand(),
 		newRunGCCommand(),
@@ -57,6 +58,10 @@ func newRunGCCommand() *cobra.Command {
 		Use:   "run-gc",
 		Short: "Runs the image builder automatic cleanup",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			cmd.Flags().Bool("enabled", false, "Enable the auto image builder clean up.")
+			cmd.Flags().Int("maxRetention", 5, "Maximum number of image builds to retain."+
+				"We will retain the newest builds.")
+
 			enabled, _ := cmd.Flags().GetBool("enabled")
 			maxIBRetention, _ := cmd.Flags().GetInt("maxRetention")
 			cfgFile, err := cmd.Flags().GetString("config")
@@ -72,10 +77,6 @@ func newRunGCCommand() *cobra.Command {
 			if err = cfg.Validate(); err != nil {
 				return err
 			}
-
-			cmd.Flags().Bool("enabled", false, "Enable the auto image builder clean up.")
-			cmd.Flags().Int("maxRetention", 5, "Maximum number of image builds to retain."+
-				"We will retain the newest builds.")
 
 			return controller.RunGC(enabled, maxIBRetention, cfg)
 		},
