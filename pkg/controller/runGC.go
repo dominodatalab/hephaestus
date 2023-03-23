@@ -2,6 +2,8 @@ package controller
 
 import (
 	"context"
+	"github.com/dominodatalab/hephaestus/pkg/config"
+	"k8s.io/client-go/rest"
 	"sort"
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
@@ -12,16 +14,19 @@ import (
 	"go.uber.org/zap/zapcore"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	k8s "k8s.io/client-go/kubernetes"
 )
 
 type ImageBuildGC struct {
 	maxIBRetention int
 	hephClient     clientset.Interface
+	namespaces     []string
 }
 
-func NewImageBuildGC(maxIBRetention int, log logr.Logger) (
+func NewImageBuildGC(maxIBRetention int, log logr.Logger, ibNamespaces []string) (
 	*ImageBuildGC, error) {
-	log.Info("Initializing Kubernetes V1 CRD client")
+	log.Info("Initializing Kubernetes Hephaestus V1 client")
 
 	config, err := kubernetes.RestConfig()
 	if err != nil {
@@ -33,14 +38,47 @@ func NewImageBuildGC(maxIBRetention int, log logr.Logger) (
 		return nil, err
 	}
 
+	var ns []string
+	if len(ibNamespaces) > 0 {
+		log.Info("Limiting GC cleanup", "namespaces", ibNamespaces)
+		ns = ibNamespaces
+	} else {
+		ns, err = getAllNamespaces(config)
+		if err != nil {
+			log.Info("Unable to access cluster namespaces")
+			return nil, err
+		}
+		log.Info("Watching all namespaces")
+
+	}
+
 	return &ImageBuildGC{
 		maxIBRetention: maxIBRetention,
 		hephClient:     hephClient,
+		namespaces:     ns,
 	}, nil
 }
 
-func (gc *ImageBuildGC) CleanUpIBs(ctx context.Context, log logr.Logger) {
-	crdList, err := gc.hephClient.HephaestusV1().ImageBuilds("default").List(ctx, metav1.ListOptions{})
+func getAllNamespaces(config *rest.Config) ([]string, error) {
+	// create k8s client to access all namespaces in the cluster
+	k8sClient, err := k8s.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	namespaces, err := k8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	var ns []string
+	for _, namespace := range namespaces.Items {
+		ns = append(ns, namespace.Name)
+	}
+	return ns, nil
+}
+
+func (gc *ImageBuildGC) CleanUpIBs(ctx context.Context, log logr.Logger, namespace string) {
+	crdList, err := gc.hephClient.HephaestusV1().ImageBuilds(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		log.Info("Unable to access a list of IBs, not starting IB clean up", "error", err)
 		return
@@ -80,7 +118,7 @@ func (gc *ImageBuildGC) CleanUpIBs(ctx context.Context, log logr.Logger) {
 	log.Info("Cleanup complete")
 }
 
-func RunGC(enabled bool, maxIBRetention int) error {
+func RunGC(enabled bool, maxIBRetention int, cfg config.Manager) error {
 	log := ctrlzap.New(
 		ctrlzap.UseDevMode(true),
 		ctrlzap.Encoder(zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())),
@@ -93,13 +131,16 @@ func RunGC(enabled bool, maxIBRetention int) error {
 	}
 	ctx := context.Background()
 
-	gc, err := NewImageBuildGC(maxIBRetention, log)
+	gc, err := NewImageBuildGC(maxIBRetention, log, cfg.WatchNamespaces)
 	if err != nil {
 		log.Info("Error setting up GC", "error", err)
 		return err
 	}
 
 	log.Info("Launching Image Build Clean up", "maxIBRetention", gc.maxIBRetention)
-	gc.CleanUpIBs(ctx, log)
+
+	for _, ns := range gc.namespaces {
+		gc.CleanUpIBs(ctx, log, ns)
+	}
 	return nil
 }
