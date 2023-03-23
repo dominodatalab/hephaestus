@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: image-build-gc
+spec:
+  schedule: "* * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          volumes:
+            - name: config-vol
+              secret:
+                secretName: {{ include "hephaestus.configSecretName" . }}
+          containers:
+            - name: image-build-gc
+              image: {{ include "hephaestus.manager.image" . }}
+              volumeMounts:
+                - name: config-vol
+                  readOnly: true
+                  mountPath: /etc/hephaestus/config.yaml
+                  subPath: config.yaml
+              imagePullPolicy: IfNotPresent
+              command: [ "hephaestus-controller" ]
+              args:
+                - run-gc
+                - --enabled=true
+                - --maxRetention=2
+                - --config=/etc/hephaestus/config.yaml
+                - echo IB Cron job GC started
+          restartPolicy: OnFailure
