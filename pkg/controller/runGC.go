@@ -2,20 +2,19 @@ package controller
 
 import (
 	"context"
-	"github.com/dominodatalab/hephaestus/pkg/config"
-	"k8s.io/client-go/rest"
 	"sort"
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/hephaestus/pkg/clientset"
+	"github.com/dominodatalab/hephaestus/pkg/config"
 	"github.com/dominodatalab/hephaestus/pkg/kubernetes"
 	"github.com/go-logr/logr"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	ctrlzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
-
 	k8s "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	ctrlzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 type ImageBuildGC struct {
@@ -49,7 +48,6 @@ func NewImageBuildGC(maxIBRetention int, log logr.Logger, ibNamespaces []string)
 			return nil, err
 		}
 		log.Info("Watching all namespaces")
-
 	}
 
 	return &ImageBuildGC{
@@ -137,8 +135,7 @@ func RunGC(enabled bool, maxIBRetention int, cfg config.Manager) error {
 		return err
 	}
 
-	log.Info("Launching Image Build Clean up", "maxIBRetention", gc.maxIBRetention)
-
+	log.Info("Launching Image Build Clean up", "maxIBRetention", gc.maxIBRetention, "namespaces", gc.namespaces)
 	for _, ns := range gc.namespaces {
 		gc.CleanUpIBs(ctx, log, ns)
 	}
