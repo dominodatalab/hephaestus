@@ -58,12 +58,13 @@ func newRunGCCommand() *cobra.Command {
 		Use:   "run-gc",
 		Short: "Runs the image builder automatic cleanup",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cmd.Flags().Bool("enabled", false, "Enable the auto image builder clean up.")
-			cmd.Flags().Int("maxRetention", 5, "Maximum number of image builds to retain."+
+			var enabled bool
+			var maxIBRetention int
+
+			cmd.Flags().BoolVar(&enabled, "enabled", false, "Enable the auto image builder clean up.")
+			cmd.Flags().IntVar(&maxIBRetention, "maxRetention", 5, "Maximum number of image builds to retain."+
 				"We will retain the newest builds.")
 
-			enabled, _ := cmd.Flags().GetBool("enabled")
-			maxIBRetention, _ := cmd.Flags().GetInt("maxRetention")
 			cfgFile, err := cmd.Flags().GetString("config")
 			if err != nil {
 				return err
