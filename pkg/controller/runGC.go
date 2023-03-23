@@ -2,13 +2,14 @@ package controller
 
 import (
 	"context"
+	"sort"
+
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/hephaestus/pkg/config"
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sort"
 )
 
 type ImageBuildGC struct {
@@ -20,7 +21,8 @@ type ImageBuildGC struct {
 // blocks until all resources belonging to a ContainerImageBuild have been deleted
 const gcDeleteOpt = client.PropagationPolicy(metav1.DeletePropagationForeground)
 
-func NewImageBuildGC(maxIBRetention int, cfg config.Controller, ctx context.Context, log logr.Logger) (*ImageBuildGC, error) {
+func NewImageBuildGC(ctx context.Context, cfg config.Controller, maxIBRetention int, log logr.Logger) (
+	*ImageBuildGC, error) {
 	mgr, err := createManager(log, cfg.Manager)
 
 	if err != nil {
@@ -32,7 +34,6 @@ func NewImageBuildGC(maxIBRetention int, cfg config.Controller, ctx context.Cont
 		Client:         mgr.GetClient(),
 		ctx:            ctx,
 	}, nil
-
 }
 
 func (gc *ImageBuildGC) CleanUpIBs(log logr.Logger) {
@@ -63,8 +64,8 @@ func (gc *ImageBuildGC) CleanUpIBs(log logr.Logger) {
 		return builds[i].CreationTimestamp.Before(&builds[j].CreationTimestamp)
 	})
 
-	for _, build := range builds[:len(builds)-gc.maxIBRetention] {
-		if err := gc.Client.Delete(gc.ctx, &build, gcDeleteOpt); err != nil {
+	for i, build := range builds[:len(builds)-gc.maxIBRetention] {
+		if err := gc.Client.Delete(gc.ctx, &builds[i], gcDeleteOpt); err != nil {
 			log.Info("Failed to delete build", "name", build.Name, "namespace", build.Namespace, "error", err)
 		}
 		log.Info("Deleted build", "name", build.Name, "namespace", build.Namespace)
@@ -81,7 +82,7 @@ func RunGC(enabled bool, maxIBRetention int, cfg config.Controller) error {
 	}
 	ctx := context.Background()
 
-	gc, err := NewImageBuildGC(maxIBRetention, cfg, ctx, log)
+	gc, err := NewImageBuildGC(ctx, cfg, maxIBRetention, log)
 	if err != nil {
 		log.Info("Error setting up GC", "error", err)
 		return err

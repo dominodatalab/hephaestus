@@ -55,7 +55,7 @@ func newStartCommand() *cobra.Command {
 func newRunGCCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "run-gc",
-		Short: "Start the image builder automatic cleanup",
+		Short: "Runs the image builder automatic cleanup",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			enabled, _ := cmd.Flags().GetBool("enabled")
 			maxIBRetention, _ := cmd.Flags().GetInt("maxRetention")
