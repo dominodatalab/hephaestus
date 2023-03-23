@@ -31,7 +31,6 @@ rules:
     resources:
       - imagebuilds
       - imagecaches
-      - namespaces
     verbs:
       - get
       - patch
@@ -68,6 +67,7 @@ rules:
       - ""
     resources:
       - services
+      - namespaces
     verbs:
       - list
       - watch
