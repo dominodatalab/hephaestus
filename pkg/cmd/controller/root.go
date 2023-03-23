@@ -20,7 +20,7 @@ func NewCommand() *cobra.Command {
 	cmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "hephaestus.yaml", "configuration file")
 
 	runGCCmd := newRunGCCommand()
-	runGCCmd.Flags().Bool("enabled", false, "Enable the auto image builder clean up.")
+	runGCCmd.Flags().Bool("enabled", true, "Enable the auto image builder clean up.")
 	runGCCmd.Flags().Int("maxIBRetention", 5, "Maximum number of image builds to retain."+
 		"We will retain the newest builds.")
 

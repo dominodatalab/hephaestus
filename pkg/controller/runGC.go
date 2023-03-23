@@ -39,12 +39,14 @@ func NewImageBuildGC(ctx context.Context, cfg config.Controller, maxIBRetention 
 func (gc *ImageBuildGC) CleanUpIBs(log logr.Logger) {
 	ibList := &hephv1.ImageBuildList{}
 	if err := gc.Client.List(gc.ctx, ibList); err != nil {
-		log.Info("Unable to access a list of IBs, not starting IB clean up")
+		log.Info("Unable to access a list of IBs, not starting IB clean up", "error", err)
+		return
 	}
 
 	listLen := len(ibList.Items)
 	if listLen == 0 {
 		log.V(1).Info("No build resources found, aborting")
+		return
 	}
 
 	var builds []hephv1.ImageBuild
@@ -58,6 +60,7 @@ func (gc *ImageBuildGC) CleanUpIBs(log logr.Logger) {
 	if len(builds) <= gc.maxIBRetention {
 		log.Info("Total resources are less than or equal to retention limit, aborting",
 			"resourceCount", len(builds), "retentionCount", gc.maxIBRetention)
+		return
 	}
 	log.Info("Total resources eligible for deletion", "count", len(builds))
 	sort.Slice(builds, func(i, j int) bool {
@@ -71,6 +74,7 @@ func (gc *ImageBuildGC) CleanUpIBs(log logr.Logger) {
 		log.Info("Deleted build", "name", build.Name, "namespace", build.Namespace)
 	}
 	log.Info("Cleanup complete")
+	return
 }
 
 func RunGC(enabled bool, maxIBRetention int, cfg config.Controller) error {
