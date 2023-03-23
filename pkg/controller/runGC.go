@@ -74,7 +74,6 @@ func (gc *ImageBuildGC) CleanUpIBs(log logr.Logger) {
 		log.Info("Deleted build", "name", build.Name, "namespace", build.Namespace)
 	}
 	log.Info("Cleanup complete")
-	return
 }
 
 func RunGC(enabled bool, maxIBRetention int, cfg config.Controller) error {
