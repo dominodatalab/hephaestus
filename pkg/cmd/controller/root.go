@@ -63,11 +63,6 @@ func newRunGCCommand() *cobra.Command {
 		Use:   "run-gc",
 		Short: "Runs the image builder automatic cleanup",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfgFile, err := cmd.Flags().GetString("config")
-			if err != nil {
-				return err
-			}
-
 			enabled, err := cmd.Flags().GetBool("enabled")
 			if err != nil {
 				return err
@@ -78,16 +73,7 @@ func newRunGCCommand() *cobra.Command {
 				return err
 			}
 
-			cfg, err := config.LoadFromFile(cfgFile)
-			if err != nil {
-				return err
-			}
-
-			if err = cfg.Validate(); err != nil {
-				return err
-			}
-
-			return controller.RunGC(enabled, maxIBRetention, cfg)
+			return controller.RunGC(enabled, maxIBRetention)
 		},
 	}
 }
