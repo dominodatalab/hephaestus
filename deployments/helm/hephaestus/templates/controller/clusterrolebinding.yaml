@@ -12,6 +12,4 @@ subjects:
   - kind: ServiceAccount
     name: {{ include "hephaestus.serviceAccountName" . }}
     namespace: {{ .Release.Namespace }}
-  - kind: ServiceAccount
-    name: default
-    namespace: default
+

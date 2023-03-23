@@ -12,6 +12,7 @@ spec:
             - name: config-vol
               secret:
                 secretName: {{ include "hephaestus.configSecretName" . }}
+          serviceAccountName: {{ include "hephaestus.serviceAccountName" . }}
           containers:
             - name: image-build-gc
               image: {{ include "hephaestus.manager.image" . }}
