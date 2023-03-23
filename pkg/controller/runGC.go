@@ -2,6 +2,8 @@ package controller
 
 import (
 	"context"
+	"sort"
+
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/hephaestus/pkg/clientset"
 	"github.com/dominodatalab/hephaestus/pkg/kubernetes"
@@ -10,7 +12,6 @@ import (
 	"go.uber.org/zap/zapcore"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"sort"
 )
 
 type ImageBuildGC struct {
@@ -20,7 +21,6 @@ type ImageBuildGC struct {
 
 func NewImageBuildGC(maxIBRetention int, log logr.Logger) (
 	*ImageBuildGC, error) {
-
 	log.Info("Initializing Kubernetes V1 CRD client")
 
 	config, err := kubernetes.RestConfig()
@@ -28,10 +28,6 @@ func NewImageBuildGC(maxIBRetention int, log logr.Logger) (
 		return nil, err
 	}
 
-	//client, err := apixv1client.NewForConfig(config)
-	//if err != nil {
-	//	return nil, err
-	//}
 	hephClient, _ := clientset.NewForConfig(config)
 	if err != nil {
 		return nil, err
