@@ -118,7 +118,7 @@ controller:
   extraVolumeMounts: []
 
   ibGarbageCollector:
-    interval: "* * * * *"
+    interval: "*/30 * * * *"
 
   # Manager configuration
   manager:
@@ -126,7 +126,7 @@ controller:
     image:
       registry: ghcr.io
       repository: dominodatalab/hephaestus
-      tag: "sha-65caed1@sha256:f4e036d9c419456056977f0fe89a5a8bbea386006ba6de8b0d53e8f83e7dcb9e"
+      tag: ""
       pullPolicy: IfNotPresent
       pullSecrets: []
 

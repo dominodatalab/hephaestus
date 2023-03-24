@@ -27,8 +27,6 @@ type ImageBuildGC struct {
 
 func NewImageBuildGC(maxIBRetention int, log logr.Logger, ibNamespaces []string) (
 	*ImageBuildGC, error) {
-	log.Info("Initializing Kubernetes Hephaestus V1 client")
-
 	config, err := kubernetes.RestConfig()
 	if err != nil {
 		return nil, err
@@ -41,7 +39,7 @@ func NewImageBuildGC(maxIBRetention int, log logr.Logger, ibNamespaces []string)
 
 	var ns []string
 	if len(ibNamespaces) > 0 {
-		log.Info("Limiting GC cleanup", "namespaces", ibNamespaces)
+		log.Info("Image Build cleanup limiting namespaces", "namespaces", ibNamespaces)
 		ns = ibNamespaces
 	} else {
 		// create k8s client to access all namespaces in the cluster
@@ -144,7 +142,7 @@ func RunGC(maxIBRetention int, cfg config.Manager) error {
 		return err
 	}
 
-	log.Info("Launching Image Build Clean up", "maxIBRetention", gc.maxIBRetention, "namespaces", gc.namespaces)
+	log.Info("Launching Image Build GC", "maxIBRetention", gc.maxIBRetention, "namespaces", gc.namespaces)
 	for _, ns := range gc.namespaces {
 		err := gc.CleanUpIBs(ctx, log, ns)
 		if err != nil {
