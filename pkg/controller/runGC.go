@@ -47,7 +47,7 @@ func NewImageBuildGC(maxIBRetention int, log logr.Logger, ibNamespaces []string)
 			log.Info("Unable to access cluster namespaces")
 			return nil, err
 		}
-		log.Info("Watching all namespaces")
+		log.Info("Running GC against all namespaces")
 	}
 
 	return &ImageBuildGC{
@@ -107,7 +107,7 @@ func (gc *ImageBuildGC) CleanUpIBs(ctx context.Context, log logr.Logger, namespa
 	})
 	deletePolicy := metav1.DeletePropagationForeground
 	for _, build := range builds[:len(builds)-gc.maxIBRetention] {
-		if err := gc.hephClient.HephaestusV1().ImageBuilds("default").Delete(ctx, build.Name,
+		if err := gc.hephClient.HephaestusV1().ImageBuilds(namespace).Delete(ctx, build.Name,
 			metav1.DeleteOptions{PropagationPolicy: &deletePolicy}); err != nil {
 			log.Info("Failed to delete build", "name", build.Name, "namespace", build.Namespace, "error", err)
 		}
