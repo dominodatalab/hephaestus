@@ -118,7 +118,8 @@ controller:
   extraVolumeMounts: []
 
   ibGarbageCollector:
-    interval: "*/30 * * * *"
+    interval: "@daily"
+    maxIBRetention: 5
 
   # Manager configuration
   manager:

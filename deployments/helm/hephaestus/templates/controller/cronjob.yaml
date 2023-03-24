@@ -2,6 +2,7 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: {{ include "hephaestus.manager.name" . }}-cronjob
+  labels: {{- include "hephaestus.controller.labels.standard" . | nindent 4 }}
 spec:
   schedule: {{ .Values.controller.ibGarbageCollector.interval | quote }}
   jobTemplate:
@@ -10,10 +11,6 @@ spec:
         metadata:
           annotations:
             checksum/config: {{ include (print $.Template.BasePath "/controller/secret.yaml") . | sha256sum }}
-            {{- if .Values.controller.metrics.enabled }}
-            prometheus.io/port: "{{ .Values.controller.manager.metricsPort }}"
-            prometheus.io/scrape: "true"
-            {{- end }}
             {{- with .Values.controller.podAnnotations }}
             {{- toYaml . | trimSuffix "\n" | nindent 8 }}
             {{- end }}
@@ -21,7 +18,7 @@ spec:
             {{- toYaml . | nindent 8 }}
             {{- end }}
           labels:
-            {{- include "hephaestus.controller.labels.matchLabels" . | nindent 12 }}
+              {{- include "hephaestus.controller.labels.matchLabels" . | nindent 12 }}
               {{- with .Values.controller.podLabels }}
               {{- toYaml . | trimSuffix "\n" | nindent 12 }}
               {{- end }}
@@ -50,7 +47,7 @@ spec:
               command: [ "hephaestus-controller" ]
               args:
                 - run-gc
-                - --maxIBRetention=2
+                - --maxIBRetention={{ .Values.controller.ibGarbageCollector.maxIBRetention | int }}
                 - --config=/etc/hephaestus/config.yaml
               {{- with .Values.controller.manager.extraEnvVars  }}
               env:

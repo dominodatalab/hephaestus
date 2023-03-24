@@ -77,8 +77,8 @@ func newRunGCCommand() *cobra.Command {
 			return controller.RunGC(maxIBRetention, cfg.Manager)
 		},
 	}
-	cmd.Flags().Int("maxIBRetention", 5, "Maximum number of image builds to retain."+
-		"We will retain the newest builds.")
+	cmd.Flags().Int("maxIBRetention", 5, "Delete all ContainerImageBuild resources in a 'finished' "+
+		"state that exceed this count, we will retain the newest builds.")
 	return cmd
 }
 

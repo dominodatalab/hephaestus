@@ -39,7 +39,7 @@ func NewImageBuildGC(maxIBRetention int, log logr.Logger, ibNamespaces []string)
 
 	var ns []string
 	if len(ibNamespaces) > 0 {
-		log.Info("Image Build cleanup limiting namespaces", "namespaces", ibNamespaces)
+		log.Info("Image Build GC limiting namespaces", "namespaces", ibNamespaces)
 		ns = ibNamespaces
 	} else {
 		// create k8s client to access all namespaces in the cluster
@@ -74,10 +74,10 @@ func getAllNamespaces(k8sClient k8s.Interface) ([]string, error) {
 	return ns, nil
 }
 
-func (gc *ImageBuildGC) CleanUpIBs(ctx context.Context, log logr.Logger, namespace string) error {
+func (gc *ImageBuildGC) GCImageBuilds(ctx context.Context, log logr.Logger, namespace string) error {
 	crdList, err := gc.hephClient.HephaestusV1().ImageBuilds(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		log.Info("Unable to access a list of IBs, not starting IB clean up", "error", err)
+		log.Info("Unable to access a list of IBs, not starting Image Build GC", "error", err)
 		return err
 	}
 
@@ -124,7 +124,7 @@ func (gc *ImageBuildGC) CleanUpIBs(ctx context.Context, log logr.Logger, namespa
 		return errors.New(builder.String())
 	}
 
-	log.Info("Cleanup complete")
+	log.Info("Image Build GC complete")
 	return nil
 }
 
@@ -144,7 +144,7 @@ func RunGC(maxIBRetention int, cfg config.Manager) error {
 
 	log.Info("Launching Image Build GC", "maxIBRetention", gc.maxIBRetention, "namespaces", gc.namespaces)
 	for _, ns := range gc.namespaces {
-		err := gc.CleanUpIBs(ctx, log, ns)
+		err := gc.GCImageBuilds(ctx, log, ns)
 		if err != nil {
 			log.Info("Exiting Image Builder GC due to error: ", "error", err)
 			os.Exit(1)

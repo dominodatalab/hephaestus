@@ -99,7 +99,7 @@ func TestCleanUpCleanUpIBSuccess(t *testing.T) {
 		hephClient:     fakeClient,
 		namespaces:     []string{"aloha"},
 	}
-	err := FakeGC.CleanUpIBs(context.Background(), logr.Discard(), "aloha")
+	err := FakeGC.GCImageBuilds(context.Background(), logr.Discard(), "aloha")
 	require.NoError(t, err)
 
 	if len(fakeClient.Fake.Actions()) != 2 {
@@ -118,7 +118,7 @@ func TestCleanUpIBsListErr(t *testing.T) {
 		hephClient:     fakeClientErr,
 		namespaces:     nil,
 	}
-	err := FakeGC.CleanUpIBs(context.Background(), logr.Discard(), "aloha")
+	err := FakeGC.GCImageBuilds(context.Background(), logr.Discard(), "aloha")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "error listing namespaces")
 }
@@ -137,7 +137,7 @@ func TestCleanUpIBsNoIbs(t *testing.T) {
 		hephClient:     fakeClientErr,
 		namespaces:     nil,
 	}
-	err := FakeGC.CleanUpIBs(context.Background(), logr.Discard(), "aloha")
+	err := FakeGC.GCImageBuilds(context.Background(), logr.Discard(), "aloha")
 	require.NoError(t, err)
 }
 
@@ -162,7 +162,7 @@ func TestCleanUpLessThanMaxRetention(t *testing.T) {
 		hephClient:     fakeClientErr,
 		namespaces:     []string{"aloha"},
 	}
-	err := FakeGC.CleanUpIBs(context.Background(), logr.Discard(), "aloha")
+	err := FakeGC.GCImageBuilds(context.Background(), logr.Discard(), "aloha")
 	require.NoError(t, err)
 }
 
@@ -191,7 +191,7 @@ func TestCleanUpMultipleBuildFailedDeletes(t *testing.T) {
 		hephClient:     fakeClientErr,
 		namespaces:     []string{"aloha"},
 	}
-	err := FakeGC.CleanUpIBs(context.Background(), logr.Discard(), "aloha")
+	err := FakeGC.GCImageBuilds(context.Background(), logr.Discard(), "aloha")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed ib delete")
 }
