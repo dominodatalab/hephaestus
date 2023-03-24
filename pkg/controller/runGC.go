@@ -16,7 +16,6 @@ import (
 	"go.uber.org/zap/zapcore"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8s "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	ctrlzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
@@ -45,7 +44,12 @@ func NewImageBuildGC(maxIBRetention int, log logr.Logger, ibNamespaces []string)
 		log.Info("Limiting GC cleanup", "namespaces", ibNamespaces)
 		ns = ibNamespaces
 	} else {
-		ns, err = getAllNamespaces(config)
+		// create k8s client to access all namespaces in the cluster
+		k8sClient, err := k8s.NewForConfig(config)
+		if err != nil {
+			return nil, err
+		}
+		ns, err = getAllNamespaces(k8sClient)
 		if err != nil {
 			log.Info("Unable to access cluster namespaces")
 			return nil, err
@@ -60,13 +64,7 @@ func NewImageBuildGC(maxIBRetention int, log logr.Logger, ibNamespaces []string)
 	}, nil
 }
 
-func getAllNamespaces(config *rest.Config) ([]string, error) {
-	// create k8s client to access all namespaces in the cluster
-	k8sClient, err := k8s.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
+func getAllNamespaces(k8sClient k8s.Interface) ([]string, error) {
 	namespaces, err := k8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
@@ -88,7 +86,7 @@ func (gc *ImageBuildGC) CleanUpIBs(ctx context.Context, log logr.Logger, namespa
 	listLen := len(crdList.Items)
 	if listLen == 0 {
 		log.V(1).Info("No build resources found, aborting")
-		return err
+		return nil
 	}
 
 	var builds []hephv1.ImageBuild
@@ -102,7 +100,7 @@ func (gc *ImageBuildGC) CleanUpIBs(ctx context.Context, log logr.Logger, namespa
 	if len(builds) <= gc.maxIBRetention {
 		log.Info("Total resources are less than or equal to retention limit, aborting",
 			"resourceCount", len(builds), "retentionCount", gc.maxIBRetention)
-		return err
+		return nil
 	}
 	log.Info("Total resources eligible for deletion", "count", len(builds))
 	sort.Slice(builds, func(i, j int) bool {
