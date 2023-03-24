@@ -52,14 +52,10 @@ spec:
                 - run-gc
                 - --maxIBRetention=2
                 - --config=/etc/hephaestus/config.yaml
-              {{- with .Values.controller.manager }}
-              {{- if .extraEnvVars  }}
+              {{- with .Values.controller.manager.extraEnvVars  }}
               env:
-                {{- with .extraEnvVars }}
                 {{- include "common.tplvalues.render" (dict "value" . "context" $) | nindent 12 }}
-                {{- end }}
-              {{ end }}
-              {{ end }}
+              {{- end }}
           restartPolicy: OnFailure
           {{- with .Values.controller.nodeSelector }}
           nodeSelector:
