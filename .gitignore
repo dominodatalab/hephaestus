@@ -1,6 +1,9 @@
 # Binaries for programs and plugins
 bin/
 
+# IDE files
+.idea/
+
 # Test binary, built with `go test -c`
 *.test
 
