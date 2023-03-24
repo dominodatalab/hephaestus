@@ -60,6 +60,3 @@ _Additional runnable commands can be found in the `pkg/cmd/controller/root.go` f
 Hephaestus is now set up and running locally. From here, the easiest way to create an image build is to run `kubectl create -f scripts/development/imagebuild.yaml`
 
 _If you encounter any trouble or need assistance, please reach out to the `#platform-help` channel._
-
-
-
