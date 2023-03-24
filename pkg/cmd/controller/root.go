@@ -57,7 +57,7 @@ func newRunGCCommand() *cobra.Command {
 		Use:   "run-gc",
 		Short: "Runs the image builder automatic cleanup",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfgFile, err := cmd.PersistentFlags().GetString("config")
+			cfgFile, err := cmd.Flags().GetString("config")
 			if err != nil {
 				return err
 			}
