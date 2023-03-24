@@ -37,7 +37,6 @@ func (c *Clientset) Discovery() discovery.DiscoveryInterface {
 	return c.DiscoveryClient
 }
 
-
 // NewForConfig creates a new Clientset for the given config.
 // If config's RateLimiter is not set and QPS and Burst are acceptable,
 // NewForConfig will generate a rate-limiter in configShallowCopy.
