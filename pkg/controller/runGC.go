@@ -25,8 +25,7 @@ type ImageBuildGC struct {
 	namespaces     []string
 }
 
-func NewImageBuildGC(maxIBRetention int, log logr.Logger, ibNamespaces []string) (
-	*ImageBuildGC, error) {
+func NewImageBuildGC(maxIBRetention int, log logr.Logger, ibNamespaces []string) (*ImageBuildGC, error) {
 	config, err := kubernetes.RestConfig()
 	if err != nil {
 		return nil, err
@@ -115,6 +114,7 @@ func (gc *ImageBuildGC) GCImageBuilds(ctx context.Context, log logr.Logger, name
 		}
 		log.Info("Deleted build", "name", build.Name, "namespace", build.Namespace)
 	}
+	// TODO: Once we update to go version 1.20, we can use errors.Join here.
 	if len(errList) > 0 {
 		var builder strings.Builder
 		for _, err := range errList {

@@ -4,19 +4,19 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	fakeHeph "github.com/dominodatalab/hephaestus/pkg/clientset/fake"
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8s "k8s.io/client-go/kubernetes"
-	k8stesting "k8s.io/client-go/testing"
-
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 )
 
 func TestGetNamespaces(t *testing.T) {
@@ -76,24 +76,22 @@ func TestGetNamespaces(t *testing.T) {
 
 func TestCleanUpCleanUpIBSuccess(t *testing.T) {
 	fakeClient := fakeHeph.NewSimpleClientset()
-	fakeClient.Fake.PrependReactor(
-		"list", "imagebuilds", func(action k8stesting.Action) (bool, runtime.Object, error) {
-			obj := &hephv1.ImageBuildList{
-				Items: []hephv1.ImageBuild{
-					{
-						Status: hephv1.ImageBuildStatus{
-							Phase: "Failed",
-						},
-						ObjectMeta: metav1.ObjectMeta{Namespace: "aloha"},
-					},
-				},
-			}
-			return true, obj, nil
-		})
-	fakeClient.Fake.PrependReactor(
-		"delete", "imagebuilds", func(action k8stesting.Action) (bool, runtime.Object, error) {
-			return true, nil, nil
-		})
+	ctx := context.Background()
+	ibv1 := fakeClient.HephaestusV1().ImageBuilds("aloha")
+
+	ib := hephv1.ImageBuild{
+		Status: hephv1.ImageBuildStatus{
+			Phase: hephv1.PhaseFailed,
+		},
+		ObjectMeta: metav1.ObjectMeta{Namespace: "aloha"},
+	}
+
+	ibv1.Create(ctx, &ib, metav1.CreateOptions{})
+
+	ogIbList, listErr := ibv1.List(ctx, metav1.ListOptions{})
+	assert.NoError(t, listErr)
+	assert.Len(t, ogIbList.Items, 1)
+
 	FakeGC := &ImageBuildGC{
 		maxIBRetention: 0,
 		hephClient:     fakeClient,
@@ -102,9 +100,57 @@ func TestCleanUpCleanUpIBSuccess(t *testing.T) {
 	err := FakeGC.GCImageBuilds(context.Background(), logr.Discard(), "aloha")
 	require.NoError(t, err)
 
-	if len(fakeClient.Fake.Actions()) != 2 {
-		t.Errorf("Expected one action, got %d", len(fakeClient.Fake.Actions()))
+	ibList, secondCallListErr := ibv1.List(ctx, metav1.ListOptions{})
+	assert.NoError(t, secondCallListErr)
+	assert.Len(t, ibList.Items, 0)
+}
+
+func TestCleanUpCleanUpIBSuccessSortOrder(t *testing.T) {
+	fakeClient := fakeHeph.NewSimpleClientset()
+	ibv1 := fakeClient.HephaestusV1().ImageBuilds("aloha")
+	oldIb := hephv1.ImageBuild{
+		Status: hephv1.ImageBuildStatus{
+			Phase: hephv1.PhaseSucceeded,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "delete-me-oldest-ib",
+			Namespace:         "aloha",
+			CreationTimestamp: metav1.NewTime(time.Now().Add(-10 * time.Minute)),
+		},
 	}
+	newIb := hephv1.ImageBuild{
+		Status: hephv1.ImageBuildStatus{
+			Phase: hephv1.PhaseSucceeded,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "keep-me-newest-ib",
+			Namespace:         "aloha",
+			CreationTimestamp: metav1.NewTime(time.Now()),
+		},
+	}
+
+	ctx := context.Background()
+	ibv1.Create(ctx, &oldIb, metav1.CreateOptions{})
+	ibv1.Create(ctx, &newIb, metav1.CreateOptions{})
+
+	ogIbs, listErr := ibv1.List(ctx, metav1.ListOptions{})
+	require.NoError(t, listErr)
+	assert.Len(t, ogIbs.Items, 2)
+
+	FakeGC := &ImageBuildGC{
+		maxIBRetention: 1,
+		hephClient:     fakeClient,
+		namespaces:     []string{"aloha"},
+	}
+
+	err := FakeGC.GCImageBuilds(context.Background(), logr.Discard(), "aloha")
+	require.NoError(t, err)
+
+	ibs, err := ibv1.List(ctx, metav1.ListOptions{})
+	require.NoError(t, err)
+
+	assert.Len(t, ibs.Items, 1)
+	assert.Equal(t, ibs.Items[0].Name, "keep-me-newest-ib")
 }
 
 func TestCleanUpIBsListErr(t *testing.T) {
@@ -125,13 +171,6 @@ func TestCleanUpIBsListErr(t *testing.T) {
 
 func TestCleanUpIBsNoIbs(t *testing.T) {
 	fakeClientErr := fakeHeph.NewSimpleClientset()
-	fakeClientErr.Fake.PrependReactor(
-		"list", "imagebuilds", func(action k8stesting.Action) (bool, runtime.Object, error) {
-			obj := &hephv1.ImageBuildList{
-				Items: []hephv1.ImageBuild{},
-			}
-			return true, obj, nil
-		})
 	FakeGC := &ImageBuildGC{
 		maxIBRetention: 1,
 		hephClient:     fakeClientErr,
@@ -142,53 +181,73 @@ func TestCleanUpIBsNoIbs(t *testing.T) {
 }
 
 func TestCleanUpLessThanMaxRetention(t *testing.T) {
-	fakeClientErr := fakeHeph.NewSimpleClientset()
-	fakeClientErr.Fake.PrependReactor(
-		"list", "imagebuilds", func(action k8stesting.Action) (bool, runtime.Object, error) {
-			obj := &hephv1.ImageBuildList{
-				Items: []hephv1.ImageBuild{
-					{
-						Status: hephv1.ImageBuildStatus{
-							Phase: "Failed",
-						},
-						ObjectMeta: metav1.ObjectMeta{Namespace: "aloha"},
-					},
-				},
-			}
-			return true, obj, nil
-		})
+	fakeClient := fakeHeph.NewSimpleClientset()
+	ibv1 := fakeClient.HephaestusV1().ImageBuilds("aloha")
+	ib := hephv1.ImageBuild{
+		Status: hephv1.ImageBuildStatus{
+			Phase: hephv1.PhaseFailed,
+		},
+		ObjectMeta: metav1.ObjectMeta{Namespace: "aloha"},
+	}
+
+	ctx := context.Background()
+	ibv1.Create(ctx, &ib, metav1.CreateOptions{})
+
+	ogIbs, listErr := ibv1.List(ctx, metav1.ListOptions{})
+	require.NoError(t, listErr)
+	assert.Len(t, ogIbs.Items, 1)
+
 	FakeGC := &ImageBuildGC{
 		maxIBRetention: 1,
-		hephClient:     fakeClientErr,
+		hephClient:     fakeClient,
 		namespaces:     []string{"aloha"},
 	}
 	err := FakeGC.GCImageBuilds(context.Background(), logr.Discard(), "aloha")
 	require.NoError(t, err)
+
+	ibs, secondCallListErr := ibv1.List(ctx, metav1.ListOptions{})
+	require.NoError(t, secondCallListErr)
+	assert.Len(t, ibs.Items, 1)
 }
 
 func TestCleanUpMultipleBuildFailedDeletes(t *testing.T) {
-	fakeClientErr := fakeHeph.NewSimpleClientset()
-	fakeClientErr.Fake.PrependReactor(
-		"list", "imagebuilds", func(action k8stesting.Action) (bool, runtime.Object, error) {
-			obj := &hephv1.ImageBuildList{
-				Items: []hephv1.ImageBuild{
-					{
-						Status: hephv1.ImageBuildStatus{
-							Phase: "Failed",
-						},
-						ObjectMeta: metav1.ObjectMeta{Namespace: "aloha"},
-					},
-				},
-			}
-			return true, obj, nil
-		})
-	fakeClientErr.Fake.PrependReactor(
+	fakeClient := fakeHeph.NewSimpleClientset()
+	ibv1 := fakeClient.HephaestusV1().ImageBuilds("aloha")
+	ib := hephv1.ImageBuild{
+		Status: hephv1.ImageBuildStatus{
+			Phase: hephv1.PhaseFailed,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "thing1",
+			Namespace: "aloha",
+		},
+	}
+
+	ib2 := hephv1.ImageBuild{
+		Status: hephv1.ImageBuildStatus{
+			Phase: hephv1.PhaseFailed,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "thing2",
+			Namespace: "aloha",
+		},
+	}
+
+	ctx := context.Background()
+	ibv1.Create(ctx, &ib, metav1.CreateOptions{})
+	ibv1.Create(ctx, &ib2, metav1.CreateOptions{})
+
+	ogIbs, listErr := ibv1.List(ctx, metav1.ListOptions{})
+	require.NoError(t, listErr)
+	assert.Len(t, ogIbs.Items, 2)
+
+	fakeClient.Fake.PrependReactor(
 		"delete", "imagebuilds", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			return true, nil, fmt.Errorf("failed ib delete")
 		})
 	FakeGC := &ImageBuildGC{
 		maxIBRetention: 0,
-		hephClient:     fakeClientErr,
+		hephClient:     fakeClient,
 		namespaces:     []string{"aloha"},
 	}
 	err := FakeGC.GCImageBuilds(context.Background(), logr.Discard(), "aloha")
