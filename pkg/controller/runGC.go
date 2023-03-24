@@ -119,7 +119,7 @@ func (gc *ImageBuildGC) CleanUpIBs(ctx context.Context, log logr.Logger, namespa
 		}
 		log.Info("Deleted build", "name", build.Name, "namespace", build.Namespace)
 	}
-	if len(errList) >= 0 {
+	if len(errList) > 0 {
 		var builder strings.Builder
 		for _, err := range errList {
 			builder.WriteString(err.Error())
