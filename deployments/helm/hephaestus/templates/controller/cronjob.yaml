@@ -1,13 +1,36 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: image-build-gc
+  name: {{ include "hephaestus.manager.name" . }}
 spec:
-  schedule: "* * * * *"
+  schedule: {{ .Values.controller.ibGarbageCollector.interval | quote }}
   jobTemplate:
     spec:
       template:
+        metadata:
+          annotations:
+            checksum/config: {{ include (print $.Template.BasePath "/controller/secret.yaml") . | sha256sum }}
+            {{- if .Values.controller.metrics.enabled }}
+            prometheus.io/port: "{{ .Values.controller.manager.metricsPort }}"
+            prometheus.io/scrape: "true"
+            {{- end }}
+            {{- with .Values.controller.podAnnotations }}
+            {{- toYaml . | trimSuffix "\n" | nindent 8 }}
+            {{- end }}
+            {{- with .Values.podAnnotations }}
+            {{- toYaml . | nindent 8 }}
+            {{- end }}
+          labels:
+            {{- include "hephaestus.controller.labels.matchLabels" . | nindent 12 }}
+              {{- with .Values.controller.podLabels }}
+              {{- toYaml . | trimSuffix "\n" | nindent 12 }}
+              {{- end }}
+              {{- with .Values.podLabels }}
+              {{- toYaml . | nindent 12 }}
+              {{- end }}
         spec:
+          securityContext:
+            {{- toYaml .Values.controller.podSecurityContext | nindent 12 }}
           volumes:
             - name: config-vol
               secret:
@@ -15,18 +38,42 @@ spec:
           serviceAccountName: {{ include "hephaestus.serviceAccountName" . }}
           containers:
             - name: image-build-gc
+              securityContext:
+                {{- toYaml .Values.controller.manager.containerSecurityContext | nindent 16 }}
               image: {{ include "hephaestus.manager.image" . }}
+              imagePullPolicy: {{ .Values.controller.manager.image.pullPolicy }}
               volumeMounts:
                 - name: config-vol
                   readOnly: true
                   mountPath: /etc/hephaestus/config.yaml
                   subPath: config.yaml
-              imagePullPolicy: IfNotPresent
               command: [ "hephaestus-controller" ]
               args:
                 - run-gc
                 - --enabled=true
-                - --maxRetention=2
+                - --maxIBRetention=2
                 - --config=/etc/hephaestus/config.yaml
-                - echo IB Cron job GC started
+              {{- with .Values.controller.manager }}
+              {{- if .extraEnvVars  }}
+              env:
+                {{- with .extraEnvVars }}
+                {{- include "common.tplvalues.render" (dict "value" . "context" $) | nindent 12 }}
+                {{- end }}
+              {{ end }}
+              {{ end }}
           restartPolicy: OnFailure
+          {{- with .Values.controller.nodeSelector }}
+          nodeSelector:
+          {{- toYaml . | nindent 8 }}
+          {{- end }}
+          {{- with .Values.controller.affinity }}
+          affinity:
+            { { - toYaml . | nindent 8 }}
+          {{- end }}
+          {{- with .Values.controller.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 8 }}
+          {{- end }}
+          {{- with .Values.controller.priorityClassName }}
+          priorityClassName: {{ . | quote }}
+          {{- end }}
