@@ -2,7 +2,10 @@ package controller
 
 import (
 	"context"
+	"errors"
+	"os"
 	"sort"
+	"strings"
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/hephaestus/pkg/clientset"
@@ -75,17 +78,17 @@ func getAllNamespaces(config *rest.Config) ([]string, error) {
 	return ns, nil
 }
 
-func (gc *ImageBuildGC) CleanUpIBs(ctx context.Context, log logr.Logger, namespace string) {
+func (gc *ImageBuildGC) CleanUpIBs(ctx context.Context, log logr.Logger, namespace string) error {
 	crdList, err := gc.hephClient.HephaestusV1().ImageBuilds(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		log.Info("Unable to access a list of IBs, not starting IB clean up", "error", err)
-		return
+		return err
 	}
 
 	listLen := len(crdList.Items)
 	if listLen == 0 {
 		log.V(1).Info("No build resources found, aborting")
-		return
+		return err
 	}
 
 	var builds []hephv1.ImageBuild
@@ -99,21 +102,34 @@ func (gc *ImageBuildGC) CleanUpIBs(ctx context.Context, log logr.Logger, namespa
 	if len(builds) <= gc.maxIBRetention {
 		log.Info("Total resources are less than or equal to retention limit, aborting",
 			"resourceCount", len(builds), "retentionCount", gc.maxIBRetention)
-		return
+		return err
 	}
 	log.Info("Total resources eligible for deletion", "count", len(builds))
 	sort.Slice(builds, func(i, j int) bool {
 		return builds[i].CreationTimestamp.Before(&builds[j].CreationTimestamp)
 	})
+
+	var errList []error
 	deletePolicy := metav1.DeletePropagationForeground
 	for _, build := range builds[:len(builds)-gc.maxIBRetention] {
 		if err := gc.hephClient.HephaestusV1().ImageBuilds(namespace).Delete(ctx, build.Name,
 			metav1.DeleteOptions{PropagationPolicy: &deletePolicy}); err != nil {
 			log.Info("Failed to delete build", "name", build.Name, "namespace", build.Namespace, "error", err)
+			errList = append(errList, err)
 		}
 		log.Info("Deleted build", "name", build.Name, "namespace", build.Namespace)
 	}
+	if len(errList) >= 0 {
+		var builder strings.Builder
+		for _, err := range errList {
+			builder.WriteString(err.Error())
+			builder.WriteString("; ")
+		}
+		return errors.New(builder.String())
+	}
+
 	log.Info("Cleanup complete")
+	return nil
 }
 
 func RunGC(maxIBRetention int, cfg config.Manager) error {
@@ -132,7 +148,11 @@ func RunGC(maxIBRetention int, cfg config.Manager) error {
 
 	log.Info("Launching Image Build Clean up", "maxIBRetention", gc.maxIBRetention, "namespaces", gc.namespaces)
 	for _, ns := range gc.namespaces {
-		gc.CleanUpIBs(ctx, log, ns)
+		err := gc.CleanUpIBs(ctx, log, ns)
+		if err != nil {
+			log.Info("Exiting Image Builder GC due to error: ", "error", err)
+			os.Exit(1)
+		}
 	}
 	return nil
 }
