@@ -12,10 +12,10 @@ spec:
           annotations:
             checksum/config: {{ include (print $.Template.BasePath "/controller/secret.yaml") . | sha256sum }}
             {{- with .Values.controller.podAnnotations }}
-            {{- toYaml . | trimSuffix "\n" | nindent 8 }}
+            {{- toYaml . | trimSuffix "\n" | nindent 12 }}
             {{- end }}
             {{- with .Values.podAnnotations }}
-            {{- toYaml . | nindent 8 }}
+            {{- toYaml . | nindent 12 }}
             {{- end }}
           labels:
               {{- include "hephaestus.controller.labels.matchLabels" . | nindent 12 }}
@@ -56,15 +56,15 @@ spec:
           restartPolicy: OnFailure
           {{- with .Values.controller.nodeSelector }}
           nodeSelector:
-          {{- toYaml . | nindent 8 }}
+          {{- toYaml . | nindent 10 }}
           {{- end }}
           {{- with .Values.controller.affinity }}
           affinity:
-            { { - toYaml . | nindent 8 }}
+            {{- toYaml . | nindent 10 }}
           {{- end }}
           {{- with .Values.controller.tolerations }}
           tolerations:
-            {{- toYaml . | nindent 8 }}
+            {{- toYaml . | nindent 10 }}
           {{- end }}
           {{- with .Values.controller.priorityClassName }}
           priorityClassName: {{ . | quote }}
