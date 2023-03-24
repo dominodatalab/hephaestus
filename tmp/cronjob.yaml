@@ -1,0 +1,54 @@
+# Source: hephaestus/templates/controller/cronjob.yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hephaestus-manager-cronjob
+  labels:
+    app.kubernetes.io/name: hephaestus
+    helm.sh/chart: hephaestus-0.0.0
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: controller
+spec:
+  schedule: "* * * * *"
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          annotations:
+            checksum/config: 587ee1ae4df8b1d4349fce96d3e3ec30c125d221825249257a9cee916ea8daee
+          labels:
+            app.kubernetes.io/name: hephaestus
+            app.kubernetes.io/instance: release-name
+            app.kubernetes.io/component: controller
+        spec:
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            seLinuxOptions:
+              type: spc_t
+          volumes:
+            - name: config-vol
+              secret:
+                secretName: hephaestus-config
+          serviceAccountName: hephaestus
+          containers:
+            - name: image-build-gc
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+              image: ghcr.io/dominodatalab/hephaestus:sha-bb77559@sha256:f4e441ca74753f1e5a3b206719ed1d6736acaaaff59b90c1c2b287964e12d846
+              imagePullPolicy: IfNotPresent
+              volumeMounts:
+                - name: config-vol
+                  readOnly: true
+                  mountPath: /etc/hephaestus/config.yaml
+                  subPath: config.yaml
+              command: [ "hephaestus-controller" ]
+              args:
+                - run-gc
+                - --maxIBRetention=5
+                - --config=/etc/hephaestus/config.yaml
+          restartPolicy: OnFailure

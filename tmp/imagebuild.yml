@@ -1,0 +1,10 @@
+apiVersion: hephaestus.dominodatalab.com/v1
+kind: ImageBuild
+metadata:
+  generateName: local-test
+spec:
+  context: http://host.minikube.internal:8000/context.tgz
+  images:
+    - username/repo:tag
+  buildArgs:
+    - ENV=development
