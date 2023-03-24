@@ -116,17 +116,12 @@ func (gc *ImageBuildGC) CleanUpIBs(ctx context.Context, log logr.Logger, namespa
 	log.Info("Cleanup complete")
 }
 
-func RunGC(enabled bool, maxIBRetention int, cfg config.Manager) error {
+func RunGC(maxIBRetention int, cfg config.Manager) error {
 	log := ctrlzap.New(
 		ctrlzap.UseDevMode(true),
 		ctrlzap.Encoder(zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())),
 	)
 	log = log.WithName("GC")
-
-	if !enabled {
-		log.Info("Auto IB clean up disabled, please manually clean up your image builds.")
-		return nil
-	}
 	ctx := context.Background()
 
 	gc, err := NewImageBuildGC(maxIBRetention, log, cfg.WatchNamespaces)

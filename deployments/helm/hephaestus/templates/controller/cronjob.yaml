@@ -50,7 +50,6 @@ spec:
               command: [ "hephaestus-controller" ]
               args:
                 - run-gc
-                - --enabled=true
                 - --maxIBRetention=2
                 - --config=/etc/hephaestus/config.yaml
               {{- with .Values.controller.manager }}

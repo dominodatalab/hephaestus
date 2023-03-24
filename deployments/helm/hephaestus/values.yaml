@@ -117,13 +117,16 @@ controller:
   # Additional volume mounts added to both the manager and vector containers
   extraVolumeMounts: []
 
+  ibGarbageCollector:
+    interval: "* * * * *"
+
   # Manager configuration
   manager:
     # Manager image (default image tag is the chart appVersion)
     image:
       registry: ghcr.io
       repository: dominodatalab/hephaestus
-      tag: ""
+      tag: "sha-65caed1@sha256:f4e036d9c419456056977f0fe89a5a8bbea386006ba6de8b0d53e8f83e7dcb9e"
       pullPolicy: IfNotPresent
       pullSecrets: []
 
