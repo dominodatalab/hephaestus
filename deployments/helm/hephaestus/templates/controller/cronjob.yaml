@@ -49,10 +49,18 @@ spec:
                 - run-gc
                 - --maxIBRetention={{ .Values.controller.ibGarbageCollector.maxIBRetention | int }}
                 - --config=/etc/hephaestus/config.yaml
-              {{- with .Values.controller.manager.extraEnvVars  }}
+              {{- with .Values.controller.manager }}
+              {{- if or .extraEnvVars $.Values.podEnv }}
               env:
-                {{- include "common.tplvalues.render" (dict "value" . "context" $) | nindent 12 }}
+              {{- with .extraEnvVars }}
+                {{- include "common.tplvalues.render" (dict "value" . "context" $) | nindent 14 }}
               {{- end }}
+              {{- with $.Values.podEnv }}
+                {{- toYaml . | nindent 14 }}
+              {{- end }}
+              {{- end }}
+              {{- end }}
+
           {{- with .Values.controller.nodeSelector }}
           nodeSelector:
             {{- toYaml . | nindent 12 }}
