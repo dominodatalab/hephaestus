@@ -53,18 +53,17 @@ spec:
               env:
                 {{- include "common.tplvalues.render" (dict "value" . "context" $) | nindent 12 }}
               {{- end }}
-          restartPolicy: OnFailure
           {{- with .Values.controller.nodeSelector }}
           nodeSelector:
-          {{- toYaml . | nindent 10 }}
+            {{- toYaml . | nindent 12 }}
           {{- end }}
           {{- with .Values.controller.affinity }}
           affinity:
-            {{- toYaml . | nindent 10 }}
+            {{- toYaml . | nindent 12 }}
           {{- end }}
           {{- with .Values.controller.tolerations }}
           tolerations:
-            {{- toYaml . | nindent 10 }}
+            {{- toYaml . | nindent 12 }}
           {{- end }}
           {{- with .Values.controller.priorityClassName }}
           priorityClassName: {{ . | quote }}
