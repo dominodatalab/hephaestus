@@ -13,7 +13,7 @@ minikube start \
   --cpus=4 \
   --memory=16g \
   --disk-size=100g \
-  --driver=hyperkit \
+  --ports 127.0.0.1:5672:5672 \
   --addons=kong,ingress-dns,metrics-server \
   --wait=true
 
