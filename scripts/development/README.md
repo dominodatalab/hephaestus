@@ -8,7 +8,7 @@ Before starting the setup process, ensure that you have access to the Hephaestus
 `WEBHOOK_SERVER_CERT_DIR=/<your-path-to>/hephaestus/local-development/webhook-certs`
 
 ### Setup Process
-In the Hephaestus repository, run go mod tidy to ensure that all dependencies are installed.
+In the Hephaestus repository, run `go mod tidy` to ensure that all dependencies are installed.
 Set the necessary webhook environment variable by adding the following program arguments: start -c local-development/hephaestus.yaml.
 Run the setup scripts available under the scripts/development directory. The scripts need to be run in the following order:
 1. `00-sanity-check.sh`: This script asserts that required executables are installed on the host.
