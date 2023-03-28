@@ -39,8 +39,8 @@ spec:
       serviceAccountName: {{ include "hephaestus.buildkit.fullname" . }}
       securityContext:
         runAsNonRoot: {{ .Values.buildkit.rootless }}
-        runAsUser: {{ ternary 1000 0 .Values.buildkit.rootless }}
-        fsGroup: {{ ternary 1000 0 .Values.buildkit.rootless }}
+        runAsUser: {{ ternary .Values.buildkit.rootlessUser 0 .Values.buildkit.rootless }}
+        fsGroup: {{ ternary .Values.buildkit.rootlessUser 0 .Values.buildkit.rootless }}
         fsGroupChangePolicy: "OnRootMismatch"
         seLinuxOptions:
           type: spc_t
@@ -49,8 +49,8 @@ spec:
           securityContext:
             {{- if .Values.buildkit.rootless }}
             # NOTE: To change UID/GID, you need to rebuild the image
-            runAsUser: 1000
-            runAsGroup: 1000
+            runAsUser: {{ .Values.buildkit.rootlessUser }}
+            runAsGroup: {{ .Values.buildkit.rootlessUser }}
             seccompProfile:
               type: Unconfined
             {{- else }}
