@@ -41,8 +41,8 @@ spec:
               imagePullPolicy: {{ .Values.controller.manager.image.pullPolicy }}
               volumeMounts:
                 - name: config-vol
-                  secret:
-                    secretName: {{ include "hephaestus.configSecretName" . }}
+                  mountPath: /config.yaml
+                  subPath: config.yaml
               command: [ "hephaestus-controller" ]
               args:
                 - run-gc
