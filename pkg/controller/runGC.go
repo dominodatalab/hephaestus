@@ -75,8 +75,7 @@ func getAllNamespaces(k8sClient k8s.Interface) ([]string, error) {
 func (gc *ImageBuildGC) GCImageBuilds(ctx context.Context, log logr.Logger, namespace string) error {
 	crdList, err := gc.hephClient.HephaestusV1().ImageBuilds(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		log.Info("Unable to access a list of IBs, not starting Image Build GC", "error", err)
-		return err
+		return fmt.Errorf("unable to access a list of IBs, not starting Image Build GC: %w", err)
 	}
 
 	listLen := len(crdList.Items)
