@@ -1,0 +1,78 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "hephaestus.manager.name" . }}-cronjob
+  labels: {{- include "hephaestus.controller.labels.standard" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.controller.completedImageBuildCleanup.interval | quote }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ .Values.controller.completedImageBuildCleanup.backoffLimit | int }}
+      template:
+        metadata:
+          annotations:
+            checksum/config: {{ include (print $.Template.BasePath "/controller/secret.yaml") . | sha256sum }}
+            {{- with .Values.controller.podAnnotations }}
+            {{- toYaml . | trimSuffix "\n" | nindent 12 }}
+            {{- end }}
+            {{- with .Values.podAnnotations }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          labels:
+            {{- include "hephaestus.controller.labels.matchLabels" . | nindent 12 }}
+            {{- with .Values.controller.podLabels }}
+            {{- toYaml . | trimSuffix "\n" | nindent 12 }}
+            {{- end }}
+            {{- with .Values.podLabels }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+        spec:
+          securityContext:
+            {{- toYaml .Values.controller.podSecurityContext | nindent 12 }}
+          restartPolicy: Never
+          volumes:
+            - name: config-vol
+              secret:
+                secretName: {{ include "hephaestus.configSecretName" . }}
+          serviceAccountName: {{ include "hephaestus.serviceAccountName" . }}
+          containers:
+            - name: image-build-gc
+              securityContext:
+                {{- toYaml .Values.controller.manager.containerSecurityContext | nindent 16 }}
+              image: {{ include "hephaestus.manager.image" . }}
+              imagePullPolicy: {{ .Values.controller.manager.image.pullPolicy }}
+              volumeMounts:
+                - name: config-vol
+                  mountPath: /etc/hephaestus/config.yaml
+                  subPath: config.yaml
+              command: [ "hephaestus-controller" ]
+              args:
+                - run-gc
+                - --maxIBRetention={{ .Values.controller.completedImageBuildCleanup.retainMax | int }}
+                - --config=/etc/hephaestus/config.yaml
+              {{- with .Values.controller.manager }}
+              {{- if or .extraEnvVars $.Values.podEnv }}
+              env:
+              {{- with .extraEnvVars }}
+                {{- include "common.tplvalues.render" (dict "value" . "context" $) | nindent 14 }}
+              {{- end }}
+              {{- with $.Values.podEnv }}
+                {{- toYaml . | nindent 14 }}
+              {{- end }}
+              {{- end }}
+              {{- end }}
+          {{- with .Values.controller.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.controller.affinity }}
+          affinity:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.controller.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.controller.priorityClassName }}
+          priorityClassName: {{ . | quote }}
+          {{- end }}

@@ -117,6 +117,11 @@ controller:
   # Additional volume mounts added to both the manager and vector containers
   extraVolumeMounts: []
 
+  completedImageBuildCleanup:
+    interval: "@daily"
+    retainMax: 5
+    backoffLimit: 3
+
   # Manager configuration
   manager:
     # Manager image (default image tag is the chart appVersion)

@@ -67,6 +67,7 @@ rules:
       - ""
     resources:
       - services
+      - namespaces
     verbs:
       - list
       - watch
