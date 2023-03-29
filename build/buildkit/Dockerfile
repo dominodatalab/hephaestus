@@ -7,12 +7,24 @@ RUN apk update && \
 
 FROM moby/buildkit:${BUILDKIT_TAG} AS rootless
 ARG ISTIO_GID=1337
+ARG UID=1000
 USER root
 RUN apk update && \
     apk upgrade && \
     rm -rf /var/cache/apk
+
+# You can ignore "deluser: can't find user in /etc/group"
+RUN deluser user && \
+    adduser -u $UID -D user && \
+    chown -R user:user /home/user && \
+    mkdir -p /run/user/$UID && \
+    chown user:root /run/user/$UID
+
+ENV XDG_RUNTIME_DIR=/run/user/$UID
+ENV BUILDKIT_HOST=unix:///run/user/$UID/buildkit/buildkitd.sock
+
 RUN addgroup -S -g $ISTIO_GID istio && \
     addgroup user istio && \
     echo user:100000:150000 | tee /etc/subuid | tee /etc/subgid && \
     echo user:$ISTIO_GID:1 >> /etc/subgid
-USER 1000:1000
+USER $UID:$UID

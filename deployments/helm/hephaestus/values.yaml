@@ -257,6 +257,10 @@ buildkit:
   # Run buildkit in rootless mode
   rootless: true
 
+  # UID for rootless user in rootless mode
+  # NOTE: You MUST have a custom image if using anything other than 1000
+  rootlessUser: 1000
+
   # Amount of storage GC keeps locally (bytes). This value should be less than the
   # total amount of available persistent storage (e.g. 75% of 20Gi)
   gcKeepStorage: 15000000000

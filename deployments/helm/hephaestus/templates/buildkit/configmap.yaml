@@ -9,7 +9,7 @@ data:
   {{- with .Values.buildkit }}
   buildkitd.toml: |
     [grpc]
-      address = [ "tcp://0.0.0.0:{{ .service.port }}", "{{ .rootless | ternary "unix:///run/user/1000/buildkit/buildkitd.sock" "unix:///run/buildkit/buildkitd.sock" }}" ]
+      address = [ "tcp://0.0.0.0:{{ .service.port }}", "{{ .rootless | ternary (printf "unix:///run/user/%s/buildkit/buildkitd.sock" .rootlessUser) "unix:///run/buildkit/buildkitd.sock" }}" ]
 
       {{- if .mtls.enabled }}
       [grpc.tls]
