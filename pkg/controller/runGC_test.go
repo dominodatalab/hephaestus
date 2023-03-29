@@ -86,11 +86,22 @@ func TestCleanUpCleanUpIBSuccess(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Namespace: "aloha"},
 	}
 
+	ibKeep := hephv1.ImageBuild{
+		Status: hephv1.ImageBuildStatus{
+			Phase: hephv1.PhaseInitializing,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "keep-me",
+			Namespace: "aloha",
+		},
+	}
+
 	ibv1.Create(ctx, &ib, metav1.CreateOptions{})
+	ibv1.Create(ctx, &ibKeep, metav1.CreateOptions{})
 
 	ogIbList, listErr := ibv1.List(ctx, metav1.ListOptions{})
 	assert.NoError(t, listErr)
-	assert.Len(t, ogIbList.Items, 1)
+	assert.Len(t, ogIbList.Items, 2)
 
 	FakeGC := &ImageBuildGC{
 		maxIBRetention: 0,
@@ -102,7 +113,7 @@ func TestCleanUpCleanUpIBSuccess(t *testing.T) {
 
 	ibList, secondCallListErr := ibv1.List(ctx, metav1.ListOptions{})
 	assert.NoError(t, secondCallListErr)
-	assert.Len(t, ibList.Items, 0)
+	assert.Len(t, ibList.Items, 1)
 }
 
 func TestCleanUpCleanUpIBSuccessSortOrder(t *testing.T) {

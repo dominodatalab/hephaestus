@@ -4,9 +4,10 @@ metadata:
   name: {{ include "hephaestus.manager.name" . }}-cronjob
   labels: {{- include "hephaestus.controller.labels.standard" . | nindent 4 }}
 spec:
-  schedule: {{ .Values.controller.ibGarbageCollector.interval | quote }}
+  schedule: {{ .Values.controller.completedImageBuildCleanup.interval | quote }}
   jobTemplate:
     spec:
+      backoffLimit: {{ .Values.controller.completedImageBuildCleanup.backoffLimit | int }}
       template:
         metadata:
           annotations:
@@ -18,17 +19,17 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
           labels:
-              {{- include "hephaestus.controller.labels.matchLabels" . | nindent 12 }}
-              {{- with .Values.controller.podLabels }}
-              {{- toYaml . | trimSuffix "\n" | nindent 12 }}
-              {{- end }}
-              {{- with .Values.podLabels }}
-              {{- toYaml . | nindent 12 }}
-              {{- end }}
+            {{- include "hephaestus.controller.labels.matchLabels" . | nindent 12 }}
+            {{- with .Values.controller.podLabels }}
+            {{- toYaml . | trimSuffix "\n" | nindent 12 }}
+            {{- end }}
+            {{- with .Values.podLabels }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
         spec:
           securityContext:
             {{- toYaml .Values.controller.podSecurityContext | nindent 12 }}
-          restartPolicy: OnFailure
+          restartPolicy: Never
           volumes:
             - name: config-vol
               secret:
@@ -47,7 +48,7 @@ spec:
               command: [ "hephaestus-controller" ]
               args:
                 - run-gc
-                - --maxIBRetention={{ .Values.controller.ibGarbageCollector.maxIBRetention | int }}
+                - --maxIBRetention={{ .Values.controller.completedImageBuildCleanup.retainMax | int }}
                 - --config=/etc/hephaestus/config.yaml
               {{- with .Values.controller.manager }}
               {{- if or .extraEnvVars $.Values.podEnv }}

@@ -3,7 +3,7 @@ package controller
 import (
 	"context"
 	"errors"
-	"os"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -48,8 +48,7 @@ func NewImageBuildGC(maxIBRetention int, log logr.Logger, ibNamespaces []string)
 		}
 		ns, err = getAllNamespaces(k8sClient)
 		if err != nil {
-			log.Info("Unable to access cluster namespaces")
-			return nil, err
+			return nil, fmt.Errorf("unable to access cluster namespaces: %w", err)
 		}
 		log.Info("Running GC against all namespaces")
 	}
@@ -109,8 +108,8 @@ func (gc *ImageBuildGC) GCImageBuilds(ctx context.Context, log logr.Logger, name
 	for _, build := range builds[:len(builds)-gc.maxIBRetention] {
 		if err := gc.hephClient.HephaestusV1().ImageBuilds(namespace).Delete(ctx, build.Name,
 			metav1.DeleteOptions{PropagationPolicy: &deletePolicy}); err != nil {
-			log.Info("Failed to delete build", "name", build.Name, "namespace", build.Namespace, "error", err)
-			errList = append(errList, err)
+			deleteErr := fmt.Errorf("failed to delete build %s: namespace: %s Error: %w", build.Name, build.Namespace, err)
+			errList = append(errList, deleteErr)
 		}
 		log.Info("Deleted build", "name", build.Name, "namespace", build.Namespace)
 	}
@@ -138,16 +137,14 @@ func RunGC(maxIBRetention int, cfg config.Manager) error {
 
 	gc, err := NewImageBuildGC(maxIBRetention, log, cfg.WatchNamespaces)
 	if err != nil {
-		log.Info("Error setting up GC", "error", err)
-		return err
+		return fmt.Errorf("error setting up GC: %w", err)
 	}
 
 	log.Info("Launching Image Build GC", "maxIBRetention", gc.maxIBRetention, "namespaces", gc.namespaces)
 	for _, ns := range gc.namespaces {
 		err := gc.GCImageBuilds(ctx, log, ns)
 		if err != nil {
-			log.Info("Exiting Image Builder GC due to error: ", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("exiting Image Builder GC due to error: %w", err)
 		}
 	}
 	return nil

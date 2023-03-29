@@ -117,9 +117,10 @@ controller:
   # Additional volume mounts added to both the manager and vector containers
   extraVolumeMounts: []
 
-  ibGarbageCollector:
+  completedImageBuildCleanup:
     interval: "@daily"
-    maxIBRetention: 5
+    retainMax: 5
+    backoffLimit: 3
 
   # Manager configuration
   manager:
