@@ -13,7 +13,8 @@ RUN apk update && \
     apk upgrade && \
     rm -rf /var/cache/apk
 
-RUN deluser user || echo this fails for no reason && \
+# You can ignore "deluser: can't find user in /etc/group"
+RUN deluser user && \
     adduser -u $UID -D user && \
     chown -R user:user /home/user && \
     mkdir -p /run/user/$UID && \
