@@ -62,6 +62,7 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
+        provenance: false
 
       - id: docker_push
         name: Push Docker image to GHCR
