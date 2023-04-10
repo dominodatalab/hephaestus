@@ -22,14 +22,14 @@ runs:
   using: composite
   steps:
     - name: Login to container registry
-      uses: docker/login-action@v1
+      uses: docker/login-action@v2
       with:
         registry: ${{ inputs.registry }}
         username: ${{ inputs.username }}
         password: ${{ inputs.password }}
     - id: meta
       name: Extract Docker metadata
-      uses: docker/metadata-action@v3
+      uses: docker/metadata-action@v4
       with:
         images: ${{ inputs.registry }}/${{ inputs.repository }}
         tags: |
@@ -39,7 +39,7 @@ runs:
           type=semver,pattern={{major}}.{{minor}}
           type=sha
     - name: Build and push Docker image
-      uses: docker/build-push-action@v2
+      uses: docker/build-push-action@v4
       with:
         context: .
         push: true

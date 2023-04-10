@@ -18,7 +18,7 @@ runs:
   steps:
     - id: image_source
       name: Extract image details from Helm values
-      uses: mikefarah/yq@v4.25.1
+      uses: mikefarah/yq@v4.33.2
       with:
         cmd: yq '${{ inputs.query }} | .repository + ":" + .tag' deployments/helm/hephaestus/values.yaml
 
@@ -32,18 +32,18 @@ runs:
         fi
         output="$(echo $input | awk -F/ '{print $NF}')"
 
-        echo ::set-output name=source::"$input"
-        echo ::set-output name=destination::"$output"
+        echo "source=$input" >> $GITHUB_OUTPUT
+        echo "destination=$output" >> $GITHUB_OUTPUT
 
     - name: Login to container registry
-      uses: docker/login-action@v1
+      uses: docker/login-action@v2
       with:
         registry: quay.io
         username: ${{ inputs.username }}
         password: ${{ inputs.password }}
 
     - name: Tag and push image
-      uses: akhilerm/tag-push-action@v2.0.0
+      uses: akhilerm/tag-push-action@v2.1.0
       with:
         src: ${{ steps.image_fields.outputs.source }}
         dst: quay.io/domino/${{ steps.image_fields.outputs.destination }}

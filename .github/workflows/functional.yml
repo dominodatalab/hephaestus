@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: Update PR Comment
         if: github.event_name != 'pull_request'
-        uses: peter-evans/create-or-update-comment@v2
+        uses: peter-evans/create-or-update-comment@v3
         with:
           comment-id: ${{ github.event.comment.id }}
           reactions: rocket
@@ -111,7 +111,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Authenticate with AWS
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v2
         with:
           role-to-assume: ${{ secrets.AWS_IAM_ROLE }}
           aws-region: ${{ secrets.AWS_REGION }}

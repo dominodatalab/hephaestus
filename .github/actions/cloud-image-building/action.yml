@@ -21,9 +21,10 @@ runs:
       shell: bash
 
     - name: Install Go
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
         go-version-file: test/functional/go.mod
+        cache-dependency-path: test/functional/go.sum
 
     - id: go-cache-paths
       name: Gather Go cache paths
@@ -32,22 +33,10 @@ runs:
         echo "go-mod=$(go env GOMODCACHE)" >> $GITHUB_OUTPUT
       shell: bash
 
-    - name: Go build cache
-      uses: actions/cache@v3
-      with:
-        path: ${{ steps.go-cache-paths.outputs.go-build }}
-        key: ${{ runner.os }}-go-build-${{ hashFiles('test/functional/**/*.go') }}
-
-    - name: Go mod cache
-      uses: actions/cache@v3
-      with:
-        path: ${{ steps.go-cache-paths.outputs.go-mod }}
-        key: ${{ runner.os }}-go-mod-${{ hashFiles('test/functional/go.sum') }}
-
     - name: Install Helm
       uses: azure/setup-helm@v3
       with:
-        version: v3.10.2
+        version: v3.11.2
 
     - name: Run tests
       env:
