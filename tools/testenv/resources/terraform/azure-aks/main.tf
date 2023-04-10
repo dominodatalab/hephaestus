@@ -40,6 +40,7 @@ module "aks" {
   log_analytics_workspace_enabled = false
   net_profile_pod_cidr            = "10.52.0.0/16"
   kubernetes_version              = var.kubernetes_version
+  rbac_aad                        = false
 }
 
 resource "local_file" "kubeconfig" {
