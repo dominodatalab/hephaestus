@@ -75,7 +75,7 @@ func Exists(gv metav1.GroupVersion) (bool, error) {
 // operate will read all available CRDS and apply state changes to the cluster using the processor func.
 func operate(ctx context.Context, processor crdProcessor, istio bool) error {
 	if istio {
-		quit, err := waitForIstioSidecar()
+		quit, err := kubernetes.WaitForIstioSidecar(log)
 		if err != nil {
 			return err
 		}

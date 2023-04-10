@@ -126,12 +126,21 @@ func (gc *ImageBuildGC) GCImageBuilds(ctx context.Context, log logr.Logger, name
 	return nil
 }
 
-func RunGC(maxIBRetention int, cfg config.Manager) error {
+func RunGC(maxIBRetention int, cfg config.Manager, istioEnabled bool) error {
 	log := ctrlzap.New(
 		ctrlzap.UseDevMode(true),
 		ctrlzap.Encoder(zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())),
 	)
 	log = log.WithName("GC")
+
+	if istioEnabled {
+		quit, err := kubernetes.WaitForIstioSidecar(log)
+		if err != nil {
+			return err
+		}
+		defer quit()
+	}
+
 	ctx := context.Background()
 
 	gc, err := NewImageBuildGC(maxIBRetention, log, cfg.WatchNamespaces)

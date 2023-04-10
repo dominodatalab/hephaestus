@@ -17,19 +17,9 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ env.GO_VERSION }}
-
-      - name: Cache Go modules
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
 
       - name: Cache Go tools
         uses: actions/cache@v3
@@ -61,7 +51,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
 
       - id: docker_push
         name: Push Docker image to GHCR
@@ -88,7 +78,7 @@ jobs:
 
       - id: image_tag
         name: Extract image details from Helm values
-        uses: mikefarah/yq@v4.25.1
+        uses: mikefarah/yq@v4.33.2
         with:
           cmd: yq '.buildkit.image.tag' deployments/helm/hephaestus/values.yaml
 
@@ -103,7 +93,7 @@ jobs:
           password: ${{ secrets.QUAY_PASSWORD }}
 
       - name: Build and push rootless Buildkit image to Quay
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v4
         with:
           push: true
           target: rootless
@@ -120,7 +110,7 @@ jobs:
 
       - id: image_tag
         name: Extract image details from Helm values
-        uses: mikefarah/yq@v4.25.1
+        uses: mikefarah/yq@v4.33.2
         with:
           cmd: yq '.buildkit.image.tag' deployments/helm/hephaestus/values.yaml | sed 's/-rootless//'
 
@@ -135,7 +125,7 @@ jobs:
           password: ${{ secrets.QUAY_PASSWORD }}
 
       - name: Build and push rootless Buildkit image to Quay
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v4
         with:
           push: true
           target: root
@@ -170,7 +160,7 @@ jobs:
       - name: Install Helm
         uses: azure/setup-helm@v3
         with:
-          version: v3.8.1
+          version: v3.11.2
 
       - id: helm_pkg
         name: Package Helm chart
@@ -183,7 +173,7 @@ jobs:
             semantic_version=$app_version
           fi
           helm package deployments/helm/hephaestus --app-version "$app_version" --version "$semantic_version"
-          echo ::set-output name=artifact::"hephaestus-${semantic_version}.tgz"
+          echo "artifact=hephaestus-${semantic_version}.tgz" >> $GITHUB_OUTPUT
 
       - name: Push Helm chart to GHCR
         uses: ./.github/actions/push-helm-chart
@@ -214,12 +204,12 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
 
       - name: Install KinD
         uses: engineerd/setup-kind@v0.5.0
