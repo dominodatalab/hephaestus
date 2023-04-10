@@ -211,12 +211,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      - name: Install KinD
-        uses: engineerd/setup-kind@v0.5.0
-        with:
-          version: "v0.14.0"
-          skipClusterCreation: true
-
       - name: Generate SDKS
         run: |
           export BRANCH_NAME=$(echo ${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}} | sed -r 's|/+|-|g')
