@@ -1,8 +1,9 @@
-package crd
+package kubernetes
 
 import (
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/hashicorp/go-retryablehttp"
 )
 
@@ -13,18 +14,18 @@ const (
 
 var retryClient *retryablehttp.Client
 
-func waitForIstioSidecar() (func(), error) {
-	log.Info("Checking istio sidecar")
+func WaitForIstioSidecar(logger logr.Logger) (func(), error) {
+	logger.Info("Checking istio sidecar")
 	resp, err := retryClient.Head(checkURL)
 	if err != nil {
-		log.Error(err, "Istio sidecar is not ready")
+		logger.Error(err, "Istio sidecar is not ready")
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	log.Info("Istio sidecar available")
+	logger.Info("Istio sidecar available")
 	fn := func() {
-		log.Info("Triggering istio termination")
+		logger.Info("Triggering istio termination")
 		_, _ = retryClient.Post(finishURL, "", nil)
 	}
 

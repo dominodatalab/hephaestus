@@ -53,6 +53,7 @@ func newStartCommand() *cobra.Command {
 }
 
 func newRunGCCommand() *cobra.Command {
+	var istioEnabled bool
 	cmd := &cobra.Command{
 		Use:   "run-gc",
 		Short: "Runs the image builder automatic cleanup",
@@ -74,9 +75,10 @@ func newRunGCCommand() *cobra.Command {
 				return err
 			}
 
-			return controller.RunGC(maxIBRetention, cfg.Manager)
+			return controller.RunGC(maxIBRetention, cfg.Manager, istioEnabled)
 		},
 	}
+	cmd.PersistentFlags().BoolVar(&istioEnabled, "istio-enabled", false, "Enable support for Istio sidecar container")
 	cmd.Flags().Int("maxIBRetention", 5, "Delete all ContainerImageBuild resources in a 'finished' "+
 		"state that exceed this count, we will retain the newest builds.")
 	return cmd

@@ -50,6 +50,9 @@ spec:
                 - run-gc
                 - --maxIBRetention={{ .Values.controller.completedImageBuildCleanup.retainMax | int }}
                 - --config=/etc/hephaestus/config.yaml
+                {{- if .Values.istio.enabled }}
+                - --istio-enabled
+                {{- end }}
               {{- with .Values.controller.manager }}
               {{- if or .extraEnvVars $.Values.podEnv }}
               env:
