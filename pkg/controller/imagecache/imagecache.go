@@ -6,7 +6,7 @@ import (
 	"github.com/dominodatalab/hephaestus/pkg/config"
 )
 
-func Register(mgr ctrl.Manager, cfg config.Controller) error {
+func Register(_ ctrl.Manager, _ config.Controller) error {
 	ctrl.Log.WithName("controller").WithName("imagecache").Info(
 		"Aborting registration, requires rework after other changes",
 	)

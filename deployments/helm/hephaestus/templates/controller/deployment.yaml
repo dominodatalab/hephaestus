@@ -145,8 +145,7 @@ spec:
           volumeMounts:
             - name: config-vol
               readOnly: true
-              mountPath: /etc/vector/vector.yaml
-              subPath: vector.yaml
+              mountPath: /etc/vector
             - name: log-vol
               mountPath: {{ include "hephaestus.logfileDir" . | quote }}
             - name: log-vol

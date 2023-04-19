@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -26,7 +27,6 @@ import (
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/auth"
 	"github.com/moby/buildkit/util/progress/progresswriter"
-	"github.com/pkg/errors"
 	"golang.org/x/crypto/nacl/sign"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -96,7 +96,7 @@ func (ap *authProvider) FetchToken(ctx context.Context, req *auth.FetchTokenRequ
 			return err
 		}
 		defer func() {
-			err = errors.Wrap(err, "failed to fetch oauth token")
+			err = fmt.Errorf("failed to fetch oauth token: %w", err)
 		}()
 		ap.mu.Lock()
 		name := fmt.Sprintf("[auth] %v token for %s", strings.Join(trimScopePrefix(req.Scopes), " "), req.Host)
@@ -129,7 +129,7 @@ func (ap *authProvider) FetchToken(ctx context.Context, req *auth.FetchTokenRequ
 	// do request anonymously
 	resp, err := authutil.FetchToken(ctx, http.DefaultClient, nil, to)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to fetch anonymous token")
+		return nil, fmt.Errorf("failed to fetch anonymous token: %w", err)
 	}
 	return toTokenResponse(resp.Token, resp.IssuedAt, resp.ExpiresIn), nil
 }

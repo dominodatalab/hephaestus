@@ -42,11 +42,6 @@ var (
 
 	newUUID          = uuid.NewUUID
 	statefulPodRegex = regexp.MustCompile(`^.*-(\d+)$`)
-
-	// NOTE: https://github.com/kubernetes/client-go/issues/970
-	// 	we have to hack the client during testing because the current version
-	// 	of the k8s fake client does not support the ApplyPatchType
-	garbageClientHack = false
 )
 
 const (
@@ -63,6 +58,7 @@ type AutoscalingPool struct {
 	// system shutdown
 	ctx    context.Context
 	cancel context.CancelFunc
+	done   chan struct{}
 
 	// incoming lease requests
 	requests RequestQueue
@@ -113,9 +109,11 @@ func NewPool(
 	endpointSliceListOptions := metav1.ListOptions{LabelSelector: esls.String()}
 
 	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
 	wp := &AutoscalingPool{
 		ctx:                       ctx,
 		cancel:                    cancel,
+		done:                      done,
 		log:                       o.Log,
 		poolSyncTime:              o.SyncWaitTime,
 		podMaxIdleTime:            o.MaxIdleTime,
@@ -157,7 +155,7 @@ func NewPool(
 				for wp.requests.Len() > 0 {
 					close(wp.requests.Dequeue().result)
 				}
-
+				close(done)
 				return
 			}
 		}
@@ -231,6 +229,7 @@ func (p *AutoscalingPool) Release(ctx context.Context, addr string) error {
 // Close shuts down the pool by terminating all background routines used to manage requests and garbage collection.
 func (p *AutoscalingPool) Close() {
 	p.cancel()
+	<-p.done
 }
 
 // applies lease metadata to given pod
@@ -387,7 +386,7 @@ func (p *AutoscalingPool) reconcileWorkers(ctx context.Context) error {
 		}
 
 		p.log.Info("Processing dequeued pod request with operational pod")
-		if p.processPodRequest(ctx, req, observation.Pod) || garbageClientHack {
+		if p.processPodRequest(ctx, req, observation.Pod) {
 			observation.MarkLeased()
 		}
 	}

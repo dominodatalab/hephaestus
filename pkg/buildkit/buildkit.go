@@ -2,6 +2,7 @@ package buildkit
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -16,7 +17,6 @@ import (
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/secrets/secretsprovider"
 	"github.com/moby/buildkit/util/progress/progressui"
-	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -216,7 +216,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
 			args = append(args, fmt.Sprintf("build-arg:%s", arg))
 		}
 
-		attrs, err := build.ParseOpt(args, nil)
+		attrs, err := build.ParseOpt(args)
 		if err != nil {
 			return fmt.Errorf("cannot parse build args: %w", err)
 		}

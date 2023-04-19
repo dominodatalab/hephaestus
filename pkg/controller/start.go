@@ -74,11 +74,7 @@ func Start(cfg config.Controller) error {
 	// +kubebuilder:scaffold:builder
 
 	log.Info("Starting controller manager")
-	if err = mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		return err
-	}
-
-	return nil
+	return mgr.Start(ctrl.SetupSignalHandler())
 }
 
 func configureNewRelic(log *zap.Logger, cfg config.NewRelic) (*newrelic.Application, error) {
@@ -193,9 +189,5 @@ func registerControllers(
 	}
 
 	log.Info("Registering ImageCache controller")
-	if err := imagecache.Register(mgr, cfg); err != nil {
-		return err
-	}
-
-	return nil
+	return imagecache.Register(mgr, cfg)
 }

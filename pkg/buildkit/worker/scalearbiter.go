@@ -201,7 +201,7 @@ func (a *ScaleArbiter) DetermineReplicas(requests int) int {
 		}
 	}
 
-	desiredReplicas := 0
+	var desiredReplicas int
 
 	// count is the absolute minimum number of replicas we can set
 	// all current replicas >= count are invalid or expired

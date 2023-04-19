@@ -7,8 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr/testr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/slices"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -54,7 +56,7 @@ func TestPoolGet(t *testing.T) {
 			watcher := watch.NewFake()
 			go func() {
 				defer watcher.Stop()
-				watcher.Add(validEndpointSlice())
+				watcher.Add(validEndpointSlice(p))
 			}()
 			return true, watcher, nil
 		})
@@ -97,7 +99,7 @@ func TestPoolGet(t *testing.T) {
 			watcher := watch.NewFake()
 			go func() {
 				defer watcher.Stop()
-				watcher.Add(validEndpointSlice())
+				watcher.Add(validEndpointSlice(delivered))
 			}()
 			return true, watcher, nil
 		})
@@ -195,7 +197,6 @@ func TestPoolGet(t *testing.T) {
 				defer watcher.Stop()
 
 				eps := validEndpointSlice()
-				eps.Endpoints = nil
 				watcher.Add(eps)
 			}()
 			return true, watcher, nil
@@ -240,9 +241,9 @@ func TestPoolGet(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		fakeClient := fake.NewSimpleClientset(validPod())
+		p := validPod()
+		fakeClient := fake.NewSimpleClientset(p)
 		fakeClient.PrependReactor("patch", "pods", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-			p := validPod()
 			assertLeasedPod(t, action, p)
 			return true, p, nil
 		})
@@ -250,21 +251,18 @@ func TestPoolGet(t *testing.T) {
 		fakeClient.PrependWatchReactor("endpointslices", func(action k8stesting.Action) (handled bool, ret watch.Interface, err error) {
 			watcher := watch.NewFake()
 			go func() {
-				defer watcher.Stop()
-
 				eps := validEndpointSlice()
-				eps.Endpoints = nil
 				watcher.Add(eps)
 
-				eps = validEndpointSlice()
+				eps = validEndpointSlice(p)
 				eps.Endpoints[0].Conditions.Ready = pointer.Bool(false)
 				watcher.Add(eps)
 
-				eps = validEndpointSlice()
+				eps = validEndpointSlice(p)
 				eps.Endpoints[0].Hostname = nil
 				watcher.Add(eps)
 
-				watcher.Add(validEndpointSlice())
+				watcher.Add(validEndpointSlice(p))
 			}()
 
 			return true, watcher, nil
@@ -295,9 +293,10 @@ func TestPoolGet(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
+		p := leasedPod()
 		fakeClient := fake.NewSimpleClientset(validSts())
 		fakeClient.PrependReactor("patch", "pods", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-			return true, leasedPod(), nil
+			return true, p, nil
 		})
 
 		stsUpdateChan := make(chan struct{})
@@ -315,7 +314,7 @@ func TestPoolGet(t *testing.T) {
 				watcher := watch.NewFake()
 				go func() {
 					defer watcher.Stop()
-					watcher.Add(validEndpointSlice())
+					watcher.Add(validEndpointSlice(p))
 				}()
 				return true, watcher, nil
 			})
@@ -364,13 +363,14 @@ func TestPoolGetFailedScaleUp(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	fakeClient := fake.NewSimpleClientset(validSts(), validPod())
+	p := validPod()
+	fakeClient := fake.NewSimpleClientset(validSts(), p)
 
 	fakeClient.PrependWatchReactor("endpointslices", func(action k8stesting.Action) (handled bool, ret watch.Interface, err error) {
 		watcher := watch.NewFake()
 		go func() {
 			defer watcher.Stop()
-			watcher.Add(validEndpointSlice())
+			watcher.Add(validEndpointSlice(p))
 		}()
 		return true, watcher, nil
 	})
@@ -550,11 +550,6 @@ func TestPoolRelease(t *testing.T) {
 }
 
 func TestPoolPodReconciliation(t *testing.T) {
-	garbageClientHack = true
-	t.Cleanup(func() {
-		garbageClientHack = false
-	})
-
 	tests := []struct {
 		name             string
 		objects          func() []runtime.Object
@@ -594,14 +589,16 @@ func TestPoolPodReconciliation(t *testing.T) {
 		{
 			name: "leased",
 			objects: func() []runtime.Object {
-				return []runtime.Object{leasedPod()}
+				p := leasedPod()
+				return []runtime.Object{p}
 			},
 			expectedReplicas: 1,
 		},
 		{
 			name: "leased_with_requests",
 			objects: func() []runtime.Object {
-				return []runtime.Object{leasedPod()}
+				p := leasedPod()
+				return []runtime.Object{p}
 			},
 			buildRequests:    1,
 			expectedReplicas: 2,
@@ -609,14 +606,16 @@ func TestPoolPodReconciliation(t *testing.T) {
 		{
 			name: "pending",
 			objects: func() []runtime.Object {
-				return []runtime.Object{pendingPod()}
+				p := pendingPod()
+				return []runtime.Object{p}
 			},
 			expectedReplicas: 1,
 		},
 		{
 			name: "pending_with_requests",
 			objects: func() []runtime.Object {
-				return []runtime.Object{pendingPod()}
+				p := pendingPod()
+				return []runtime.Object{p}
 			},
 			buildRequests:    1,
 			expectedReplicas: 1,
@@ -992,7 +991,18 @@ func TestPoolPodReconciliation(t *testing.T) {
 			replicasCh := make(chan int32)
 			defer close(replicasCh)
 
-			fakeClient := fake.NewSimpleClientset(tc.objects()...)
+			objects := tc.objects()
+			fakeClient := fake.NewSimpleClientset(objects...)
+			fakeClient.PrependWatchReactor("endpointslices", func(a k8stesting.Action) (handled bool, ret watch.Interface, err error) {
+				watcher := watch.NewFake()
+				if objects != nil {
+					go func() {
+						watcher.Add(validEndpointSlice(objects...))
+						t.Log("added endpoints")
+					}()
+				}
+				return true, watcher, nil
+			})
 			fakeClient.PrependReactor("update", "statefulsets", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 				scale := action.(k8stesting.UpdateAction).GetObject().(*autoscalingv1.Scale)
 				replicasCh <- scale.Spec.Replicas
@@ -1001,7 +1011,7 @@ func TestPoolPodReconciliation(t *testing.T) {
 				return true, nil, nil
 			})
 
-			wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(500*time.Millisecond), MaxIdleTime(5*time.Minute))
+			wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(500*time.Millisecond), MaxIdleTime(5*time.Minute), Logger(testr.New(t)))
 			for i := 0; i < tc.buildRequests; i++ {
 				wp.requests.Enqueue(&PodRequest{result: make(chan PodRequestResult, 1)})
 			}
@@ -1040,25 +1050,35 @@ func validSts() *appsv1.StatefulSet {
 	}
 }
 
-func validEndpointSlice() *discoveryv1.EndpointSlice {
+func validEndpointSlice(pods ...runtime.Object) *discoveryv1.EndpointSlice {
+	endpoints := make([]discoveryv1.Endpoint, 0, len(pods))
+	for i := range pods {
+		pod := pods[i].(*corev1.Pod)
+		ready := pointer.Bool(false)
+		if pod.Status.Phase == corev1.PodRunning {
+			if idx := slices.IndexFunc(pod.Status.Conditions, func(c corev1.PodCondition) bool { return c.Type == corev1.PodReady }); idx != -1 {
+				ready = pointer.Bool(pod.Status.Conditions[idx].Status == corev1.ConditionTrue)
+			}
+			endpoints = append(endpoints, discoveryv1.Endpoint{
+				Conditions: discoveryv1.EndpointConditions{
+					Ready:   ready,
+					Serving: ready,
+				},
+				Hostname: pointer.String(pod.Name),
+				TargetRef: &corev1.ObjectReference{
+					Name:      pod.Name,
+					Namespace: namespace,
+				},
+			})
+		}
+	}
+
 	return &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "buildkit-bgk87",
 			Namespace: namespace,
 		},
-		Endpoints: []discoveryv1.Endpoint{
-			{
-				Conditions: discoveryv1.EndpointConditions{
-					Ready:   pointer.Bool(true),
-					Serving: pointer.Bool(true),
-				},
-				Hostname: pointer.String("buildkit-0"),
-				TargetRef: &corev1.ObjectReference{
-					Name:      "buildkit-0",
-					Namespace: namespace,
-				},
-			},
-		},
+		Endpoints: endpoints,
 		Ports: []discoveryv1.EndpointPort{
 			{
 				Name: pointer.String("daemon"),
