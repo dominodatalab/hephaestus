@@ -1,5 +1,6 @@
+{{- $issuerKind := ternary "Issuer" "ClusterIssuer" (eq .Values.certManagerNamespace (include "hephaestus.buildkit.namespace" .)) }}
 apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
+kind: {{ $issuerKind }}
 metadata:
   name: {{ include "hephaestus.certmanager.selfSignedIssuer" . }}
   labels:
@@ -24,12 +25,12 @@ spec:
     size: 256
   issuerRef:
     group: cert-manager.io
-    kind: ClusterIssuer
+    kind: {{ $issuerKind }}
     name: {{ include "hephaestus.certmanager.selfSignedIssuer" . }}
 
 ---
 apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
+kind: {{ $issuerKind }}
 metadata:
   name: {{ include "hephaestus.certmanager.caIssuer" . }}
   labels:
@@ -50,7 +51,7 @@ spec:
     - {{ include "hephaestus.webhook.service" . }}.{{ .Release.Namespace }}.svc
     - {{ include "hephaestus.webhook.service" . }}.{{ .Release.Namespace }}.svc.cluster.local
   issuerRef:
-    kind: ClusterIssuer
+    kind: {{ $issuerKind }}
     name: {{ include "hephaestus.certmanager.caIssuer" . }}
   secretName: {{ include "hephaestus.webhook.secret" . }}
 
@@ -67,7 +68,7 @@ spec:
   usages:
     - client auth
   issuerRef:
-    kind: ClusterIssuer
+    kind: {{ $issuerKind }}
     name: {{ include "hephaestus.certmanager.caIssuer" . }}
   secretName: {{ include "hephaestus.buildkit.clientSecret" . }}
 
@@ -86,7 +87,7 @@ spec:
   usages:
     - server auth
   issuerRef:
-    kind: ClusterIssuer
+    kind: {{ $issuerKind }} 
     name: {{ include "hephaestus.certmanager.caIssuer" . }}
   secretName: {{ include "hephaestus.buildkit.serverSecret" . }}
 {{- end }}
