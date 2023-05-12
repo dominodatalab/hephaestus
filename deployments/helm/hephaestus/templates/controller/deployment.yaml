@@ -33,6 +33,11 @@ spec:
         {{- with .Values.podLabels }}
           {{- toYaml . | nindent 8 }}
         {{- end }}
+        {{- with .Values.controller.manager.cloudRegistryAuth.azure }}
+        {{- if and .enabled .workloadIdentity }}
+        azure.workload.identity/use: "true"
+        {{- end }}
+        {{- end }}
     spec:
       {{- include "hephaestus.imagePullSecrets" . | nindent 6 }}
       serviceAccountName: {{ include "hephaestus.serviceAccountName" . }}
@@ -54,14 +59,14 @@ spec:
             {{- with .extraEnvVars }}
             {{- include "common.tplvalues.render" (dict "value" . "context" $) | nindent 12 }}
             {{- end }}
-            {{- if .cloudRegistryAuth.azure.enabled }}
+            {{- with .cloudRegistryAuth.azure }}
+            {{- if .enabled }}
             - name: AZURE_TENANT_ID
-              value: {{ required "Azure tenantID is required when enabled!" .cloudRegistryAuth.azure.tenantID | quote }}
+              value: {{ required "Azure tenantID is required when enabled!" .tenantID | quote }}
             - name: AZURE_CLIENT_ID
-              value: {{ required "Azure clientID is required when enabled!" .cloudRegistryAuth.azure.clientID | quote }}
-            {{- with .cloudRegistryAuth.azure.clientSecret }}
+              value: {{ required "Azure clientID is required when enabled!" .clientID | quote }}
             - name: AZURE_CLIENT_SECRET
-              value: {{ . | quote }}
+              value: {{ .clientSecret | quote }}
             {{- end }}
             {{- end }}
             {{- with $.Values.podEnv }}

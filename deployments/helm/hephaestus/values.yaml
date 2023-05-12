@@ -170,6 +170,7 @@ controller:
         tenantID: ""
         clientID: ""
         clientSecret: ""
+        workloadIdentity: false
       # GCP credentials required to access GCR
       gcp:
         enabled: false
@@ -277,7 +278,7 @@ buildkit:
   image:
     registry: ""
     repository: moby/buildkit
-    tag: v0.10.6-rootless
+    tag: v0.11.6-rootless
     pullPolicy: IfNotPresent
     pullSecrets: []
 

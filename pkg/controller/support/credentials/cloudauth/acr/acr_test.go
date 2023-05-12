@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/services/preview/containerregistry/runtime/2019-08-15-preview/containerregistry"
 	"github.com/Azure/azure-sdk-for-go/services/preview/containerregistry/runtime/2019-08-15-preview/containerregistry/containerregistryapi"
 	"github.com/docker/docker/api/types"
@@ -20,6 +22,8 @@ import (
 )
 
 func TestAuthenticate(t *testing.T) {
+	errGetToken := errors.New("GetToken failed")
+	errExchange := errors.New("get from exchange error")
 	for _, tt := range []struct {
 		name                     string
 		serverName               string
@@ -33,8 +37,8 @@ func TestAuthenticate(t *testing.T) {
 		{
 			"success_foo.azurecr.us",
 			"foo.azurecr.us",
-			createProvider("test-tenantId", false),
-			createRefreshTokensClient(false),
+			createProvider("test-tenantId", nil),
+			createRefreshTokensClient(nil),
 			cloudauthtest.FakeChallengeLoginServer("test-service", "test-realm", nil),
 			&types.AuthConfig{Username: acrUserForRefreshToken},
 			"Successfully authenticated with ACR \"foo.azurecr.us\"",
@@ -43,8 +47,8 @@ func TestAuthenticate(t *testing.T) {
 		{
 			"success_foo.azurecr.cn",
 			"foo.azurecr.cn",
-			createProvider("test-tenantId", false),
-			createRefreshTokensClient(false),
+			createProvider("test-tenantId", nil),
+			createRefreshTokensClient(nil),
 			cloudauthtest.FakeChallengeLoginServer("test-service", "test-realm", nil),
 			&types.AuthConfig{Username: acrUserForRefreshToken},
 			"Successfully authenticated with ACR \"foo.azurecr.cn\"",
@@ -53,8 +57,8 @@ func TestAuthenticate(t *testing.T) {
 		{
 			"success_foo.azurecr.de",
 			"foo.azurecr.de",
-			createProvider("test-tenantId", false),
-			createRefreshTokensClient(false),
+			createProvider("test-tenantId", nil),
+			createRefreshTokensClient(nil),
 			cloudauthtest.FakeChallengeLoginServer("test-service", "test-realm", nil),
 			&types.AuthConfig{Username: acrUserForRefreshToken},
 			"Successfully authenticated with ACR \"foo.azurecr.de\"",
@@ -63,8 +67,8 @@ func TestAuthenticate(t *testing.T) {
 		{
 			"success_foo.azurecr.io",
 			"foo.azurecr.io",
-			createProvider("test-tenantId", false),
-			createRefreshTokensClient(false),
+			createProvider("test-tenantId", nil),
+			createRefreshTokensClient(nil),
 			cloudauthtest.FakeChallengeLoginServer("test-service", "test-realm", nil),
 			&types.AuthConfig{Username: acrUserForRefreshToken},
 			"Successfully authenticated with ACR \"foo.azurecr.io\"",
@@ -73,43 +77,42 @@ func TestAuthenticate(t *testing.T) {
 		{
 			"invalid_server",
 			"test-server",
-			createProvider("test-tenantId", false),
-			createRefreshTokensClient(false),
+			createProvider("test-tenantId", nil),
+			createRefreshTokensClient(nil),
 			cloudauthtest.FakeChallengeLoginServer("", "", nil),
 			nil,
-			fmt.Sprintf(`ACR URL is invalid: "test-server" should match pattern %s`, acrRegex),
-			errors.New("ACR URL is invalid: \"test-server\" should match pattern .*\\.azurecr\\.io|.*\\.azurecr\\.cn|.*\\.azurecr\\.de|.*\\.azurecr\\.us"),
+			fmt.Sprintf("Invalid ACR URL"),
+			errACRURL,
 		},
 		{
 			"failed_get_from_exchange",
 			"foo.azurecr.cn",
-			createProvider("test-tenantId", false),
-			createRefreshTokensClient(true),
+			createProvider("test-tenantId", nil),
+			createRefreshTokensClient(errExchange),
 			cloudauthtest.FakeChallengeLoginServer("", "", nil),
 			nil,
 			"failed to generate ACR refresh token: get from exchange error",
-			fmt.Errorf("failed to generate ACR refresh token: get from exchange error"),
+			errExchange,
 		},
 		{
-			"failed_refresh_exchange",
+			"failed_get_token",
 			"foo.azurecr.de",
-			createProvider("test-tenantId", true),
-			createRefreshTokensClient(false),
+			createProvider("test-tenantId", errGetToken),
+			createRefreshTokensClient(nil),
 			cloudauthtest.FakeChallengeLoginServer("", "", nil),
 			nil,
-			"AAD token refresh failure: failed to refresh principal token",
-			errors.New("AAD token refresh failure: failed to refresh principal token"),
+			"Failed to GetToken.",
+			errGetToken,
 		},
 		{
 			"failed_default_challenge_login_server",
 			"foo.azurecr.io",
-			createProvider("test-tenantId", false),
-			createRefreshTokensClient(false),
-			cloudauthtest.FakeChallengeLoginServer("", "",
-				errors.New("failed to refresh AAD token: failed to refresh principal token")),
+			createProvider("test-tenantId", nil),
+			createRefreshTokensClient(nil),
+			cloudauthtest.FakeChallengeLoginServer("", "", errGetToken),
 			nil,
-			"ACR registry \"https://foo.azurecr.io\" is unusable: failed to refresh AAD token: failed to refresh principal token",
-			errors.New("ACR registry \"https://foo.azurecr.io\" is unusable: failed to refresh AAD token: failed to refresh principal token"),
+			"Login challenge failed.",
+			errGetToken,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -128,7 +131,7 @@ func TestAuthenticate(t *testing.T) {
 				require.NoError(t, err)
 			} else {
 				require.Error(t, err)
-				assert.Equal(t, tt.expectedError.Error(), err.Error())
+				assert.ErrorIs(t, err, tt.expectedError)
 			}
 
 			// Compare expected log messages.
@@ -141,52 +144,37 @@ func TestAuthenticate(t *testing.T) {
 }
 
 type fakeServicePrincipalToken struct {
-	errOut bool
+	err error
 }
 
-func (f fakeServicePrincipalToken) RefreshWithContext(ctx context.Context) error { return nil }
-
-func (f fakeServicePrincipalToken) RefreshExchangeWithContext(ctx context.Context, resource string) error {
-	return nil
-}
-
-func (f fakeServicePrincipalToken) EnsureFreshWithContext(ctx context.Context) error {
-	if f.errOut {
-		return errors.New("failed to refresh principal token")
-	}
-
-	return nil
-}
-
-func (f fakeServicePrincipalToken) OAuthToken() string {
-	return "test-oauth-token"
+func (f fakeServicePrincipalToken) GetToken(ctx context.Context, options policy.TokenRequestOptions) (azcore.AccessToken, error) {
+	return azcore.AccessToken{
+		Token: "test-oauth-token",
+	}, f.err
 }
 
 type fakeRefreshTokensClient struct {
-	errOut bool
+	err error
 }
 
 func (f fakeRefreshTokensClient) GetFromExchange(_ context.Context, _, _, _, _, _ string) (result containerregistry.RefreshToken, err error) {
-	if f.errOut {
-		err = errors.New("get from exchange error")
-	}
-	return
+	return result, f.err
 }
 
 // Helper functions
-func createProvider(tenantId string, shouldErr bool) *acrProvider {
+func createProvider(tenantId string, err error) *acrProvider {
 	return &acrProvider{
 		tenantID: tenantId,
-		servicePrincipalToken: fakeServicePrincipalToken{
-			errOut: shouldErr,
+		tokenCredential: fakeServicePrincipalToken{
+			err: err,
 		},
 	}
 }
 
-func createRefreshTokensClient(errOut bool) refreshTokensClientFunc {
+func createRefreshTokensClient(err error) refreshTokensClientFunc {
 	return func(loginURL string) containerregistryapi.RefreshTokensClientAPI {
 		return &fakeRefreshTokensClient{
-			errOut: errOut,
+			err: err,
 		}
 	}
 }

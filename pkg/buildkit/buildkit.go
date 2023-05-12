@@ -11,10 +11,12 @@ import (
 	"time"
 
 	"github.com/containerd/console"
+	"github.com/docker/cli/cli/config"
 	"github.com/go-logr/logr"
 	bkclient "github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/cmd/buildctl/build"
 	"github.com/moby/buildkit/session"
+	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/session/secrets/secretsprovider"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"golang.org/x/sync/errgroup"
@@ -129,6 +131,9 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
 		}
 	}(buildDir)
 
+	config.SetDir(c.dockerAuthConfig)
+	dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
+
 	// process build context
 	var contentsDir string
 
@@ -181,7 +186,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
 			"dockerfile": contentsDir,
 		},
 		Session: []session.Attachable{
-			NewDockerAuthProvider(c.dockerAuthConfig),
+			authprovider.NewDockerAuthProvider(dockerConfig),
 			secretsprovider.FromMap(secrets),
 		},
 		CacheExports: []bkclient.CacheOptionsEntry{
@@ -282,11 +287,13 @@ func (c *Client) solveWith(ctx context.Context, modify func(buildDir string, sol
 		}
 	}(buildDir)
 
+	config.SetDir(c.dockerAuthConfig)
+	dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
 	solveOpt := bkclient.SolveOpt{
 		Frontend:      "dockerfile.v0",
 		FrontendAttrs: map[string]string{},
 		Session: []session.Attachable{
-			NewDockerAuthProvider(c.dockerAuthConfig),
+			authprovider.NewDockerAuthProvider(dockerConfig),
 		},
 	}
 
