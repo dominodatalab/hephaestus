@@ -45,6 +45,9 @@ newRelic:
   appName: hephaestus
   # Account API key
   licenseKey: ""
+  # metadata_config 
+  remoteWriteInterval: 120s
+
   # Tag metadata added to metrics
   labels: {}
 
