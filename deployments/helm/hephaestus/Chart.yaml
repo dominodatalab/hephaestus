@@ -14,5 +14,5 @@ maintainers:
     email: sonny.garcia@dominodatalab.com
 dependencies:
   - name: common
-    version: 1.16.0
+    version: 1.17.0
     repository: https://charts.bitnami.com/bitnami
