@@ -1,6 +1,5 @@
-{{- $issuerKind := ternary "Issuer" "ClusterIssuer" (eq .Values.certManagerNamespace (include "hephaestus.buildkit.namespace" .)) }}
 apiVersion: cert-manager.io/v1
-kind: {{ $issuerKind }}
+kind: Issuer
 metadata:
   name: {{ include "hephaestus.certmanager.selfSignedIssuer" . }}
   labels:
@@ -13,7 +12,6 @@ apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: {{ include "hephaestus.certmanager.selfSignedCA" . }}
-  namespace: {{ .Values.certManagerNamespace }}
   labels:
     {{- include "common.labels.standard" . | nindent 4 }}
 spec:
@@ -25,12 +23,12 @@ spec:
     size: 256
   issuerRef:
     group: cert-manager.io
-    kind: {{ $issuerKind }}
+    kind: Issuer
     name: {{ include "hephaestus.certmanager.selfSignedIssuer" . }}
 
 ---
 apiVersion: cert-manager.io/v1
-kind: {{ $issuerKind }}
+kind: Issuer
 metadata:
   name: {{ include "hephaestus.certmanager.caIssuer" . }}
   labels:
@@ -51,7 +49,7 @@ spec:
     - {{ include "hephaestus.webhook.service" . }}.{{ .Release.Namespace }}.svc
     - {{ include "hephaestus.webhook.service" . }}.{{ .Release.Namespace }}.svc.cluster.local
   issuerRef:
-    kind: {{ $issuerKind }}
+    kind: Issuer
     name: {{ include "hephaestus.certmanager.caIssuer" . }}
   secretName: {{ include "hephaestus.webhook.secret" . }}
 
@@ -68,7 +66,7 @@ spec:
   usages:
     - client auth
   issuerRef:
-    kind: {{ $issuerKind }}
+    kind: Issuer
     name: {{ include "hephaestus.certmanager.caIssuer" . }}
   secretName: {{ include "hephaestus.buildkit.clientSecret" . }}
 
@@ -77,17 +75,16 @@ apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: {{ include "hephaestus.buildkit.fullname" . }}-server
-  namespace: {{ include "hephaestus.buildkit.namespace" . }}
   labels:
     {{- include "common.labels.standard" . | nindent 4 }}
 spec:
   dnsNames:
     - "*.{{ include "hephaestus.buildkit.fullname" . }}"
-    - "*.{{ include "hephaestus.buildkit.fullname" . }}.{{ include "hephaestus.buildkit.namespace" . }}"
+    - "*.{{ include "hephaestus.buildkit.fullname" . }}.{{ .Release.Namespace }}"
   usages:
     - server auth
   issuerRef:
-    kind: {{ $issuerKind }} 
+    kind: Issuer
     name: {{ include "hephaestus.certmanager.caIssuer" . }}
   secretName: {{ include "hephaestus.buildkit.serverSecret" . }}
 {{- end }}
