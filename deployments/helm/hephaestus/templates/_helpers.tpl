@@ -165,13 +165,6 @@ Return the buildkit fully-qualified app name.
 {{- end }}
 
 {{/*
-Return the namespace for buildkit-related resources.
-*/}}
-{{- define "hephaestus.buildkit.namespace" -}}
-{{- .Values.buildkit.namespace | default .Release.Namespace }}
-{{- end }}
-
-{{/*
 Return the buildkit standard labels.
 */}}
 {{- define "hephaestus.buildkit.labels.standard" -}}

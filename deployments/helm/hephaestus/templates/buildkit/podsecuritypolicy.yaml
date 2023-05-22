@@ -68,5 +68,4 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: {{ include "hephaestus.buildkit.serviceAccountName" . }}
-    namespace: {{ include "hephaestus.buildkit.namespace" . }}
 {{- end }}

@@ -23,10 +23,6 @@ enableNetworkPolicies: true
 # This flag will have no effect in k8s >= 1.25.
 enablePodSecurityPolicies: false
 
-# Namespace where cert-manager is deployed. CA certificate secret needs to live in the cluster resource namespace.
-# https://cert-manager.io/docs/faq/cluster-resource/
-certManagerNamespace: cert-manager
-
 # Applied to all pods
 podAnnotations: {}
 podLabels: {}
@@ -276,14 +272,6 @@ buildkit:
   # Add a ConfigMap containing custom CAs if you need to push images to one or
   # more registries that use self-signed certificates
   customCABundle: ""
-
-  # Deploy buildkit workload into a different namespace from the release
-  namespace: ""
-
-  # The buildkit network policy will select against all the labels on the
-  # release namespace to allow ingress traffic from the controller by default.
-  # Use this field to limit the selector labels
-  releaseNamespaceLabels: {}
 
   # Buildkit image
   image:
