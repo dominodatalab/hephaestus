@@ -93,7 +93,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 
 	log.Info("Processing and persisting registry credentials")
 	persistCredsSeg := txn.StartSegment("credentials-persist")
-	configDir, err := credentials.Persist(ctx, buildLog, ctx.Config, obj.Spec.RegistryAuth)
+	configDir, helpMessage, err := credentials.Persist(ctx, buildLog, ctx.Config, obj.Spec.RegistryAuth)
 	if err != nil {
 		err = fmt.Errorf("registry credentials processing failed: %w", err)
 		txn.NoticeError(newrelic.Error{
@@ -121,7 +121,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	}
 
 	buildLog.Info("Validating registry credentials")
-	if err = credentials.Verify(ctx, configDir, insecureRegistries); err != nil {
+	if err = credentials.Verify(ctx, configDir, insecureRegistries, helpMessage); err != nil {
 		txn.NoticeError(newrelic.Error{
 			Message: err.Error(),
 			Class:   "CredentialsValidateError",
