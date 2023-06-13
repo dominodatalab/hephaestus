@@ -45,6 +45,7 @@ require (
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.6.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.3.0
+	github.com/Nerzal/gocloak/v13 v13.7.0
 	github.com/dominodatalab/amqp-client v0.1.3
 	github.com/dominodatalab/controller-util v0.0.2
 	github.com/hashicorp/go-retryablehttp v0.7.1
@@ -70,7 +71,6 @@ require (
 	github.com/Azure/go-autorest/tracing v0.6.0 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.0.0 // indirect
 	github.com/Microsoft/go-winio v0.5.2 // indirect
-	github.com/Nerzal/gocloak/v13 v13.7.0 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.12.0 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.12.4 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.32 // indirect

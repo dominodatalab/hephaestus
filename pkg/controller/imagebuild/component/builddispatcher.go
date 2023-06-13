@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	_ "github.com/Nerzal/gocloak/v13" // temporary to prevent removal
+	"github.com/Nerzal/gocloak/v13"
 	"github.com/dominodatalab/controller-util/core"
 	"github.com/go-logr/logr"
 	"github.com/newrelic/go-agent/v3/newrelic"
@@ -182,6 +182,24 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 			Class:   "WorkerClientInitError",
 		})
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, err)
+	}
+
+	if c.keycloakCfg.Enabled {
+		buildLog.Info("Acquiring Keycloak service account token")
+		kc := gocloak.NewClient(c.keycloakCfg.Server)
+		jwt, err := kc.LoginClient(buildCtx, c.keycloakCfg.ClientID, c.keycloakCfg.ClientSecret, c.keycloakCfg.Realm)
+		if err != nil {
+			buildLog.Error(err, fmt.Sprintf(
+				"Failed to acquire %s Keycloak creds from %s", c.keycloakCfg.ClientID, c.keycloakCfg.Server))
+			txn.NoticeError(newrelic.Error{
+				Message: err.Error(),
+				Class:   "WorkerClientInitError",
+			})
+			return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("keycloak token acquire failed: %w", err))
+		}
+
+		obj.Spec.BuildArgs = append(obj.Spec.BuildArgs, fmt.Sprintf("%s=%s", hephv1.ServiceTokenArgName, jwt.AccessToken))
+		log.Info(fmt.Sprintf("Injected %s token as build-arg %s", c.keycloakCfg.ClientID, hephv1.ServiceTokenArgName))
 	}
 	clientInitSeg.End()
 

@@ -26,6 +26,8 @@ const (
 	PhaseFailed Phase = "Failed"
 )
 
+const ServiceTokenArgName = "SERVICE_TOKEN"
+
 type BasicAuthCredentials struct {
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
