@@ -36,6 +36,19 @@ istio:
   # network settings when CNI plugin is NOT installed.
   cni: false
 
+# Keycloak configuration to optionally provide a service account JWT token to executing builds
+keycloak:
+  # Enable support for acquiring a Keycloak JWT for this service and making it available to builds
+  enabled: false
+  # Address of the Keycloak endpoint - auth may or may not be required depending on KeyCloak version and its configuration
+  server: "http://keycloak-http/auth/"
+  # Realm where the given client id logs in
+  realm: "DominoRealm"
+  # Identifies the client for use in API calls
+  clientId: ""
+  # In conjunction clientId, defines the credentials used in Keycloak
+  clientSecret: ""
+
 # New Relic APM configuration
 newRelic:
   # Enable monitoring

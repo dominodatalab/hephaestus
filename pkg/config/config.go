@@ -18,6 +18,7 @@ type Controller struct {
 	Buildkit  Buildkit  `json:"buildkit" yaml:"buildkit"`
 	Messaging Messaging `json:"messaging" yaml:"messaging"`
 	NewRelic  NewRelic  `json:"newRelic" yaml:"newRelic"`
+	Keycloak  Keycloak  `json:"keycloak" yaml:"keycloak"`
 
 	ImageBuildMaxConcurrency int `json:"imageBuildMaxConcurrency" yaml:"imageBuildMaxConcurrency"`
 }
@@ -50,6 +51,21 @@ func (c Controller) Validate() error {
 
 	if c.NewRelic.Enabled && c.NewRelic.LicenseKey == "" {
 		errs = append(errs, "newRelic.licenseKey cannot be blank")
+	}
+
+	if c.Keycloak.Enabled {
+		if c.Keycloak.ClientID == "" {
+			errs = append(errs, "keycloak.clientId cannot be blank")
+		}
+		if c.Keycloak.ClientSecret == "" {
+			errs = append(errs, "keycloak.clientSecret cannot be blank")
+		}
+		if c.Keycloak.Realm == "" {
+			errs = append(errs, "keycloak.realm cannot be blank")
+		}
+		if c.Keycloak.Server == "" {
+			errs = append(errs, "keycloak.server cannot be blank")
+		}
 	}
 
 	if len(errs) != 0 {
@@ -163,6 +179,14 @@ type NewRelic struct {
 	AppName    string            `json:"appName" yaml:"appName"`
 	Labels     map[string]string `json:"labels" yaml:"labels,omitempty"`
 	LicenseKey string            `json:"licenseKey" yaml:"licenseKey"`
+}
+
+type Keycloak struct {
+	Enabled      bool   `json:"enabled" yaml:"enabled"`
+	Server       string `json:"server" yaml:"server"`
+	ClientID     string `json:"clientId" yaml:"clientId"`
+	ClientSecret string `json:"clientSecret" yaml:"clientSecret"`
+	Realm        string `json:"realm" yaml:"realm"`
 }
 
 func LoadFromFile(filename string) (Controller, error) {

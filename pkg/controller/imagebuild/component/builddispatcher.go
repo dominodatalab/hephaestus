@@ -22,10 +22,11 @@ import (
 )
 
 type BuildDispatcherComponent struct {
-	cfg      config.Buildkit
-	pool     worker.Pool
-	phase    *phase.TransitionHelper
-	newRelic *newrelic.Application
+	cfg         config.Buildkit
+	pool        worker.Pool
+	phase       *phase.TransitionHelper
+	newRelic    *newrelic.Application
+	keycloakCfg config.Keycloak
 
 	delete  <-chan client.ObjectKey
 	cancels sync.Map
@@ -35,13 +36,15 @@ func BuildDispatcher(
 	cfg config.Buildkit,
 	pool worker.Pool,
 	nr *newrelic.Application,
+	kc config.Keycloak,
 	ch <-chan client.ObjectKey,
 ) *BuildDispatcherComponent {
 	return &BuildDispatcherComponent{
-		cfg:      cfg,
-		pool:     pool,
-		delete:   ch,
-		newRelic: nr,
+		cfg:         cfg,
+		pool:        pool,
+		delete:      ch,
+		newRelic:    nr,
+		keycloakCfg: kc,
 	}
 }
 

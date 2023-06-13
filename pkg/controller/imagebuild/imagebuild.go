@@ -20,7 +20,7 @@ var ch = make(chan client.ObjectKey)
 func Register(mgr ctrl.Manager, cfg config.Controller, pool worker.Pool, nr *newrelic.Application) error {
 	return core.NewReconciler(mgr).
 		For(&hephv1.ImageBuild{}).
-		Component("build-dispatcher", component.BuildDispatcher(cfg.Buildkit, pool, nr, ch)).
+		Component("build-dispatcher", component.BuildDispatcher(cfg.Buildkit, pool, nr, cfg.Keycloak, ch)).
 		WithControllerOptions(controller.Options{MaxConcurrentReconciles: cfg.ImageBuildMaxConcurrency}).
 		WithWebhooks().
 		Complete()
