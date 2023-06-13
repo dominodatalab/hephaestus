@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	_ "github.com/Nerzal/gocloak/v13" // temporary to prevent removal
 	"github.com/dominodatalab/controller-util/core"
 	"github.com/go-logr/logr"
 	"github.com/newrelic/go-agent/v3/newrelic"
