@@ -243,8 +243,11 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
 		solveOpt.Exports = append(solveOpt.Exports, bkclient.ExportEntry{
 			Type: bkclient.ExporterImage,
 			Attrs: map[string]string{
-				"name": name,
-				"push": "true",
+				"name":              name,
+				"push":              "true",
+				"compression":       "estargz",
+				"force-compression": "true",
+				"oci-mediatypes":    "true",
 			},
 		})
 	}
