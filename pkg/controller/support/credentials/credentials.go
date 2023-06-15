@@ -147,7 +147,6 @@ func Verify(ctx context.Context, configDir string, insecureRegistries []string, 
 		auth.ServerAddress = server
 
 		if _, _, err = svc.Auth(ctx, &auth, "DominoDataLab_Hephaestus/1.0"); err != nil {
-			//nolint:lll
 			detailedErr := fmt.Errorf("%q client credentials are invalid. Make sure the provided credentials are correct: %s. Underlying error: %w", server, strings.Join(helpMessage, ","), err)
 			errs = append(errs, detailedErr)
 		}
