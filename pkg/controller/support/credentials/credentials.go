@@ -82,11 +82,14 @@ func Persist(
 				return "", nil, err
 			}
 
+			var servers []string
 			for server, config := range conf.Auths {
 				auths[server] = config
+				servers = append(servers, server)
 			}
 
-			helpMessage = append(helpMessage, fmt.Sprintf("secret %q in namespace %q", cred.Secret.Name, cred.Secret.Namespace))
+			//nolint:lll
+			helpMessage = append(helpMessage, fmt.Sprintf("secret %q in namespace %q (credentials for servers: %s)", cred.Secret.Name, cred.Secret.Namespace, strings.Join(servers, ", ")))
 			continue
 		case cred.BasicAuth != nil:
 			ac = types.AuthConfig{
@@ -102,7 +105,7 @@ func Persist(
 			}
 
 			ac = *pac
-			helpMessage = append(helpMessage, "cloud provider install configuration in image_building.cloud_registry_auth")
+			helpMessage = append(helpMessage, "cloud provider access configuration")
 		default:
 			return "", nil, fmt.Errorf("credential %v is missing auth section", cred)
 		}
@@ -148,7 +151,7 @@ func Verify(ctx context.Context, configDir string, insecureRegistries []string, 
 
 		if _, _, err = svc.Auth(ctx, &auth, "DominoDataLab_Hephaestus/1.0"); err != nil {
 			//nolint:lll
-			detailedErr := fmt.Errorf("%q client credentials are invalid. Make sure the provided credentials are correct: %s. Underlying error: %w", server, strings.Join(helpMessage, ","), err)
+			detailedErr := fmt.Errorf("client credentials are invalid for registry %q.\nMake sure the following sources of credentials are correct: %s.\nUnderlying error: %w", server, strings.Join(helpMessage, ", "), err)
 			errs = append(errs, detailedErr)
 		}
 	}

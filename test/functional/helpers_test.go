@@ -337,7 +337,8 @@ func (suite *GenericImageBuilderTestSuite) TestImageBuilding() {
 		ib := createBuild(t, ctx, suite.hephClient, build)
 
 		assert.Equal(t, ib.Status.Phase, hephv1.PhaseFailed)
-		assert.Contains(t, ib.Status.Conditions[0].Message, `"docker-registry-secure:5000" client credentials are invalid. Make sure the provided credentials are correct: basic authentication username and password`)
+		assert.Contains(t, ib.Status.Conditions[0].Message, `client credentials are invalid for registry "docker-registry-secure:5000".`)
+		assert.Contains(t, ib.Status.Conditions[0].Message, `Make sure the following sources of credentials are correct: basic authentication username and password.`)
 	})
 
 	suite.T().Run("basic_auth", func(t *testing.T) {
