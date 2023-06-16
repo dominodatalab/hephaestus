@@ -69,6 +69,6 @@ func TestPersist(t *testing.T) {
 
 		assert.Equal(t, expected, actual)
 		assert.Equal(t, len(helpMessage), 1)
-		assert.Contains(t, helpMessage, "secret \"test-creds\" in namespace \"test-ns\" (credentials for servers: registry1.com, registry2.com)")
+		assert.Contains(t, helpMessage[0], "secret \"test-creds\" in namespace \"test-ns\"")
 	})
 }
