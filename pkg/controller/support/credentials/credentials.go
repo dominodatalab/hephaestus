@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/registry"
@@ -43,13 +44,19 @@ func Persist(
 	logger logr.Logger,
 	cfg *rest.Config,
 	credentials []hephv1.RegistryCredentials,
-) (string, error) {
+) (string, []string, error) {
 	dir, err := os.MkdirTemp("", "docker-config-")
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	auths := AuthConfigs{}
+	// as we can't establish a 1:1 correlation between the server field
+	// and the computed docker config.json in downstream authentication
+	// helpMessage stores general meta-information about the creds
+	// in use that can be supplied to any error message(s) that surface
+	// for more easily debugging the source of a failed auth.
+	var helpMessage []string
 	for _, cred := range credentials {
 		var ac types.AuthConfig
 
@@ -57,43 +64,50 @@ func Persist(
 		case cred.Secret != nil:
 			clientset, err := clientsetFunc(cfg)
 			if err != nil {
-				return "", err
+				return "", nil, err
 			}
 			client := clientset.CoreV1().Secrets(cred.Secret.Namespace)
 
 			secret, err := client.Get(ctx, cred.Secret.Name, metav1.GetOptions{})
 			if err != nil {
-				return "", err
+				return "", nil, err
 			}
 
 			if secret.Type != corev1.SecretTypeDockerConfigJson {
-				return "", fmt.Errorf("invalid secret")
+				return "", nil, fmt.Errorf("invalid secret")
 			}
 
 			var conf DockerConfigJSON
 			if err := json.Unmarshal(secret.Data[corev1.DockerConfigJsonKey], &conf); err != nil {
-				return "", err
+				return "", nil, err
 			}
 
+			var servers []string
 			for server, config := range conf.Auths {
 				auths[server] = config
+				servers = append(servers, server)
 			}
 
+			//nolint:lll
+			helpMessage = append(helpMessage, fmt.Sprintf("secret %q in namespace %q (credentials for servers: %s)", cred.Secret.Name, cred.Secret.Namespace, strings.Join(servers, ", ")))
 			continue
 		case cred.BasicAuth != nil:
 			ac = types.AuthConfig{
 				Username: cred.BasicAuth.Username,
 				Password: cred.BasicAuth.Password,
 			}
+
+			helpMessage = append(helpMessage, "basic authentication username and password")
 		case pointer.BoolDeref(cred.CloudProvided, false):
 			pac, err := CloudAuthRegistry.RetrieveAuthorization(ctx, logger, cred.Server)
 			if err != nil {
-				return "", fmt.Errorf("cloud registry authorization failed: %w", err)
+				return "", nil, fmt.Errorf("cloud registry authorization failed: %w", err)
 			}
 
 			ac = *pac
+			helpMessage = append(helpMessage, "cloud provider access configuration")
 		default:
-			return "", fmt.Errorf("credential %v is missing auth section", cred)
+			return "", nil, fmt.Errorf("credential %v is missing auth section", cred)
 		}
 
 		auths[cred.Server] = ac
@@ -102,18 +116,18 @@ func Persist(
 
 	configJSON, err := json.Marshal(dockerCfg)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	filename := filepath.Join(dir, "config.json")
 	if err = os.WriteFile(filename, configJSON, 0644); err != nil {
-		return "", err
+		return "", nil, err
 	}
 
-	return dir, err
+	return dir, helpMessage, err
 }
 
-func Verify(ctx context.Context, configDir string, insecureRegistries []string) error {
+func Verify(ctx context.Context, configDir string, insecureRegistries []string, helpMessage []string) error {
 	filename := filepath.Join(configDir, "config.json")
 	data, err := os.ReadFile(filename)
 	if err != nil {
@@ -136,7 +150,9 @@ func Verify(ctx context.Context, configDir string, insecureRegistries []string) 
 		auth.ServerAddress = server
 
 		if _, _, err = svc.Auth(ctx, &auth, "DominoDataLab_Hephaestus/1.0"); err != nil {
-			errs = append(errs, fmt.Errorf("%q client credentials are invalid: %w", server, err))
+			//nolint:lll
+			detailedErr := fmt.Errorf("client credentials are invalid for registry %q.\nMake sure the following sources of credentials are correct: %s.\nUnderlying error: %w", server, strings.Join(helpMessage, ", "), err)
+			errs = append(errs, detailedErr)
 		}
 	}
 	if len(errs) != 0 {

@@ -58,7 +58,7 @@ func TestPersist(t *testing.T) {
 			},
 		}
 
-		configPath, err := Persist(context.Background(), logr.Discard(), nil, credentials)
+		configPath, helpMessage, err := Persist(context.Background(), logr.Discard(), nil, credentials)
 		require.NoError(t, err)
 		t.Cleanup(func() {
 			os.RemoveAll(configPath)
@@ -68,5 +68,7 @@ func TestPersist(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, expected, actual)
+		assert.Equal(t, len(helpMessage), 1)
+		assert.Contains(t, helpMessage, "secret \"test-creds\" in namespace \"test-ns\" (credentials for servers: registry1.com, registry2.com)")
 	})
 }
