@@ -409,6 +409,19 @@ func (suite *GenericImageBuilderTestSuite) TestImageBuilding() {
 		assert.Equalf(t, ib.Status.Phase, hephv1.PhaseSucceeded, "failed build with message %q", ib.Status.Conditions[0].Message)
 	})
 
+	suite.T().Run("token_injection", func(t *testing.T) {
+		build := newImageBuild(
+			buildArgBuildContext,
+			"docker-registry:5000/test-ns/test-repo",
+			nil,
+		)
+		// TODO: configure the Keycloak client and point it to a fake httptest server
+		build.Spec.EnableServiceAccountTokenInjection = true
+		ib := createBuild(t, ctx, suite.hephClient, build)
+
+		assert.Equalf(t, ib.Status.Phase, hephv1.PhaseSucceeded, "failed build with message %q", ib.Status.Conditions[0].Message)
+	})
+
 	suite.T().Run("build_failure", func(t *testing.T) {
 		build := newImageBuild(
 			errorBuildContext,

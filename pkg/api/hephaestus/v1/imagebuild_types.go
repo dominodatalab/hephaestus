@@ -32,6 +32,9 @@ type ImageBuildSpec struct {
 	DisableLocalBuildCache bool `json:"disableBuildCache,omitempty"`
 	// DisableCacheLayerExport will remove the "inline" cache metadata from the image configuration.
 	DisableCacheLayerExport bool `json:"disableCacheExport,omitempty"`
+	// EnableServiceAccountTokenInjection adds a service account JWT token as build-arg to the images.
+	// This supports use cases like model building that must access other Domino services
+	EnableServiceAccountTokenInjection bool `json:"enableServiceAccountTokenInjection,omitempty"`
 }
 
 type ImageBuildTransition struct {

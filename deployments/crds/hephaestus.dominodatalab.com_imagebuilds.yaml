@@ -78,6 +78,11 @@ spec:
                 description: DisableCacheLayerExport will remove the "inline" cache
                   metadata from the image configuration.
                 type: boolean
+              enableServiceAccountTokenInjection:
+                description: EnableServiceAccountTokenInjection adds a service account
+                  JWT token as build-arg to the images. This supports use cases like
+                  model building that must access other Domino services
+                type: boolean
               images:
                 description: Images is a list of images to build and push.
                 items:

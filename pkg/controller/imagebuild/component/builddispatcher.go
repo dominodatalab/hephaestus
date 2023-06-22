@@ -184,8 +184,17 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, err)
 	}
 
-	if c.keycloakCfg.Enabled {
+	if obj.Spec.EnableServiceAccountTokenInjection {
 		buildLog.Info("Acquiring Keycloak service account token")
+		if !c.keycloakCfg.Enabled {
+			buildLog.Error(err, "Keycloak configuration disabled")
+			txn.NoticeError(newrelic.Error{
+				Message: "Keycloak configuration disabled",
+				Class:   "WorkerClientInitError",
+			})
+			return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("keycloak configuration disabled"))
+		}
+
 		kc := gocloak.NewClient(c.keycloakCfg.Server)
 		jwt, err := kc.LoginClient(buildCtx, c.keycloakCfg.ClientID, c.keycloakCfg.ClientSecret, c.keycloakCfg.Realm)
 		if err != nil {
