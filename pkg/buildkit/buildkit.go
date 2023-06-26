@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/dominodatalab/hephaestus/pkg/buildkit/archive"
+	hephconfig "github.com/dominodatalab/hephaestus/pkg/config"
 )
 
 var clientCheckBackoff = wait.Backoff{ // retries after 500ms 1s 2s 4s 8s 16s 32s 64s with jitter
@@ -120,6 +121,26 @@ type Client struct {
 	bk              *bkclient.Client
 	log             logr.Logger
 	dockerConfigDir string
+}
+
+func validateCompression(compression string, name string) map[string]string {
+	attrs := make(map[string]string)
+	attrs["name"] = name
+	switch compression {
+	case "estargz":
+		attrs["push"] = "true"
+		attrs["compression"] = "estargz"
+		attrs["force-compression"] = "true"
+		attrs["oci-mediatypes"] = "true"
+	case "zstd":
+		attrs["compression"] = "zstd"
+		attrs["force-compression"] = "true"
+		attrs["push"] = "true"
+	// default is gzip
+	default:
+		attrs["push"] = "true"
+	}
+	return attrs
 }
 
 func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
@@ -241,14 +262,11 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
 			solveOpt.FrontendAttrs[k] = v
 		}
 	}
-
 	for _, name := range opts.Images {
+		bkclientattrs := validateCompression(hephconfig.CompressionMethod, name)
 		solveOpt.Exports = append(solveOpt.Exports, bkclient.ExportEntry{
-			Type: bkclient.ExporterImage,
-			Attrs: map[string]string{
-				"name": name,
-				"push": "true",
-			},
+			Type:  bkclient.ExporterImage,
+			Attrs: bkclientattrs,
 		})
 	}
 

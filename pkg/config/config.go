@@ -12,6 +12,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var CompressionMethod string
+
 type Controller struct {
 	Logging   Logging   `json:"logging" yaml:"logging"`
 	Manager   Manager   `json:"manager" yaml:"manager"`
