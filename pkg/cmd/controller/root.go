@@ -18,8 +18,10 @@ func NewCommand() *cobra.Command {
 		Use:   "hephaestus-controller",
 		Short: "OCI image build controller using buildkit",
 	}
-	cmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "hephaestus.yaml", "configuration file")
-	cmd.PersistentFlags().StringVarP(&config.CompressionMethod, "compression", "d", "gzip", "Compression method options: zstd,estargz")
+	cmd.PersistentFlags().StringVarP(&cfgFile, "config", "c",
+		"hephaestus.yaml", "configuration file")
+	cmd.PersistentFlags().StringVarP(&config.CompressionMethod,
+		"compression", "d", "gzip", "Compression method options: zstd,estargz")
 	cmd.AddCommand(
 		newStartCommand(),
 		newRunGCCommand(),

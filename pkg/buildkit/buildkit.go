@@ -126,19 +126,20 @@ type Client struct {
 func validateCompression(compression string, name string) map[string]string {
 	attrs := make(map[string]string)
 	attrs["name"] = name
+	const truth = "true"
 	switch compression {
 	case "estargz":
-		attrs["push"] = "true"
+		attrs["push"] = truth
 		attrs["compression"] = "estargz"
-		attrs["force-compression"] = "true"
-		attrs["oci-mediatypes"] = "true"
+		attrs["force-compression"] = truth
+		attrs["oci-mediatypes"] = truth
 	case "zstd":
 		attrs["compression"] = "zstd"
-		attrs["force-compression"] = "true"
-		attrs["push"] = "true"
+		attrs["force-compression"] = truth
+		attrs["push"] = truth
 	// default is gzip
 	default:
-		attrs["push"] = "true"
+		attrs["push"] = truth
 	}
 	return attrs
 }
