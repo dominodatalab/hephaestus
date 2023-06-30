@@ -159,7 +159,7 @@ controller:
     # Defaults to 4.25 mins for fetch retries and an unlimited amount of time to extract.
     fetchAndExtractTimeout: null
 
-    # Secrets (name: path) to expose into builds that request it
+    # Global secrets (name: path) to expose into all image builds
     secrets: {}
 
     # Cloud-based registry credentials configuration
