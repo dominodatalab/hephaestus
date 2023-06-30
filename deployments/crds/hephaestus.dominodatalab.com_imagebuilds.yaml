@@ -125,6 +125,17 @@ spec:
                       type: string
                   type: object
                 type: array
+              secrets:
+                description: Secrets provides references to Kubernetes secrets to
+                  expose to individual image builds.
+                items:
+                  properties:
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                  type: object
+                type: array
             type: object
           status:
             properties:

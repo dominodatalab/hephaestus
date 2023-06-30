@@ -34,6 +34,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCacheStatus":                  schema_pkg_api_hephaestus_v1_ImageCacheStatus(ref),
 		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.RegistryCredentials":               schema_pkg_api_hephaestus_v1_RegistryCredentials(ref),
 		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.SecretCredentials":                 schema_pkg_api_hephaestus_v1_SecretCredentials(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.SecretReference":                   schema_pkg_api_hephaestus_v1_SecretReference(ref),
 	}
 }
 
@@ -482,11 +483,25 @@ func schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref common.ReferenceCallback) c
 							Format:      "",
 						},
 					},
+					"secrets": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Secrets provides references to Kubernetes secrets to expose to individual image builds.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.SecretReference"),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildAMQPOverrides", "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.RegistryCredentials"},
+			"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildAMQPOverrides", "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.RegistryCredentials", "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.SecretReference"},
 	}
 }
 
@@ -920,6 +935,30 @@ func schema_pkg_api_hephaestus_v1_RegistryCredentials(ref common.ReferenceCallba
 }
 
 func schema_pkg_api_hephaestus_v1_SecretCredentials(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"namespace": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_api_hephaestus_v1_SecretReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{

@@ -2946,6 +2946,14 @@
             "default": {},
             "$ref": "#/definitions/.RegistryCredentials"
           }
+        },
+        "secrets": {
+          "description": "Secrets provides references to Kubernetes secrets to expose to individual image builds.",
+          "type": "array",
+          "items": {
+            "default": {},
+            "$ref": "#/definitions/.SecretReference"
+          }
         }
       }
     },
@@ -3184,6 +3192,17 @@
       }
     },
     ".SecretCredentials": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        }
+      }
+    },
+    ".SecretReference": {
       "type": "object",
       "properties": {
         "name": {

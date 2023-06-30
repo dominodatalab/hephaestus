@@ -19,6 +19,7 @@ import (
 	"github.com/dominodatalab/hephaestus/pkg/config"
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials"
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/phase"
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/secrets"
 )
 
 type BuildDispatcherComponent struct {
@@ -90,6 +91,21 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		return ctrl.Result{}, nil
 	}
 	c.phase.SetInitializing(ctx, obj)
+
+	// Extracts cluster secrets into data to pass to buildkit
+	log.Info("Processing references to build secrets")
+	secretsReadSeq := txn.StartSegment("cluster-secrets-read")
+	secretsData, err := secrets.ReadSecrets(ctx, obj, log, ctx.Config, ctx.Scheme)
+	if err != nil {
+		err = fmt.Errorf("cluster secrets processing failed: %w", err)
+		txn.NoticeError(newrelic.Error{
+			Message: err.Error(),
+			Class:   "ClusterSecretsReadError",
+		})
+
+		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, err)
+	}
+	secretsReadSeq.End()
 
 	log.Info("Processing and persisting registry credentials")
 	persistCredsSeg := txn.StartSegment("credentials-persist")
@@ -189,6 +205,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 		ImportCache:              obj.Spec.ImportRemoteBuildCache,
 		DisableInlineCacheExport: obj.Spec.DisableCacheLayerExport,
 		Secrets:                  c.cfg.Secrets,
+		SecretsData:              secretsData,
 		FetchAndExtractTimeout:   c.cfg.FetchAndExtractTimeout,
 	}
 	log.Info("Dispatching image build", "images", buildOpts.Images)

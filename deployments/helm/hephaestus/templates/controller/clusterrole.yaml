@@ -83,9 +83,15 @@ rules:
       - ""
     resources:
       - nodes
+    verbs:
+      - get
+  - apiGroups:
+      - ""
+    resources:
       - secrets
     verbs:
       - get
+      - update
   - apiGroups:
       - apps
     resources:

@@ -26,6 +26,15 @@ const (
 	PhaseFailed Phase = "Failed"
 )
 
+const (
+	// Kubernetes metadata set by clients required to allow reading secrets by Hephaestus.
+	// Safeguards against accidental secret exposure / exfiltration.
+	AccessLabel = "hephaestus-accessible"
+	// Kubernetes metadata set by clients, to manage secret lifetime.
+	// When set, the given secret gets deleted at the same time as the ImageBuild that uses it.
+	OwnedLabel = "hephaestus-owned"
+)
+
 type BasicAuthCredentials struct {
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
@@ -47,6 +56,11 @@ type RegistryCredentials struct {
 	CloudProvided *bool                 `json:"cloudProvided,omitempty"`
 	BasicAuth     *BasicAuthCredentials `json:"basicAuth,omitempty"`
 	Secret        *SecretCredentials    `json:"secret,omitempty"`
+}
+
+type SecretReference struct {
+	Name      string `json:"name,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
 }
 
 // ImageBuildStatusTransitionMessage contains information about ImageBuild status transitions.
