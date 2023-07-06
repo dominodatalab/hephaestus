@@ -23,9 +23,9 @@ require (
 	github.com/rabbitmq/amqp091-go v1.5.0
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/oauth2 v0.7.0
-	k8s.io/api v0.26.5
-	k8s.io/apimachinery v0.26.5
-	k8s.io/client-go v0.26.5
+	k8s.io/api v0.27.2
+	k8s.io/apimachinery v0.27.3
+	k8s.io/client-go v0.27.2
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106
 )
 
@@ -161,7 +161,7 @@ require (
 	github.com/hashicorp/vault/sdk v0.4.1 // indirect
 	github.com/hashicorp/yamux v0.0.0-20211028200310-0bc27b27de87 // indirect
 	github.com/helmfile/chartify v0.14.0 // indirect
-	github.com/helmfile/helmfile v0.155.0 // indirect
+	github.com/helmfile/helmfile v0.152.0 // indirect
 	github.com/helmfile/vals v0.25.0 // indirect
 	github.com/howeyc/gopass v0.0.0-20210920133722-c8aef6fb66ef // indirect
 	github.com/huandu/xstrings v1.4.0 // indirect
