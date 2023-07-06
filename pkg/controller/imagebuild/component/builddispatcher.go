@@ -182,7 +182,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	bldr := buildkit.
 		NewClientBuilder(addr).
 		WithLogger(ctx.Log.WithName("buildkit").WithValues("addr", addr, "logKey", obj.Spec.LogKey)).
-		WithDockerAuthConfig(configDir)
+		WithDockerConfigDir(configDir)
 	if mtls := c.cfg.MTLS; mtls != nil {
 		bldr.WithMTLSAuth(mtls.CACertPath, mtls.CertPath, mtls.KeyPath)
 	}
