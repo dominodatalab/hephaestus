@@ -8,6 +8,9 @@ spec:
     - username/repo:tag
   buildArgs:
     - ENV=development
+  secrets:
+    - name: mySecret
+      namespace: default
   cacheMode: min
   cacheTag: local-test
   disableCacheExports: false

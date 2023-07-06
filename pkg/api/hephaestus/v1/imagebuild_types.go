@@ -32,6 +32,8 @@ type ImageBuildSpec struct {
 	DisableLocalBuildCache bool `json:"disableBuildCache,omitempty"`
 	// DisableCacheLayerExport will remove the "inline" cache metadata from the image configuration.
 	DisableCacheLayerExport bool `json:"disableCacheExport,omitempty"`
+	// Secrets provides references to Kubernetes secrets to expose to individual image builds.
+	Secrets []SecretReference `json:"secrets,omitempty"`
 }
 
 type ImageBuildTransition struct {

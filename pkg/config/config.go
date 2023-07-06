@@ -105,7 +105,7 @@ type Buildkit struct {
 	PoolEndpointWatchTimeout *int64 `json:"poolEndpointWatchTimeout" yaml:"poolEndpointWatchTimeout"`
 	// MTLS parameters.
 	MTLS *BuildkitMTLS `json:"mtls,omitempty" yaml:"mtls,omitempty"`
-	// Secrets provided to buildkitd during the build process.
+	// Global secrets provided to buildkitd during the build process for all image builds.
 	Secrets map[string]string `json:"secrets" yaml:"secrets,omitempty"`
 	// Registries parameters.
 	Registries map[string]RegistryConfig `json:"registries,omitempty" yaml:"registries,omitempty"`

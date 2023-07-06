@@ -104,6 +104,7 @@ type BuildOptions struct {
 	ImportCache              []string
 	DisableInlineCacheExport bool
 	Secrets                  map[string]string
+	SecretsData              map[string][]byte
 	FetchAndExtractTimeout   time.Duration
 }
 
@@ -174,6 +175,11 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
 			return err
 		}
 
+		secrets[name] = contents
+	}
+
+	// merge in preloaded data
+	for name, contents := range opts.SecretsData {
 		secrets[name] = contents
 	}
 
