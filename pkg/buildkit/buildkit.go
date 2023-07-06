@@ -33,18 +33,18 @@ var clientCheckBackoff = wait.Backoff{ // retries after 500ms 1s 2s 4s 8s 16s 32
 }
 
 type ClientBuilder struct {
-	addr             string
-	dockerAuthConfig string
-	log              logr.Logger
-	bkOpts           []bkclient.ClientOpt
+	addr            string
+	dockerConfigDir string
+	log             logr.Logger
+	bkOpts          []bkclient.ClientOpt
 }
 
 func NewClientBuilder(addr string) *ClientBuilder {
 	return &ClientBuilder{addr: addr, log: logr.Discard()}
 }
 
-func (b *ClientBuilder) WithDockerAuthConfig(configDir string) *ClientBuilder {
-	b.dockerAuthConfig = configDir
+func (b *ClientBuilder) WithDockerConfigDir(configDir string) *ClientBuilder {
+	b.dockerConfigDir = configDir
 	return b
 }
 
@@ -89,9 +89,9 @@ func (b *ClientBuilder) Build(ctx context.Context) (*Client, error) {
 	b.log.Info("Buildkitd connectivity established")
 
 	return &Client{
-		bk:               bk,
-		log:              b.log,
-		dockerAuthConfig: b.dockerAuthConfig,
+		bk:              bk,
+		log:             b.log,
+		dockerConfigDir: b.dockerConfigDir,
 	}, nil
 }
 
@@ -114,9 +114,9 @@ type Buildkit interface {
 }
 
 type Client struct {
-	bk               *bkclient.Client
-	log              logr.Logger
-	dockerAuthConfig string
+	bk              *bkclient.Client
+	log             logr.Logger
+	dockerConfigDir string
 }
 
 func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
@@ -132,8 +132,10 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
 		}
 	}(buildDir)
 
-	config.SetDir(c.dockerAuthConfig)
-	dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
+	dockerConfig, err := config.Load(c.dockerConfigDir)
+	if err != nil {
+		c.log.Error(err, "Error loading config file")
+	}
 
 	// process build context
 	var contentsDir string
@@ -293,8 +295,10 @@ func (c *Client) solveWith(ctx context.Context, modify func(buildDir string, sol
 		}
 	}(buildDir)
 
-	config.SetDir(c.dockerAuthConfig)
-	dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
+	dockerConfig, err := config.Load(c.dockerConfigDir)
+	if err != nil {
+		c.log.Error(err, "Error loading config file")
+	}
 	solveOpt := bkclient.SolveOpt{
 		Frontend:      "dockerfile.v0",
 		FrontendAttrs: map[string]string{},
