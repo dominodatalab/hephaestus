@@ -42,7 +42,8 @@ func ReadSecrets(
 
 		path := strings.Join([]string{secretRef.Namespace, secretRef.Name}, "/")
 		log.Info("Finding secret", "path", path)
-		fields := fields.SelectorFromSet(map[string]string{"Namespace": secretRef.Namespace, "Name": secretRef.Name})
+		fields := fields.SelectorFromSet(
+			map[string]string{"metadata.namespace": secretRef.Namespace, "metadata.name": secretRef.Name})
 		// prevent exfiltration of arbitrary secret values by using the presence of this label
 		labels := labels.SelectorFromSet(map[string]string{hephv1.AccessLabel: "true"})
 		secrets, err := secretClient.List(ctx,
