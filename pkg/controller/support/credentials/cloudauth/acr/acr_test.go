@@ -10,7 +10,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/services/preview/containerregistry/runtime/2019-08-15-preview/containerregistry"
 	"github.com/Azure/azure-sdk-for-go/services/preview/containerregistry/runtime/2019-08-15-preview/containerregistry/containerregistryapi"
-	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/registry"
 	"github.com/go-logr/zapr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,7 +30,7 @@ func TestAuthenticate(t *testing.T) {
 		provider                 *acrProvider
 		refreshTokensClient      refreshTokensClientFunc
 		fakeChallengeLoginServer cloudauth.LoginChallenger
-		authConfig               *types.AuthConfig
+		authConfig               *registry.AuthConfig
 		expectedLogMessage       string
 		expectedError            error
 	}{
@@ -40,7 +40,7 @@ func TestAuthenticate(t *testing.T) {
 			createProvider("test-tenantId", nil),
 			createRefreshTokensClient(nil),
 			cloudauthtest.FakeChallengeLoginServer("test-service", "test-realm", nil),
-			&types.AuthConfig{Username: acrUserForRefreshToken},
+			&registry.AuthConfig{Username: acrUserForRefreshToken},
 			"Successfully authenticated with ACR \"foo.azurecr.us\"",
 			nil,
 		},
@@ -50,7 +50,7 @@ func TestAuthenticate(t *testing.T) {
 			createProvider("test-tenantId", nil),
 			createRefreshTokensClient(nil),
 			cloudauthtest.FakeChallengeLoginServer("test-service", "test-realm", nil),
-			&types.AuthConfig{Username: acrUserForRefreshToken},
+			&registry.AuthConfig{Username: acrUserForRefreshToken},
 			"Successfully authenticated with ACR \"foo.azurecr.cn\"",
 			nil,
 		},
@@ -60,7 +60,7 @@ func TestAuthenticate(t *testing.T) {
 			createProvider("test-tenantId", nil),
 			createRefreshTokensClient(nil),
 			cloudauthtest.FakeChallengeLoginServer("test-service", "test-realm", nil),
-			&types.AuthConfig{Username: acrUserForRefreshToken},
+			&registry.AuthConfig{Username: acrUserForRefreshToken},
 			"Successfully authenticated with ACR \"foo.azurecr.de\"",
 			nil,
 		},
@@ -70,7 +70,7 @@ func TestAuthenticate(t *testing.T) {
 			createProvider("test-tenantId", nil),
 			createRefreshTokensClient(nil),
 			cloudauthtest.FakeChallengeLoginServer("test-service", "test-realm", nil),
-			&types.AuthConfig{Username: acrUserForRefreshToken},
+			&registry.AuthConfig{Username: acrUserForRefreshToken},
 			"Successfully authenticated with ACR \"foo.azurecr.io\"",
 			nil,
 		},

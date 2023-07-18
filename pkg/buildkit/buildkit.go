@@ -53,7 +53,10 @@ func (b *ClientBuilder) WithMTLSAuth(caPath, certPath, keyPath string) *ClientBu
 	if err != nil {
 		b.log.Error(err, "Cannot parse hostname, skipping mTLS auth", "addr", b.addr)
 	} else {
-		b.bkOpts = append(b.bkOpts, bkclient.WithCredentials(u.Hostname(), caPath, certPath, keyPath))
+		b.bkOpts = append(b.bkOpts,
+			bkclient.WithServerConfig(u.Hostname(), caPath),
+			bkclient.WithCredentials(certPath, keyPath),
+		)
 	}
 
 	return b
@@ -327,7 +330,7 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 
 		// this operation should return cleanly when solve returns (either by itself or when cancelled) so there's no
 		// need to cancel it explicitly. see https://github.com/moby/buildkit/pull/1721 for details.
-		_, err := progressui.DisplaySolveStatus(context.Background(), "", c, lw, ch)
+		_, err := progressui.DisplaySolveStatus(context.Background(), c, lw, ch)
 
 		return err
 	})

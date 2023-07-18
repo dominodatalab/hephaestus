@@ -9,7 +9,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
-	dockerTypes "github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/registry"
 	"github.com/go-logr/zapr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,7 +39,7 @@ func TestAuthenticate(t *testing.T) {
 		name               string
 		serverUrl          string
 		client             fakeECRClient
-		authConfig         *dockerTypes.AuthConfig
+		authConfig         *registry.AuthConfig
 		expectedLogMessage string
 		expectedError      error
 	}{
@@ -117,7 +117,7 @@ func TestAuthenticate(t *testing.T) {
 					},
 				},
 			},
-			authConfig: &dockerTypes.AuthConfig{
+			authConfig: &registry.AuthConfig{
 				Username: "abc",
 				Password: "hi",
 			},
@@ -133,7 +133,7 @@ func TestAuthenticate(t *testing.T) {
 					},
 				},
 			},
-			authConfig: &dockerTypes.AuthConfig{
+			authConfig: &registry.AuthConfig{
 				Username: "abc",
 				Password: "hi",
 			},
@@ -149,7 +149,7 @@ func TestAuthenticate(t *testing.T) {
 					},
 				},
 			},
-			authConfig: &dockerTypes.AuthConfig{
+			authConfig: &registry.AuthConfig{
 				Username: "abc",
 				Password: "hi",
 			},

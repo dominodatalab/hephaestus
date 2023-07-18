@@ -13,9 +13,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/ecr/types"
-	dockertypes "github.com/docker/docker/api/types"
 	"github.com/go-logr/logr"
 
+	"github.com/docker/docker/api/types/registry"
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
 )
 
@@ -85,7 +85,7 @@ func TestAuthenticateIntegration(t *testing.T) {
 		}
 
 		actual, err := authenticate(ctx, url)
-		expected := &dockertypes.AuthConfig{
+		expected := &registry.AuthConfig{
 			Username: "steve-o",
 			Password: "awesome",
 		}

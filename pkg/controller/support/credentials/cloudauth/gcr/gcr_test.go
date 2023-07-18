@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/registry"
 	"github.com/go-logr/zapr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -60,7 +60,7 @@ func TestAuthenticate(t *testing.T) {
 		ctx                context.Context
 		roundTripper       roundTripFunc
 		tokenShouldErr     bool
-		authConfig         *types.AuthConfig
+		authConfig         *registry.AuthConfig
 		loginChallenger    cloudauth.LoginChallenger
 		expectedLogMessage string
 		expectedError      error
@@ -145,7 +145,7 @@ func TestAuthenticate(t *testing.T) {
 			serverName:   "gcr.io",
 			ctx:          defaultCtx,
 			roundTripper: createRoundTripperFunc(t, tokenResponse{AccessToken: "test-access-token"}, http.StatusOK),
-			authConfig: &types.AuthConfig{
+			authConfig: &registry.AuthConfig{
 				Username:      "oauth2accesstoken",
 				Password:      "hey",
 				RegistryToken: "test-access-token",
@@ -162,7 +162,7 @@ func TestAuthenticate(t *testing.T) {
 			serverName:   "gcr.io",
 			ctx:          defaultCtx,
 			roundTripper: createRoundTripperFunc(t, tokenResponse{Token: "regular-token"}, http.StatusOK),
-			authConfig: &types.AuthConfig{
+			authConfig: &registry.AuthConfig{
 				Username:      "oauth2accesstoken",
 				Password:      "hey",
 				RegistryToken: "regular-token",
@@ -181,7 +181,7 @@ func TestAuthenticate(t *testing.T) {
 			roundTripper: createRoundTripperFunc(t, tokenResponse{
 				Token: "regular-token", RefreshToken: "ignore-this-refresh-token",
 			}, http.StatusOK),
-			authConfig: &types.AuthConfig{
+			authConfig: &registry.AuthConfig{
 				Username:      "oauth2accesstoken",
 				Password:      "hey",
 				RegistryToken: "regular-token",

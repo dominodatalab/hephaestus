@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/docker/docker/api/types"
+	typesregistry "github.com/docker/docker/api/types/registry"
 	"github.com/docker/docker/registry"
 	"github.com/go-logr/logr"
 	"go.uber.org/multierr"
@@ -32,7 +32,7 @@ var clientsetFunc = func(config *rest.Config) (kubernetes.Interface, error) {
 }
 
 // AuthConfigs is a map of registry urls to authentication credentials.
-type AuthConfigs map[string]types.AuthConfig
+type AuthConfigs map[string]typesregistry.AuthConfig
 
 // DockerConfigJSON models the structure of .dockerconfigjson data.
 type DockerConfigJSON struct {
@@ -58,7 +58,7 @@ func Persist(
 	// for more easily debugging the source of a failed auth.
 	var helpMessage []string
 	for _, cred := range credentials {
-		var ac types.AuthConfig
+		var ac typesregistry.AuthConfig
 
 		switch {
 		case cred.Secret != nil:
@@ -92,7 +92,7 @@ func Persist(
 			helpMessage = append(helpMessage, fmt.Sprintf("secret %q in namespace %q (credentials for servers: %s)", cred.Secret.Name, cred.Secret.Namespace, strings.Join(servers, ", ")))
 			continue
 		case cred.BasicAuth != nil:
-			ac = types.AuthConfig{
+			ac = typesregistry.AuthConfig{
 				Username: cred.BasicAuth.Username,
 				Password: cred.BasicAuth.Password,
 			}

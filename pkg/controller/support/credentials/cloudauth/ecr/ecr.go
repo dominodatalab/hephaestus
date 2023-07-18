@@ -11,7 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
-	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/registry"
 	"github.com/go-logr/logr"
 
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
@@ -46,7 +46,7 @@ func Register(ctx context.Context, logger logr.Logger, registry *cloudauth.Regis
 	return nil
 }
 
-func authenticate(ctx context.Context, logger logr.Logger, url string) (*types.AuthConfig, error) {
+func authenticate(ctx context.Context, logger logr.Logger, url string) (*registry.AuthConfig, error) {
 	logger.WithName("ecr-auth-provider")
 
 	if !urlRegex.MatchString(url) {
@@ -77,7 +77,7 @@ func authenticate(ctx context.Context, logger logr.Logger, url string) (*types.A
 	}
 
 	logger.Info("Successfully authenticated with ECR")
-	return &types.AuthConfig{
+	return &registry.AuthConfig{
 		Username: username,
 		Password: password,
 	}, nil

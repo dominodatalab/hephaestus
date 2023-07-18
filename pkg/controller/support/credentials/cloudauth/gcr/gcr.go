@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/registry"
 	"github.com/go-logr/logr"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -71,7 +71,11 @@ func newProvider(ctx context.Context, logger logr.Logger) (*gcrProvider, error) 
 	return &gcrProvider{logger: logger.WithName("gcr-auth-provider"), tokenSource: creds.TokenSource}, nil
 }
 
-func (g *gcrProvider) authenticate(ctx context.Context, logger logr.Logger, server string) (*types.AuthConfig, error) {
+func (g *gcrProvider) authenticate(
+	ctx context.Context,
+	logger logr.Logger,
+	server string,
+) (*registry.AuthConfig, error) {
 	match := gcrRegex.FindAllString(server, -1)
 	if len(match) != 1 {
 		err := fmt.Errorf(fmt.Sprintf("invalid GCR URL %s should match %s", server, gcrRegex))
@@ -156,7 +160,7 @@ func (g *gcrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 
 	logger.Info(fmt.Sprintf("Successfully authenticated with GCR %q", server))
 	// buildkit only supports username/password
-	return &types.AuthConfig{
+	return &registry.AuthConfig{
 		Username:      "oauth2accesstoken",
 		Password:      token.AccessToken,
 		RegistryToken: response.Token,

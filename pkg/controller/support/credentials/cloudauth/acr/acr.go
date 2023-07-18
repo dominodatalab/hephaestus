@@ -13,7 +13,7 @@ import (
 	cra "github.com/Azure/azure-sdk-for-go/services/preview/containerregistry/runtime/2019-08-15-preview/containerregistry/containerregistryapi"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 	"github.com/Azure/go-autorest/autorest/to"
-	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/registry"
 	"github.com/go-logr/logr"
 
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
@@ -74,7 +74,11 @@ func newProvider(_ context.Context, _ logr.Logger, tenantID string) (*acrProvide
 	}, nil
 }
 
-func (a *acrProvider) authenticate(ctx context.Context, logger logr.Logger, server string) (*types.AuthConfig, error) {
+func (a *acrProvider) authenticate(
+	ctx context.Context,
+	logger logr.Logger,
+	server string,
+) (*registry.AuthConfig, error) {
 	logger = logger.WithName("acr-auth-provider")
 
 	match := acrRegex.FindAllString(server, -1)
@@ -119,7 +123,7 @@ func (a *acrProvider) authenticate(ctx context.Context, logger logr.Logger, serv
 	}
 
 	logger.Info(fmt.Sprintf("Successfully authenticated with ACR %q", server))
-	return &types.AuthConfig{
+	return &registry.AuthConfig{
 		Username: acrUserForRefreshToken,
 		Password: to.String(refreshToken.RefreshToken),
 	}, nil

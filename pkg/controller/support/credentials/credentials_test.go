@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/registry"
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -24,11 +24,11 @@ func TestPersist(t *testing.T) {
 	t.Run("all_secret_auths", func(t *testing.T) {
 		config := DockerConfigJSON{
 			Auths: AuthConfigs{
-				"registry1.com": types.AuthConfig{
+				"registry1.com": registry.AuthConfig{
 					Username: "happy",
 					Password: "gilmore",
 				},
-				"registry2.com": types.AuthConfig{
+				"registry2.com": registry.AuthConfig{
 					Username: "billy",
 					Password: "madison",
 				},

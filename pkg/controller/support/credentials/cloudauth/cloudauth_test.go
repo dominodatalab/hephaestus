@@ -5,25 +5,24 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/docker/docker/api/types/registry"
 	"github.com/go-logr/logr"
-
-	"github.com/docker/docker/api/types"
 )
 
 func TestRegistry_RetrieveAuthorization(t *testing.T) {
-	expected := &types.AuthConfig{
+	expected := &registry.AuthConfig{
 		Username: "test-user",
 		Password: "test-pass",
 	}
-	registry := &Registry{}
-	registry.Register(regexp.MustCompile(`^my.cloud`), func(context.Context, logr.Logger, string) (*types.AuthConfig, error) {
+	r := &Registry{}
+	r.Register(regexp.MustCompile(`^my.cloud`), func(context.Context, logr.Logger, string) (*registry.AuthConfig, error) {
 		return expected, nil
 	})
 
 	testLog := logr.Discard()
 
 	ctx := context.Background()
-	auth, err := registry.RetrieveAuthorization(ctx, testLog, "my.cloud/best/cloud")
+	auth, err := r.RetrieveAuthorization(ctx, testLog, "my.cloud/best/cloud")
 	if err != nil {
 		t.Errorf("unexpected err: %v", err)
 	}
@@ -31,7 +30,7 @@ func TestRegistry_RetrieveAuthorization(t *testing.T) {
 		t.Errorf("wrong auth: got %v, want %v", auth, expected)
 	}
 
-	auth, err = registry.RetrieveAuthorization(ctx, testLog, "your.cloud/silly/cloud")
+	auth, err = r.RetrieveAuthorization(ctx, testLog, "your.cloud/silly/cloud")
 	if err != ErrNoLoader {
 		t.Errorf("wrong err: got %v, want %v", err, ErrNoLoader)
 	}
