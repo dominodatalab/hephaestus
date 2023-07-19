@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -37,11 +38,10 @@ type result struct {
 }
 
 var (
-	owner               = "test-owner"
-	namespace           = "test-namespace"
-	testLabels          = map[string]string{"owned-by": "testing"}
-	testConfig          = config.Buildkit{Namespace: namespace, PodLabels: testLabels, ServiceName: "buildkit", DaemonPort: 1234}
-	testTimeoutDuration = 5 * time.Second
+	owner      = "test-owner"
+	namespace  = "test-namespace"
+	testLabels = map[string]string{"owned-by": "testing"}
+	testConfig = config.Buildkit{Namespace: namespace, PodLabels: testLabels, ServiceName: "buildkit", DaemonPort: 1234}
 )
 
 func TestPoolGet(t *testing.T) {
@@ -65,7 +65,7 @@ func TestPoolGet(t *testing.T) {
 			return true, p, nil
 		})
 
-		wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond))
+		wp := NewPool(fakeClient, testConfig, SyncWaitTime(50*time.Millisecond))
 		defer wp.Close()
 
 		leaseChannel := make(chan result)
@@ -74,6 +74,8 @@ func TestPoolGet(t *testing.T) {
 			leaseChannel <- result{addr, err}
 		}()
 
+		wp.Start(ctx)
+
 		select {
 		case res := <-leaseChannel:
 			require.NoError(t, res.err, "could not acquire a buildkit endpoint")
@@ -81,8 +83,6 @@ func TestPoolGet(t *testing.T) {
 			leaseAddr := res.res.(string)
 			expected := "tcp://buildkit-0.buildkit.test-namespace:1234"
 			assert.Equal(t, expected, leaseAddr, "did not receive correct lease")
-		case <-time.After(testTimeoutDuration):
-			assert.Fail(t, "could not acquire a buildkit endpoint within %s", testTimeoutDuration)
 		}
 	})
 
@@ -135,7 +135,7 @@ func TestPoolGet(t *testing.T) {
 			return true, nil, nil
 		})
 
-		wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond))
+		wp := NewPool(fakeClient, testConfig, SyncWaitTime(50*time.Millisecond))
 		defer wp.Close()
 
 		leaseChannel := make(chan result)
@@ -146,6 +146,8 @@ func TestPoolGet(t *testing.T) {
 			leaseChannel <- result{addr, err}
 		}()
 
+		wp.Start(ctx)
+
 		select {
 		case res := <-leaseChannel:
 			require.NoError(t, res.err, "could not acquire a buildkit endpoint")
@@ -154,8 +156,6 @@ func TestPoolGet(t *testing.T) {
 			leaseAddr := res.res.(string)
 			expected := "tcp://buildkit-0.buildkit.test-namespace:1234"
 			assert.Equal(t, expected, leaseAddr, "did not receive correct lease")
-		case <-time.After(testTimeoutDuration):
-			assert.Fail(t, "could not acquire a buildkit endpoint within %s", testTimeoutDuration)
 		}
 	})
 
@@ -168,7 +168,7 @@ func TestPoolGet(t *testing.T) {
 			return true, nil, errors.New("expected failure")
 		})
 
-		wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond))
+		wp := NewPool(fakeClient, testConfig, SyncWaitTime(50*time.Millisecond))
 		defer wp.Close()
 
 		leaseChannel := make(chan result)
@@ -177,12 +177,12 @@ func TestPoolGet(t *testing.T) {
 			leaseChannel <- result{addr, err}
 		}()
 
+		wp.Start(ctx)
+
 		select {
 		case res := <-leaseChannel:
 			assert.Empty(t, res.res.(string), "expected an empty lease address")
 			assert.EqualError(t, res.err, "cannot update pod metadata: expected failure")
-		case <-time.After(testTimeoutDuration):
-			assert.Fail(t, "could not acquire a buildkit endpoint within %s", testTimeoutDuration)
 		}
 	})
 
@@ -219,7 +219,7 @@ func TestPoolGet(t *testing.T) {
 			return true, p, nil
 		})
 
-		wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond))
+		wp := NewPool(fakeClient, testConfig, SyncWaitTime(50*time.Millisecond))
 		defer wp.Close()
 
 		leaseChannel := make(chan result)
@@ -228,12 +228,12 @@ func TestPoolGet(t *testing.T) {
 			leaseChannel <- result{addr, err}
 		}()
 
+		wp.Start(ctx)
+
 		select {
 		case res := <-leaseChannel:
 			assert.Empty(t, res.res.(string), "expected an empty lease address")
 			assert.EqualError(t, res.err, "failed to extract hostname after 180 seconds")
-		case <-time.After(testTimeoutDuration):
-			assert.Fail(t, "could not acquire a buildkit endpoint within %s", testTimeoutDuration)
 		}
 	})
 
@@ -268,7 +268,7 @@ func TestPoolGet(t *testing.T) {
 			return true, watcher, nil
 		})
 
-		wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond))
+		wp := NewPool(fakeClient, testConfig, SyncWaitTime(50*time.Millisecond))
 		defer wp.Close()
 
 		leaseChannel := make(chan result)
@@ -277,6 +277,8 @@ func TestPoolGet(t *testing.T) {
 			leaseChannel <- result{addr, err}
 		}()
 
+		wp.Start(ctx)
+
 		select {
 		case res := <-leaseChannel:
 			require.NoError(t, res.err, "could not acquire a buildkit endpoint")
@@ -284,8 +286,6 @@ func TestPoolGet(t *testing.T) {
 			leaseAddr := res.res.(string)
 			expected := "tcp://buildkit-0.buildkit.test-namespace:1234"
 			assert.Equal(t, expected, leaseAddr, "did not receive correct lease")
-		case <-time.After(testTimeoutDuration):
-			assert.Fail(t, "could not acquire a buildkit endpoint within %s", testTimeoutDuration)
 		}
 	})
 
@@ -329,7 +329,7 @@ func TestPoolGet(t *testing.T) {
 			return true, nil, nil
 		})
 
-		wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond))
+		wp := NewPool(fakeClient, testConfig, SyncWaitTime(50*time.Millisecond))
 		defer wp.Close()
 
 		leaseChannel := make(chan result)
@@ -337,6 +337,8 @@ func TestPoolGet(t *testing.T) {
 			addr, err := wp.Get(ctx, owner)
 			leaseChannel <- result{addr, err}
 		}()
+
+		wp.Start(ctx)
 
 		select {
 		case res := <-leaseChannel:
@@ -353,8 +355,6 @@ func TestPoolGet(t *testing.T) {
 			if e != nil {
 				t.Errorf("Received error attempting to create test setup: %s", e.Error())
 			}
-		case <-time.After(testTimeoutDuration):
-			t.Errorf("Could not acquire a buildkit endpoint within %s", testTimeoutDuration)
 		}
 	})
 }
@@ -389,8 +389,9 @@ func TestPoolGetFailedScaleUp(t *testing.T) {
 		return true, nil, errors.New("failed scale up")
 	})
 
-	wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond))
+	wp := NewPool(fakeClient, testConfig, SyncWaitTime(50*time.Millisecond))
 	defer wp.Close()
+	wp.Start(ctx)
 
 	addr, err := wp.Get(ctx, owner)
 	if err != nil {
@@ -418,8 +419,6 @@ func TestPoolGetFailedScaleUp(t *testing.T) {
 				t.Errorf("did not received correct lease: %s expected, %s actual", expected, leaseAddr)
 			}
 		}
-	case <-time.After(testTimeoutDuration):
-		t.Errorf("Could not acquire a buildkit endpoint within %s", testTimeoutDuration)
 	}
 }
 
@@ -432,24 +431,25 @@ func TestPoolGetAndClose(t *testing.T) {
 		return true, nil, nil
 	})
 
-	wp := NewPool(context.Background(), fakeClient, testConfig, SyncWaitTime(250*time.Millisecond))
+	wp := NewPool(fakeClient, testConfig, SyncWaitTime(50*time.Millisecond))
+	wp.Start(context.Background())
 
-	done := make(chan struct{})
+	errCh := make(chan error)
 	go func() {
 		addr, err := wp.Get(context.Background(), owner)
-		assert.Empty(t, addr, "acquired lease even though pool was closed")
-		assert.Equal(t, ErrNoUnleasedPods, err, "expected no unleased pods error")
-
-		done <- struct{}{}
+		if addr != "" {
+			err = fmt.Errorf("acquired lease even though pool was closed")
+		} else if err == ErrNoUnleasedPods {
+			err = nil
+		}
+		errCh <- err
 	}()
-	time.Sleep(1 * time.Millisecond)
 
 	wp.Close()
 
-	select {
-	case <-done:
-	case <-time.After(testTimeoutDuration):
-		assert.Fail(t, "worker pool was not closed within %s", testTimeoutDuration)
+	err := <-errCh
+	if err != nil {
+		t.Error(err)
 	}
 }
 
@@ -462,26 +462,27 @@ func TestPoolGetAndCancel(t *testing.T) {
 		return true, nil, nil
 	})
 
-	wp := NewPool(context.Background(), fakeClient, testConfig, SyncWaitTime(250*time.Millisecond))
+	wp := NewPool(fakeClient, testConfig, SyncWaitTime(50*time.Millisecond))
 	defer wp.Close()
+	wp.Start(context.Background())
 
-	done := make(chan struct{})
+	errCh := make(chan error)
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		addr, err := wp.Get(ctx, owner)
-		assert.Empty(t, addr, "acquired lease even though pool was closed")
-		assert.Equal(t, context.Canceled, err)
-
-		done <- struct{}{}
+		if addr != "" {
+			err = fmt.Errorf("acquired lease even though pool was closed")
+		} else if err == context.Canceled {
+			err = nil
+		}
+		errCh <- err
 	}()
-	time.Sleep(1 * time.Millisecond)
 
 	cancel()
 
-	select {
-	case <-done:
-	case <-time.After(testTimeoutDuration):
-		assert.Fail(t, "worker pool was not closed within %s", testTimeoutDuration)
+	err := <-errCh
+	if err != nil {
+		t.Error(err)
 	}
 }
 
@@ -496,8 +497,9 @@ func TestPoolRelease(t *testing.T) {
 			return true, nil, nil
 		})
 
-		wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond), MaxIdleTime(10*time.Minute))
+		wp := NewPool(fakeClient, testConfig, SyncWaitTime(50*time.Millisecond), MaxIdleTime(10*time.Minute))
 		defer wp.Close()
+		wp.Start(ctx)
 
 		assert.NoError(t, wp.Release(ctx, "tcp://buildkit-0.buildkit.default:1234"), "expected release to succeed")
 	})
@@ -505,8 +507,9 @@ func TestPoolRelease(t *testing.T) {
 	t.Run("invalid_address", func(t *testing.T) {
 		fakeClient := fake.NewSimpleClientset(leasedPod())
 
-		wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond), MaxIdleTime(10*time.Minute))
+		wp := NewPool(fakeClient, testConfig, SyncWaitTime(50*time.Millisecond), MaxIdleTime(10*time.Minute))
 		defer wp.Close()
+		wp.Start(ctx)
 
 		invalidAddrs := []string{
 			"buildkit-0.buildkit.default:1234",
@@ -527,8 +530,9 @@ func TestPoolRelease(t *testing.T) {
 	t.Run("missing_pod", func(t *testing.T) {
 		fakeClient := fake.NewSimpleClientset()
 
-		wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond), MaxIdleTime(10*time.Minute))
+		wp := NewPool(fakeClient, testConfig, SyncWaitTime(50*time.Millisecond), MaxIdleTime(10*time.Minute))
 		defer wp.Close()
+		wp.Start(ctx)
 
 		assert.EqualError(t,
 			wp.Release(ctx, "tcp://buildkit-0.buildkit.default:1234"),
@@ -542,8 +546,9 @@ func TestPoolRelease(t *testing.T) {
 			return true, nil, errors.New("test failure")
 		})
 
-		wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(250*time.Millisecond), MaxIdleTime(10*time.Minute))
+		wp := NewPool(fakeClient, testConfig, SyncWaitTime(50*time.Millisecond), MaxIdleTime(10*time.Minute))
 		defer wp.Close()
+		wp.Start(ctx)
 
 		assert.EqualError(t, wp.Release(ctx, "tcp://buildkit-0.buildkit.default:1234"), "cannot update pod metadata: test failure")
 	})
@@ -975,7 +980,6 @@ func TestPoolPodReconciliation(t *testing.T) {
 				expired1.ObjectMeta.Annotations = map[string]string{
 					expiryTimeAnnotation: time.Now().Add(-10 * time.Minute).Format(time.RFC3339),
 				}
-
 				return []runtime.Object{leased0, expired1}
 			},
 			buildRequests:    0,
@@ -985,11 +989,7 @@ func TestPoolPodReconciliation(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
-			replicasCh := make(chan int32)
-			defer close(replicasCh)
+			updateCh := make(chan int32, 1)
 
 			objects := tc.objects()
 			fakeClient := fake.NewSimpleClientset(objects...)
@@ -1003,30 +1003,86 @@ func TestPoolPodReconciliation(t *testing.T) {
 				}
 				return true, watcher, nil
 			})
-			fakeClient.PrependReactor("update", "statefulsets", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			fakeClient.PrependReactor("update", "statefulsets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 				scale := action.(k8stesting.UpdateAction).GetObject().(*autoscalingv1.Scale)
-				replicasCh <- scale.Spec.Replicas
+				updateCh <- scale.Spec.Replicas
 
-				cancel()
 				return true, nil, nil
 			})
 
-			wp := NewPool(ctx, fakeClient, testConfig, SyncWaitTime(500*time.Millisecond), MaxIdleTime(5*time.Minute), Logger(testr.New(t)))
+			wp := NewPool(fakeClient, testConfig, SyncWaitTime(10*time.Millisecond), MaxIdleTime(5*time.Minute), Logger(testr.New(t)))
+
 			for i := 0; i < tc.buildRequests; i++ {
 				wp.requests.Enqueue(&PodRequest{result: make(chan PodRequestResult, 1)})
 			}
-			defer wp.Close()
 
-			select {
-			case actual := <-replicasCh:
-				if tc.expectedReplicas != actual {
-					t.Errorf("expected statefulset update with %d replicas, got %d", tc.expectedReplicas, actual)
-				}
-			case <-time.After(testTimeoutDuration):
-				t.Errorf("worker pool update not received within %s", testTimeoutDuration)
+			if err := wp.reconcileWorkers(context.Background()); err != nil {
+				t.Error(err)
+			}
+
+			actual := <-updateCh
+			if tc.expectedReplicas != actual {
+				t.Errorf("got %d, want %d", actual, tc.expectedReplicas)
 			}
 		})
 	}
+}
+
+func TestPoolClose(t *testing.T) {
+	fakeClient := fake.NewSimpleClientset()
+	t.Run("Started", func(t *testing.T) {
+		wp := NewPool(fakeClient, testConfig, SyncWaitTime(10*time.Millisecond), MaxIdleTime(5*time.Minute), Logger(testr.New(t)))
+		if err := wp.Start(context.Background()); err != nil {
+			t.Error(err)
+		}
+		wp.Close()
+		<-wp.done
+		if err := context.Cause(wp.stopCtx); err != errPoolClosed {
+			t.Error(err)
+		}
+	})
+
+	t.Run("ctx cancelled", func(t *testing.T) {
+		wp := NewPool(fakeClient, testConfig, SyncWaitTime(10*time.Millisecond), MaxIdleTime(5*time.Minute), Logger(testr.New(t)))
+		defer wp.Close()
+
+		ctx, cancel := context.WithCancelCause(context.Background())
+		if err := wp.Start(ctx); err != nil {
+			t.Error(err)
+		}
+		myErr := errors.New("myErr")
+		// Start should exit and done should be closed
+		cancel(myErr)
+		<-wp.done
+		if err := context.Cause(wp.stopCtx); err != nil {
+			t.Error(err)
+		}
+	})
+
+	t.Run("Never started", func(t *testing.T) {
+		wp := NewPool(fakeClient, testConfig, SyncWaitTime(10*time.Millisecond), MaxIdleTime(5*time.Minute), Logger(testr.New(t)))
+		closedCh := make(chan struct{})
+		go func() {
+			wp.Close()
+			close(closedCh)
+		}()
+		select {
+		case <-closedCh:
+			t.Error("unexpected")
+		default:
+		}
+		wp.Start(context.Background())
+		<-closedCh
+	})
+
+	t.Run("Close twice", func(t *testing.T) {
+		wp := NewPool(fakeClient, testConfig, SyncWaitTime(10*time.Millisecond), MaxIdleTime(5*time.Minute), Logger(testr.New(t)))
+		if err := wp.Start(context.Background()); err != nil {
+			t.Error(err)
+		}
+		wp.Close()
+		wp.Close()
+	})
 }
 
 func validSts() *appsv1.StatefulSet {

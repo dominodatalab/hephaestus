@@ -54,17 +54,20 @@ func Start(cfg config.Controller) error {
 		return err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	pool, err := createWorkerPool(ctx, log, mgr, cfg.Buildkit)
+	pool, err := createWorkerPool(log, mgr, cfg.Buildkit)
 	if err != nil {
+		return err
+	}
+	if err = mgr.Add(pool); err != nil {
 		return err
 	}
 
 	if err = registerControllers(log, mgr, pool, nr, cfg); err != nil {
 		return err
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	log.Info("Registering cloud auth providers")
 	if err = credentials.LoadCloudProviders(ctx, log); err != nil {
@@ -136,7 +139,6 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 }
 
 func createWorkerPool(
-	ctx context.Context,
 	log logr.Logger,
 	mgr ctrl.Manager,
 	cfg config.Buildkit,
@@ -163,7 +165,7 @@ func createWorkerPool(
 		return nil, err
 	}
 
-	return worker.NewPool(ctx, clientset, cfg, poolOpts...), nil
+	return worker.NewPool(clientset, cfg, poolOpts...), nil
 }
 
 func registerControllers(

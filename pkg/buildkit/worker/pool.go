@@ -32,6 +32,7 @@ import (
 )
 
 type Pool interface {
+	Start(ctx context.Context) error
 	Get(ctx context.Context, owner string) (workerAddr string, err error)
 	Release(ctx context.Context, workerAddr string) error
 	Close()
@@ -56,9 +57,9 @@ type AutoscalingPool struct {
 	log logr.Logger
 
 	// system shutdown
-	ctx    context.Context
-	cancel context.CancelFunc
-	done   chan struct{}
+	stopCtx     context.Context
+	cancelCause context.CancelCauseFunc
+	done        chan struct{}
 
 	// incoming lease requests
 	requests RequestQueue
@@ -90,9 +91,10 @@ type AutoscalingPool struct {
 	statefulSetClient appsv1typed.StatefulSetInterface
 }
 
+var errPoolClosed = errors.New("AutoscalingPool closed")
+
 // NewPool creates a new worker pool that can be used to lease buildkit workers for image builds.
 func NewPool(
-	ctx context.Context,
 	clientset kubernetes.Interface,
 	conf config.Buildkit,
 	opts ...PoolOption,
@@ -108,11 +110,11 @@ func NewPool(
 	esls := labels.SelectorFromSet(map[string]string{"kubernetes.io/service-name": conf.ServiceName})
 	endpointSliceListOptions := metav1.ListOptions{LabelSelector: esls.String()}
 
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancelCause(context.Background())
 	done := make(chan struct{})
 	wp := &AutoscalingPool{
-		ctx:                       ctx,
-		cancel:                    cancel,
+		stopCtx:                   ctx,
+		cancelCause:               cancel,
 		done:                      done,
 		log:                       o.Log,
 		poolSyncTime:              o.SyncWaitTime,
@@ -133,35 +135,43 @@ func NewPool(
 		statefulSetClient:         clientset.AppsV1().StatefulSets(conf.Namespace),
 		namespace:                 conf.Namespace,
 	}
+	return wp
+}
 
-	wp.log.Info("Starting worker pod monitor", "syncTime", wp.poolSyncTime.String())
+func (p *AutoscalingPool) Start(ctx context.Context) error {
+	p.log.Info("Starting worker pod monitor", "syncTime", p.poolSyncTime.String())
 	go func() {
-		ticker := time.NewTicker(wp.poolSyncTime)
-		defer ticker.Stop()
+		ticker := time.NewTicker(p.poolSyncTime)
+
+		defer func() {
+			ticker.Stop()
+			p.log.Info("Shutting down worker pod monitor")
+			for p.requests.Len() > 0 {
+				close(p.requests.Dequeue().result)
+			}
+			close(p.done)
+		}()
 
 		for {
-			if err := wp.reconcileWorkers(wp.ctx); err != nil {
-				wp.log.Error(err, "Failed to update worker pool")
+			if err := p.reconcileWorkers(ctx); err != nil {
+				p.log.Error(err, "Failed to update worker pool")
 			}
 
 			select {
 			// break out of the select when triggered by notification or tick, this will trigger an update
-			case <-wp.notifyReconcile:
-				wp.log.Info("Reconciling pool, notify triggered")
+			case <-p.notifyReconcile:
+				p.log.Info("Reconciling pool, notify triggered")
 			case <-ticker.C:
-				wp.log.Info("Reconciling pool, sync triggered")
-			case <-wp.ctx.Done():
-				wp.log.Info("Shutting down worker pod monitor")
-				for wp.requests.Len() > 0 {
-					close(wp.requests.Dequeue().result)
-				}
-				close(done)
+				p.log.Info("Reconciling pool, sync triggered")
+			case <-ctx.Done():
+				return
+			case <-p.stopCtx.Done():
 				return
 			}
 		}
 	}()
 
-	return wp
+	return nil
 }
 
 // Get a lease for a worker in the pool and return a routable address.
@@ -192,6 +202,8 @@ func (p *AutoscalingPool) Get(ctx context.Context, owner string) (string, error)
 		}
 	case <-ctx.Done():
 		// context has been cancelled
+		return "", ctx.Err()
+	case <-p.stopCtx.Done():
 		return "", ctx.Err()
 	}
 
@@ -228,7 +240,7 @@ func (p *AutoscalingPool) Release(ctx context.Context, addr string) error {
 
 // Close shuts down the pool by terminating all background routines used to manage requests and garbage collection.
 func (p *AutoscalingPool) Close() {
-	p.cancel()
+	p.cancelCause(errPoolClosed)
 	<-p.done
 }
 
