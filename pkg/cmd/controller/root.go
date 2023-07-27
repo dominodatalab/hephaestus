@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/spf13/cobra"
 
@@ -17,7 +18,10 @@ func NewCommand() *cobra.Command {
 		Use:   "hephaestus-controller",
 		Short: "OCI image build controller using buildkit",
 	}
-	cmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "hephaestus.yaml", "configuration file")
+	cmd.PersistentFlags().StringVarP(&cfgFile, "config", "c",
+		"hephaestus.yaml", "configuration file")
+	cmd.PersistentFlags().StringVarP(&config.CompressionMethod,
+		"compression", "d", "gzip", "Compression method options: zstd,estargz")
 	cmd.AddCommand(
 		newStartCommand(),
 		newRunGCCommand(),
@@ -33,6 +37,8 @@ func newStartCommand() *cobra.Command {
 		Use:   "start",
 		Short: "Start controller",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			config.CompressionMethod, _ = cmd.Flags().GetString("compression")
+			fmt.Printf("BuildKit compression method: %s enabled\n", config.CompressionMethod)
 			cfgFile, err := cmd.Flags().GetString("config")
 			if err != nil {
 				return err
