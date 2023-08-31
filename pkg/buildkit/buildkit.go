@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/containerd/console"
 	"github.com/docker/cli/cli/config"
 	"github.com/go-logr/logr"
 	bkclient "github.com/moby/buildkit/client"
@@ -337,20 +336,19 @@ func (c *Client) solveWith(ctx context.Context, modify func(buildDir string, sol
 }
 
 func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
-	lw := &LogWriter{Logger: c.log}
 	ch := make(chan *bkclient.SolveStatus)
 	eg, ctx := errgroup.WithContext(ctx)
+	lw := &LogWriter{Logger: c.log}
 
 	eg.Go(func() error {
-		var c console.Console
-		if cn, err := console.ConsoleFromFile(os.Stderr); err != nil {
-			c = cn
+		d, err := progressui.NewDisplay(os.Stderr, progressui.AutoMode)
+		if err != nil {
+			// If an error occurs while attempting to create the tty display,
+			// fallback to using plain mode on stdout (in contrast to stderr).
+			d, _ = progressui.NewDisplay(lw, progressui.PlainMode)
 		}
-
-		// this operation should return cleanly when solve returns (either by itself or when cancelled) so there's no
-		// need to cancel it explicitly. see https://github.com/moby/buildkit/pull/1721 for details.
-		_, err := progressui.DisplaySolveStatus(context.Background(), c, lw, ch)
-
+		// not using shared context to not disrupt display but let is finish reporting errors
+		_, err = d.UpdateFrom(ctx, ch)
 		return err
 	})
 

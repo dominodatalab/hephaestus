@@ -20,3 +20,19 @@ func (w *LogWriter) Write(msg []byte) (int, error) {
 	w.Logger.Info(string(msg))
 	return len(msg), nil
 }
+
+func (w *LogWriter) Close() error {
+	return nil
+}
+
+func (w *LogWriter) Fd() uintptr {
+	return uintptr(0)
+}
+
+func (w *LogWriter) Name() string {
+	return ""
+}
+
+func (w *LogWriter) Read(_ []byte) (n int, err error) {
+	return 1, nil
+}
