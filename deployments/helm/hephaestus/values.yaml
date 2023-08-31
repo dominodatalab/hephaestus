@@ -28,6 +28,8 @@ podAnnotations: {}
 podLabels: {}
 podEnv: {}
 
+clusterDomain: cluster.local
+
 # Istio configuration
 istio:
   # Enable support for environments with Istio installed
