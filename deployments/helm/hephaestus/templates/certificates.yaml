@@ -47,7 +47,7 @@ metadata:
 spec:
   dnsNames:
     - {{ include "hephaestus.webhook.service" . }}.{{ .Release.Namespace }}.svc
-    - {{ include "hephaestus.webhook.service" . }}.{{ .Release.Namespace }}.svc.cluster.local
+    - {{ include "hephaestus.webhook.service" . }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}
   issuerRef:
     kind: Issuer
     name: {{ include "hephaestus.certmanager.caIssuer" . }}
