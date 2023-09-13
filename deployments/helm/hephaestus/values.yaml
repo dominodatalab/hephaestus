@@ -19,10 +19,6 @@ uninstallCRDs: false
 # Restrict network access to controller and buildkit pods
 enableNetworkPolicies: true
 
-# Creates policy/RBAC rules that allow this application to function when the PSP admission controller is enabled.
-# This flag will have no effect in k8s >= 1.25.
-enablePodSecurityPolicies: false
-
 # Applied to all pods
 podAnnotations: {}
 podLabels: {}

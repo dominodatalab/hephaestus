@@ -106,13 +106,3 @@ rules:
     verbs:
       - list
       - watch
-  {{- if include "hephaestus.pspRequired" . }}
-  - apiGroups:
-      - policy
-    resources:
-      - podsecuritypolicies
-    resourceNames:
-      - {{ include "hephaestus.manager.name" . }}
-    verbs:
-      - use
-  {{- end }}
