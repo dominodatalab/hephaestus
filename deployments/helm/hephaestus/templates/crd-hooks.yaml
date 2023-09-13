@@ -1,5 +1,5 @@
 {{- $serviceAccountName := printf "%s-hook" (include "hephaestus.serviceAccountName" .) -}}
-{{- $hookName := printf "%s:hook" (include "hephaestus.rbac.managerName" .) -}}
+{{- $hookName := printf "%s:%s:hook" (include "hephaestus.rbac.managerName" .) .Release.Namespace -}}
 
 {{- if or .Values.installCRDs .Values.uninstallCRDs }}
 apiVersion: v1

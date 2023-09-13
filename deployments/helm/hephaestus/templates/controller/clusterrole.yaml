@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "hephaestus.rbac.managerName" . }}
+  name: {{ include "hephaestus.rbac.managerName" . }}:{{ .Release.Namespace }}
   labels:
     {{- include "hephaestus.controller.labels.standard" . | nindent 4 }}
 rules:
