@@ -56,15 +56,6 @@ Returns a unified list of image pull secrets.
 {{- end }}
 
 {{/*
-Return whether or not pod security policies are enabled and supported.
-*/}}
-{{- define "hephaestus.pspRequired" -}}
-{{- if and .Values.enablePodSecurityPolicies (semverCompare "<1.25-0" .Capabilities.KubeVersion.Version) }}
-{{- true }}
-{{- end }}
-{{- end }}
-
-{{/*
 Return if istio is enabled without the use of the CNI plugin.
 */}}
 {{- define "hephaestus.istioWithoutCNI" -}}
