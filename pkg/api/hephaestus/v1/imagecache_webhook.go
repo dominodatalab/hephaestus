@@ -6,25 +6,26 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 var imagecachelog = logf.Log.WithName("webhook").WithName("imagecache")
 
 var _ webhook.Validator = &ImageCache{}
 
-func (in *ImageCache) ValidateCreate() error {
+func (in *ImageCache) ValidateCreate() (admission.Warnings, error) {
 	return in.validateImageCache("create")
 }
 
-func (in *ImageCache) ValidateUpdate(runtime.Object) error {
+func (in *ImageCache) ValidateUpdate(runtime.Object) (admission.Warnings, error) {
 	return in.validateImageCache("update")
 }
 
-func (in *ImageCache) ValidateDelete() error {
-	return nil // not used, just here for interface compliance
+func (in *ImageCache) ValidateDelete() (admission.Warnings, error) {
+	return admission.Warnings{}, nil
 }
 
-func (in *ImageCache) validateImageCache(action string) error {
+func (in *ImageCache) validateImageCache(action string) (admission.Warnings, error) {
 	log := imagecachelog.WithName("validator").WithName(action).WithValues("imagecache", client.ObjectKeyFromObject(in))
 	log.Info("Starting validation")
 
@@ -38,5 +39,5 @@ func (in *ImageCache) validateImageCache(action string) error {
 		errList = append(errList, errs...)
 	}
 
-	return invalidIfNotEmpty(ImageCacheKind, in.Name, errList)
+	return admission.Warnings{}, invalidIfNotEmpty(ImageCacheKind, in.Name, errList)
 }

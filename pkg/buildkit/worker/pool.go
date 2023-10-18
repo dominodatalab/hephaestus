@@ -26,7 +26,7 @@ import (
 	appsv1typed "k8s.io/client-go/kubernetes/typed/apps/v1"
 	corev1typed "k8s.io/client-go/kubernetes/typed/core/v1"
 	discoveryv1typed "k8s.io/client-go/kubernetes/typed/discovery/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"github.com/dominodatalab/hephaestus/pkg/config"
 )
@@ -338,7 +338,7 @@ func (p *AutoscalingPool) buildEndpointURL(ctx context.Context, pod corev1.Pod) 
 func (p *AutoscalingPool) extractHostname(epSlice *discoveryv1.EndpointSlice, podName string) (hostname string) {
 	var portPresent bool
 	for _, port := range epSlice.Ports {
-		if pointer.Int32Deref(port.Port, 0) == p.servicePort {
+		if ptr.Deref(port.Port, 0) == p.servicePort {
 			portPresent = true
 			break
 		}
@@ -352,7 +352,7 @@ func (p *AutoscalingPool) extractHostname(epSlice *discoveryv1.EndpointSlice, po
 			continue
 		}
 
-		if !pointer.BoolDeref(endpoint.Conditions.Ready, false) {
+		if !ptr.Deref(endpoint.Conditions.Ready, false) {
 			break
 		}
 
@@ -435,7 +435,6 @@ func (p *AutoscalingPool) processPodRequest(ctx context.Context, req *PodRequest
 
 	log.Info("Building endpoint URL")
 	addr, err := p.buildEndpointURL(ctx, pod)
-
 	if err != nil {
 		log.Error(err, "Failed to build routable URL")
 
@@ -493,13 +492,13 @@ func (p *AutoscalingPool) diagnoseEndpointSlices(ctx context.Context, podName st
 			if endpoint.TargetRef.Name == podName {
 				log.Info("Found endpoint for pod", "endpoint", endpoint)
 
-				if !pointer.BoolDeref(endpoint.Conditions.Ready, false) {
+				if !ptr.Deref(endpoint.Conditions.Ready, false) {
 					log.Info("Endpoint IS NOT ready")
 				}
-				if !pointer.BoolDeref(endpoint.Conditions.Serving, false) {
+				if !ptr.Deref(endpoint.Conditions.Serving, false) {
 					log.Info("Endpoint IS NOT serving")
 				}
-				if pointer.BoolDeref(endpoint.Conditions.Terminating, false) {
+				if ptr.Deref(endpoint.Conditions.Terminating, false) {
 					log.Info("Endpoint IS terminating")
 				}
 

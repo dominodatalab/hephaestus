@@ -85,7 +85,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	}()
 
 	if obj.Status.Phase != "" {
-		log.Info("Aborting reconcile, status phase in not blank", "phase", obj.Status.Phase)
+		log.Info("Aborting reconcile, status phase is not blank", "phase", obj.Status.Phase)
 		txn.Ignore()
 
 		return ctrl.Result{}, nil

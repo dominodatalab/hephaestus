@@ -58,7 +58,7 @@ func authenticate(ctx context.Context, logger logr.Logger, url string) (*registr
 
 	resp, err := client.GetAuthorizationToken(ctx, input)
 	if err != nil {
-		err = fmt.Errorf("failed to access ECR auth token: %s", err)
+		err = fmt.Errorf("failed to access ECR auth token: %w", err)
 		logger.Info(err.Error())
 		return nil, err
 	}
@@ -71,7 +71,7 @@ func authenticate(ctx context.Context, logger logr.Logger, url string) (*registr
 
 	username, password, err := decodeAuth(authToken)
 	if err != nil {
-		err = fmt.Errorf("invalid ECR authorization token: %s", err)
+		err = fmt.Errorf("invalid ECR authorization token: %w", err)
 		logger.Info(err.Error())
 		return nil, err
 	}

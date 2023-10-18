@@ -5,6 +5,21 @@ run:
     - cribbed.go
     - "zz_generated.*"
 linters-settings:
+  depguard:
+    rules:
+      main:
+        files:
+          - "!**/*_a _file.go"
+        # allow:
+        #   - $gostd
+        #   - github.com/OpenPeeDeeP
+        deny:
+          - pkg: "github.com/sirupsen/logrus"
+            desc: not allowed
+          - pkg: "github.com/pkg/errors"
+            desc: Should be replaced by standard lib errors package
+  errorlint:
+    comparison: false
   funlen: # NOTE: bring these values down
     lines: 200
     statements: 100
@@ -22,63 +37,45 @@ linters-settings:
     line-length: 120
   nakedret:
     max-func-lines: 35
+  tagalign:
+    align: false
+    sort: true
 linters:
   enable-all: true
   disable:
-   - asciicheck
-   - containedctx
-   - cyclop
-   - deadcode
-   - errorlint
-   - exhaustive
-   - exhaustivestruct
-   - exhaustruct
-   - forbidigo
-   - forcetypeassert
-   - gci
-   - gochecknoinits
-   - gochecknoglobals
-   - gocognit
-   - godot
-   - godox
-   - goerr113
-   - gofumpt
-   - golint
-   - gomnd
-   - gomoddirectives
-   - ifshort
-   - interfacer
-   - ireturn
-   - maintidx
-   - maligned
-   - nlreturn
-   - nonamedreturns
-   - nosnakecase
-   - nosprintfhostport
-   - nestif
-   - prealloc
-   - tagliatelle
-   - testpackage
-   - scopelint
-   - structcheck
-   - varcheck
-   - varnamelen
-   - wrapcheck
-   - wsl
-issues:
-  exclude-rules:
-    - path: pkg/buildkit/worker/pool.go
-      text: "ifElseChain: rewrite if-else to switch statement"
-      linters:
-        - gocritic
-    - path: pkg/crd/crd.go
-      text: "waitForIstioSidecar"
-      linters:
-        - contextcheck
-    - path: pkg/controller/support/credentials/cloudauth/ecr/ecr.go
-      text: "NewFromConfig"
-      linters:
-        - contextcheck
-    - linters:
-        - lll
-      source: "github.com/Azure/azure-sdk-for-go"
+    - containedctx
+    - cyclop
+    - deadcode
+    - exhaustive
+    - exhaustivestruct
+    - exhaustruct
+    - forbidigo
+    - forcetypeassert
+    - gci
+    - gochecknoinits
+    - gochecknoglobals
+    - gocognit
+    - godot
+    - godox
+    - goerr113
+    - gofumpt
+    - golint
+    - gomnd
+    - ifshort
+    - interfacer
+    - ireturn
+    - maligned
+    - nlreturn
+    - nonamedreturns
+    - nosnakecase
+    - nosprintfhostport
+    - nestif
+    - prealloc
+    - scopelint
+    - structcheck
+    - tagliatelle
+    - typecheck
+    - varcheck
+    - varnamelen
+    - wrapcheck
+    - wsl

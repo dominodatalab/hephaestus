@@ -48,7 +48,6 @@ func ReadSecrets(
 		labels := labels.SelectorFromSet(map[string]string{hephv1.AccessLabel: "true"})
 		secrets, err := secretClient.List(ctx,
 			metav1.ListOptions{FieldSelector: fields.String(), LabelSelector: labels.String()})
-
 		if err != nil {
 			return map[string][]byte{}, fmt.Errorf("failure querying for secret %q: %w", path, err)
 		}

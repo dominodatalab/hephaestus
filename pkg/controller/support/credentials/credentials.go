@@ -16,7 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
@@ -98,7 +98,7 @@ func Persist(
 			}
 
 			helpMessage = append(helpMessage, "basic authentication username and password")
-		case pointer.BoolDeref(cred.CloudProvided, false):
+		case ptr.Deref(cred.CloudProvided, false):
 			pac, err := CloudAuthRegistry.RetrieveAuthorization(ctx, logger, cred.Server)
 			if err != nil {
 				return "", nil, fmt.Errorf("cloud registry authorization failed: %w", err)

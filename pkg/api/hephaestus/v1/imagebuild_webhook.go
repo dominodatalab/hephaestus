@@ -9,6 +9,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 var imagebuildlog = logf.Log.WithName("webhook").WithName("imagebuild")
@@ -22,19 +23,19 @@ func (in *ImageBuild) Default() {
 
 var _ webhook.Validator = &ImageBuild{}
 
-func (in *ImageBuild) ValidateCreate() error {
+func (in *ImageBuild) ValidateCreate() (admission.Warnings, error) {
 	return in.validateImageBuild("create")
 }
 
-func (in *ImageBuild) ValidateUpdate(runtime.Object) error {
+func (in *ImageBuild) ValidateUpdate(runtime.Object) (admission.Warnings, error) {
 	return in.validateImageBuild("update")
 }
 
-func (in *ImageBuild) ValidateDelete() error {
-	return nil // not used, just here for interface compliance
+func (in *ImageBuild) ValidateDelete() (admission.Warnings, error) {
+	return admission.Warnings{}, nil
 }
 
-func (in *ImageBuild) validateImageBuild(action string) error {
+func (in *ImageBuild) validateImageBuild(action string) (admission.Warnings, error) {
 	log := imagebuildlog.WithName("validator").WithName(action).WithValues("imagebuild", client.ObjectKeyFromObject(in))
 	log.V(1).Info("Starting validation")
 
@@ -70,5 +71,5 @@ func (in *ImageBuild) validateImageBuild(action string) error {
 		log.Info("WARNING: Blank 'logKey' will preclude post-log processing")
 	}
 
-	return invalidIfNotEmpty(ImageBuildKind, in.Name, errList)
+	return admission.Warnings{}, invalidIfNotEmpty(ImageBuildKind, in.Name, errList)
 }

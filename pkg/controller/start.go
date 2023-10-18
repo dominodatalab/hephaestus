@@ -15,6 +15,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
@@ -102,26 +103,29 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 
 	opts := ctrl.Options{
 		Scheme:                 scheme,
-		Port:                   cfg.WebhookPort,
-		MetricsBindAddress:     cfg.MetricsAddr,
+		Metrics:                server.Options{BindAddress: cfg.MetricsAddr},
 		HealthProbeBindAddress: cfg.HealthProbeAddr,
 		LeaderElection:         cfg.EnableLeaderElection,
 		LeaderElectionID:       "hephaestus-controller-lock",
 	}
+	webhookOpts := webhook.Options{Port: cfg.WebhookPort}
 
 	if certDir := os.Getenv("WEBHOOK_SERVER_CERT_DIR"); certDir != "" {
 		log.Info("Overriding webhook server certificate directory", "value", certDir)
-		opts.WebhookServer = &webhook.Server{
-			CertDir: certDir,
-		}
+		webhookOpts.CertDir = certDir
 	}
 
 	if len(cfg.WatchNamespaces) > 0 {
 		log.Info("Limiting reconciliation watch", "namespaces", cfg.WatchNamespaces)
-		opts.NewCache = cache.MultiNamespacedCacheBuilder(cfg.WatchNamespaces)
+		defaultNS := map[string]cache.Config{}
+		for _, ns := range cfg.WatchNamespaces {
+			defaultNS[ns] = cache.Config{}
+		}
+		opts.Cache = cache.Options{DefaultNamespaces: defaultNS}
 	} else {
 		log.Info("Watching all namespaces")
 	}
+	opts.WebhookServer = webhook.NewServer(webhookOpts)
 
 	log.Info("Creating new controller manager")
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), opts)

@@ -63,7 +63,7 @@ sdks: crds openapi ## Generate non-GO client libraries
 .PHONY: tools
 tools: ## Install go tooling
 	@echo Installing tools from tools/tools.go
-	@cd tools && go list -f '{{range .Imports}}{{.}}{{"\n"}}{{end}}' tools.go | xargs -I % go install %
+	@cd tools && go list -e -f '{{range .Imports}}{{.}}{{"\n"}}{{end}}' tools.go | xargs -I % go install %
 
 .DEFAULT_GOAL:=help
 help: ## Display this help

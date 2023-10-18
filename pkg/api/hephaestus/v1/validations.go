@@ -3,11 +3,11 @@ package v1
 import (
 	"strings"
 
-	"github.com/docker/distribution/reference"
+	"github.com/distribution/reference"
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 func validateImages(log logr.Logger, fp *field.Path, images []string) (errs field.ErrorList) {
@@ -41,7 +41,7 @@ func validateRegistryAuth(log logr.Logger, fp *field.Path, registryAuth []Regist
 
 		ba := auth.BasicAuth != nil
 		sa := auth.Secret != nil
-		ca := pointer.BoolDeref(auth.CloudProvided, false)
+		ca := ptr.Deref(auth.CloudProvided, false)
 
 		if (ba && sa) || (ba && ca) || (sa && ca) {
 			log.V(1).Info("Multiple registry credential sources provided")
