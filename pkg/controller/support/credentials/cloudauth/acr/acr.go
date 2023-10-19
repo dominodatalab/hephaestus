@@ -14,21 +14,23 @@ import (
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/docker/docker/api/types/registry"
-	"github.com/go-logr/logr"
-
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
+	"github.com/go-logr/logr"
 )
 
 // https://github.com/Azure/acr/blob/main/docs/AAD-OAuth.md
 
 const acrUserForRefreshToken = "00000000-0000-0000-0000-000000000000"
 
-var acrRegex = regexp.MustCompile(`.*\.azurecr\.io|.*\.azurecr\.cn|.*\.azurecr\.de|.*\.azurecr\.us`)
-var errACRURL = fmt.Errorf("ACR URL is invalid, should match pattern %v", acrRegex)
-var defaultRefreshTokensClient refreshTokensClientFunc = func(loginURL string) cra.RefreshTokensClientAPI {
-	obj := containerregistry.NewRefreshTokensClient(loginURL)
-	return &obj
-}
+var (
+	acrRegex  = regexp.MustCompile(`.*\.azurecr\.io|.*\.azurecr\.cn|.*\.azurecr\.de|.*\.azurecr\.us`)
+	errACRURL = fmt.Errorf("ACR URL is invalid, should match pattern %v", acrRegex)
+
+	defaultRefreshTokensClient refreshTokensClientFunc = func(loginURL string) cra.RefreshTokensClientAPI {
+		obj := containerregistry.NewRefreshTokensClient(loginURL)
+		return &obj
+	}
+)
 var defaultChallengeLoginServer = cloudauth.ChallengeLoginServer
 
 type refreshTokensClientFunc func(loginURL string) cra.RefreshTokensClientAPI

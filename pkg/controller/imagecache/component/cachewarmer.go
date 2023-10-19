@@ -15,7 +15,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/hephaestus/pkg/config"
@@ -56,7 +55,7 @@ func (c *CacheWarmerComponent) Initialize(ctx *core.Context, bldr *ctrl.Builder)
 	}
 
 	bldr.Watches(
-		&source.Kind{Type: &corev1.Pod{}},
+		&corev1.Pod{},
 		handler.EnqueueRequestsFromMapFunc(c.mapBuildkitPodChanges),
 		builder.WithPredicates(predicate.Funcs{CreateFunc: func(event.CreateEvent) bool { return true }}),
 		// &eventhandler.PodMonitor{
@@ -206,7 +205,8 @@ func (c *CacheWarmerComponent) Reconcile(ctx *core.Context) (ctrl.Result, error)
 	// return ctrl.Result{}, nil
 }
 
-func (c *CacheWarmerComponent) mapBuildkitPodChanges(obj client.Object) (requests []reconcile.Request) {
+func (c *CacheWarmerComponent) mapBuildkitPodChanges(ctx context.Context, obj client.Object,
+) (requests []reconcile.Request) {
 	if len(c.config.PodLabels) > len(obj.GetLabels()) {
 		return
 	}
@@ -223,7 +223,7 @@ func (c *CacheWarmerComponent) mapBuildkitPodChanges(obj client.Object) (request
 	}
 
 	cacheList := &hephv1.ImageCacheList{}
-	err := c.client.List(context.Background(), cacheList)
+	err := c.client.List(ctx, cacheList)
 	if err != nil {
 		c.log.Error(err, "cannot list image cache objects")
 	}

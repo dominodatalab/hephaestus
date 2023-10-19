@@ -229,12 +229,12 @@ func (a *ScaleArbiter) isOperationalPod(ctx context.Context, log logr.Logger, po
 	pod, err := a.podClient.Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
 		log.Error(err, "Failed to check if pod is operational")
-		return
+		return false
 	}
 
 	// this does not mean the pod is usable but is a good sanity check
 	if pod.Status.Phase != corev1.PodRunning {
-		return
+		return false
 	}
 
 	// assert the following:

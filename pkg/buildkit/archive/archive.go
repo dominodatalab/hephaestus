@@ -36,7 +36,7 @@ var defaultBackoff = wait.Backoff{ // retries after 1s 2s 4s 8s 16s 32s 64s 128s
 }
 
 type fileDownloader interface {
-	Get(string) (*http.Response, error)
+	Do(req *http.Request) (*http.Response, error)
 }
 
 type Extractor func(context.Context, logr.Logger, string, string, time.Duration) (*Extraction, error)
@@ -71,8 +71,8 @@ func FetchAndExtract(ctx context.Context, log logr.Logger, url, wd string, timeo
 
 	archive := filepath.Join(wd, "archive")
 
-	err := wait.ExponentialBackoffWithContext(ctx, defaultBackoff, func() (bool, error) {
-		return downloadFile(log, http.DefaultClient, url, archive)
+	err := wait.ExponentialBackoffWithContext(ctx, defaultBackoff, func(ctx context.Context) (bool, error) {
+		return downloadFile(ctx, log, http.DefaultClient, url, archive)
 	})
 	if err != nil {
 		return nil, err
@@ -108,8 +108,12 @@ func retryable(err *url.Error) bool {
 
 // downloadFile takes a file URL and local location to download it to.
 // It returns "done" (retryable or not) and an error.
-func downloadFile(log logr.Logger, c fileDownloader, fileURL, fp string) (bool, error) {
-	resp, err := c.Get(fileURL)
+func downloadFile(ctx context.Context, log logr.Logger, c fileDownloader, fileURL, fp string) (bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fileURL, nil)
+	if err != nil {
+		return false, err
+	}
+	resp, err := c.Do(req)
 	if err != nil {
 		var urlError *url.Error
 		if errors.As(err, &urlError) && retryable(urlError) {

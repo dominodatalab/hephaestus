@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/distribution/reference"
+	"github.com/distribution/reference"
 	amqpclient "github.com/dominodatalab/amqp-client"
 	"github.com/dominodatalab/controller-util/core"
 	"github.com/newrelic/go-agent/v3/newrelic"
@@ -23,7 +23,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/hephaestus/pkg/config"
@@ -45,7 +44,7 @@ func StatusMessenger(cfg config.Messaging, nr *newrelic.Application) *AMQPMessen
 
 func (c *AMQPMessengerComponent) Initialize(_ *core.Context, bldr *ctrl.Builder) error {
 	bldr.Watches(
-		&source.Kind{Type: &hephv1.ImageBuild{}},
+		&hephv1.ImageBuild{},
 		&handler.EnqueueRequestForObject{},
 		builder.WithPredicates(predicate.Funcs{
 			CreateFunc:  func(event.CreateEvent) bool { return true },
