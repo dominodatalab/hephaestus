@@ -24,7 +24,7 @@ require (
 	github.com/go-logr/zapr v1.2.4
 	github.com/h2non/filetype v1.1.3
 	github.com/hashicorp/go-retryablehttp v0.7.4
-	github.com/moby/buildkit v0.12.2
+	github.com/moby/buildkit v0.12.3
 	github.com/newrelic/go-agent/v3 v3.26.0
 	github.com/newrelic/go-agent/v3/integrations/nrzap v1.0.1
 	github.com/spf13/cobra v1.7.0
@@ -42,7 +42,7 @@ require (
 	k8s.io/client-go v0.28.3
 	k8s.io/kube-openapi v0.0.0-20231010175941-2dd684a91f00
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
-	sigs.k8s.io/controller-runtime v0.16.2
+	sigs.k8s.io/controller-runtime v0.16.3
 	sigs.k8s.io/yaml v1.3.0
 )
 
