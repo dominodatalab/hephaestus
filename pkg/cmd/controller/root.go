@@ -24,7 +24,6 @@ func NewCommand() *cobra.Command {
 		"compression", "d", "gzip", "Compression method options: zstd,estargz")
 	cmd.AddCommand(
 		newStartCommand(),
-		newRunGCCommand(),
 		newCRDApplyCommand(),
 		newCRDDeleteCommand(),
 	)
@@ -56,38 +55,6 @@ func newStartCommand() *cobra.Command {
 			return controller.Start(cfg)
 		},
 	}
-}
-
-func newRunGCCommand() *cobra.Command {
-	var istioEnabled bool
-	cmd := &cobra.Command{
-		Use:   "run-gc",
-		Short: "Runs the image builder automatic cleanup",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfgFile, err := cmd.Flags().GetString("config")
-			if err != nil {
-				return err
-			}
-			cfg, err := config.LoadFromFile(cfgFile)
-			if err != nil {
-				return err
-			}
-			if err = cfg.Validate(); err != nil {
-				return err
-			}
-
-			maxIBRetention, err := cmd.Flags().GetInt("maxIBRetention")
-			if err != nil {
-				return err
-			}
-
-			return controller.RunGC(maxIBRetention, cfg.Manager, istioEnabled)
-		},
-	}
-	cmd.PersistentFlags().BoolVar(&istioEnabled, "istio-enabled", false, "Enable support for Istio sidecar container")
-	cmd.Flags().Int("maxIBRetention", 5, "Delete all ContainerImageBuild resources in a 'finished' "+
-		"state that exceed this count, we will retain the newest builds.")
-	return cmd
 }
 
 func newCRDApplyCommand() *cobra.Command {

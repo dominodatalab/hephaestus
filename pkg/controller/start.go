@@ -14,6 +14,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -189,8 +190,10 @@ func registerControllers(
 	nr *newrelic.Application,
 	cfg config.Controller,
 ) error {
+	deleteCh := make(chan client.ObjectKey, 10)
+
 	log.Info("Registering ImageBuild controller")
-	if err := imagebuild.Register(mgr, cfg, pool, nr); err != nil {
+	if err := imagebuild.Register(mgr, cfg, pool, nr, deleteCh); err != nil {
 		return err
 	}
 
@@ -200,7 +203,7 @@ func registerControllers(
 	}
 
 	log.Info("Registering ImageBuildDelete controller")
-	if err := imagebuild.RegisterImageBuildDelete(mgr); err != nil {
+	if err := imagebuild.RegisterImageBuildDelete(mgr, deleteCh); err != nil {
 		return err
 	}
 

@@ -6,10 +6,10 @@ import (
 )
 
 type RequestQueue interface {
-	Enqueue(*PodRequest)
+	Enqueue(r *PodRequest)
 	Dequeue() *PodRequest
 	Len() int
-	Remove(*PodRequest) bool
+	Remove(r *PodRequest) bool
 }
 
 type PodRequest struct {
