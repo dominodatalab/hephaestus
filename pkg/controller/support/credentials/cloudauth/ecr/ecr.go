@@ -10,11 +10,12 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
+	"github.com/aws/smithy-go/logging"
 	"github.com/docker/docker/api/types/registry"
-	"github.com/go-logr/logr"
-
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
+	"github.com/go-logr/logr"
 )
 
 type ecrClient interface {
@@ -25,21 +26,46 @@ type ecrClient interface {
 	) (*ecr.GetAuthorizationTokenOutput, error)
 }
 
+type awsLogger struct {
+	logr.Logger
+}
+
+func (l awsLogger) Logf(classification logging.Classification, format string, v ...interface{}) {
+	var level int
+	if classification == logging.Debug {
+		level = 1
+	}
+
+	l.V(level).Info(fmt.Sprintf(format, v...))
+}
+
 var (
 	client   ecrClient
 	urlRegex = regexp.MustCompile(
 		`^(?P<aws_account_id>[a-zA-Z\d][a-zA-Z\d-_]*)\.dkr\.ecr(-fips)?\.([a-zA-Z\d][a-zA-Z\d-_]*)\.amazonaws\.com(\.cn)?`,
 	)
+	clientMode = aws.LogRequest | aws.LogResponse | aws.LogRetries
 )
 
 func Register(ctx context.Context, logger logr.Logger, registry *cloudauth.Registry) error {
-	config, err := config.LoadDefaultConfig(ctx, config.WithEC2IMDSRegion())
+	clientLogger := &awsLogger{logger}
+	awsConfig, err := config.LoadDefaultConfig(
+		ctx,
+		config.WithEC2IMDSRegion(func(o *config.UseEC2IMDSRegion) {
+			o.Client = imds.New(imds.Options{
+				ClientLogMode: clientMode,
+				Logger:        clientLogger,
+			})
+		}),
+		config.WithLogger(clientLogger),
+		config.WithClientLogMode(clientMode),
+	)
 	if err != nil {
 		logger.Info("ECR not registered", "error", err)
 		return nil
 	}
 
-	client = ecr.NewFromConfig(config)
+	client = ecr.NewFromConfig(awsConfig)
 
 	registry.Register(urlRegex, authenticate)
 	logger.Info("ECR registered")

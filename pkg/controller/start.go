@@ -67,7 +67,7 @@ func Start(cfg config.Controller) error {
 		return err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	log.Info("Registering cloud auth providers")
