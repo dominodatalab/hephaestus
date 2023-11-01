@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"time"
 
@@ -81,7 +80,7 @@ func Start(cfg config.Controller) error {
 	ctx, cancel := context.WithTimeout(context.Background(), cloudAuthRegistrationTimeout)
 	defer cancel()
 
-	log.Info(fmt.Sprintf("Registering cloud auth providers with %s timeout", cloudAuthRegistrationTimeout))
+	log.Info("Registering cloud auth providers", "timeout", cloudAuthRegistrationTimeout)
 	if err = credentials.LoadCloudProviders(ctx, log); err != nil {
 		return err
 	}

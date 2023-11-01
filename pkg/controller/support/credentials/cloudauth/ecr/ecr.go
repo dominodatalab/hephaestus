@@ -44,10 +44,10 @@ var (
 	urlRegex = regexp.MustCompile(
 		`^(?P<aws_account_id>[a-zA-Z\d][a-zA-Z\d-_]*)\.dkr\.ecr(-fips)?\.([a-zA-Z\d][a-zA-Z\d-_]*)\.amazonaws\.com(\.cn)?`,
 	)
-	clientMode = aws.LogRequest | aws.LogResponse | aws.LogRetries
 )
 
 func Register(ctx context.Context, logger logr.Logger, registry *cloudauth.Registry) error {
+	clientMode := aws.LogRequest | aws.LogResponse | aws.LogRetries
 	clientLogger := &awsLogger{logger}
 	awsConfig, err := config.LoadDefaultConfig(
 		ctx,
