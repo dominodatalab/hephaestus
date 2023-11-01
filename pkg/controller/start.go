@@ -30,6 +30,16 @@ import (
 	// +kubebuilder:scaffold:imports
 )
 
+var cloudAuthRegistrationTimeout = 30 * time.Second
+
+func init() {
+	if cloudAuthRegTimeoutEnv := os.Getenv("CLOUD_AUTH_REGISTRATION_TIMEOUT"); cloudAuthRegTimeoutEnv != "" {
+		if duration, err := time.ParseDuration(cloudAuthRegTimeoutEnv); err == nil {
+			cloudAuthRegistrationTimeout = duration
+		}
+	}
+}
+
 // Start creates a new controller manager, registers controllers, and starts
 // their control loops for resource reconciliation.
 func Start(cfg config.Controller) error {
@@ -67,10 +77,10 @@ func Start(cfg config.Controller) error {
 		return err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), cloudAuthRegistrationTimeout)
 	defer cancel()
 
-	log.Info("Registering cloud auth providers")
+	log.Info("Registering cloud auth providers", "timeout", cloudAuthRegistrationTimeout)
 	if err = credentials.LoadCloudProviders(ctx, log); err != nil {
 		return err
 	}
