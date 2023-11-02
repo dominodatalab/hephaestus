@@ -103,7 +103,7 @@ func (gc *ImageBuildGC) gc(ctx context.Context, namespace string) error {
 	sort.Slice(builds, func(i, j int) bool {
 		iTS := builds[i].CreationTimestamp
 		jTS := builds[j].CreationTimestamp
-		if before := iTS.Before(&jTS); before {
+		if iTS.Before(&jTS) {
 			return true
 		}
 		if iTS.Equal(&jTS) {

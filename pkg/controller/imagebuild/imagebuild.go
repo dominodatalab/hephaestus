@@ -15,7 +15,10 @@ import (
 	"github.com/dominodatalab/hephaestus/pkg/controller/imagebuild/predicate"
 )
 
-func Register(mgr ctrl.Manager, cfg config.Controller, pool worker.Pool, nr *newrelic.Application,
+func Register(mgr ctrl.Manager,
+	cfg config.Controller,
+	pool worker.Pool,
+	nr *newrelic.Application,
 	deleteChan chan client.ObjectKey,
 ) error {
 	err := core.NewReconciler(mgr).
