@@ -7,12 +7,16 @@ import (
 	"time"
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-var ErrMissingNamespaces = errors.New("no namespaces specified")
+var (
+	ErrMissingNamespaces = errors.New("no namespaces specified")
+	ErrInvalidNamespace  = errors.New("invalid namespace name")
+)
 
 type ImageBuildGC struct {
 	HistoryLimit int
@@ -40,18 +44,34 @@ func (gc *ImageBuildGC) Start(ctx context.Context) error {
 }
 
 func (gc *ImageBuildGC) GC(ctx context.Context) error {
+	namespaces := gc.Namespaces
+	if len(namespaces) == 1 && namespaces[0] == "" {
+		nsList := &corev1.NamespaceList{}
+		err := gc.Client.List(ctx, nsList)
+		if err != nil {
+			return err
+		}
+		namespaces = make([]string, 0, len(nsList.Items))
+		for _, ns := range nsList.Items {
+			namespaces = append(namespaces, ns.Name)
+		}
+	}
+
 	var errs []error
-	for i := range gc.Namespaces {
-		errs = append(errs, gc.gc(ctx, gc.Namespaces[i]))
+	for i := range namespaces {
+		errs = append(errs, gc.gc(ctx, namespaces[i]))
 	}
 	return errors.Join(errs...)
 }
 
 func (gc *ImageBuildGC) gc(ctx context.Context, namespace string) error {
 	logger := log.FromContext(ctx)
-	if namespace != "" {
-		logger = logger.WithValues("namespace", namespace)
+	if namespace == "" {
+		logger.Error(ErrInvalidNamespace, "Namespace cannot be empty")
+		return ErrInvalidNamespace
 	}
+
+	logger = logger.WithValues("namespace", namespace)
 	logger.Info("Image Build GC starting")
 	defer logger.Info("Image Build GC finished")
 
@@ -80,7 +100,6 @@ func (gc *ImageBuildGC) gc(ctx context.Context, namespace string) error {
 		return nil
 	}
 
-	logger.Info("Removing ImageBuilds", "count", len(builds))
 	sort.Slice(builds, func(i, j int) bool {
 		iTS := builds[i].CreationTimestamp
 		jTS := builds[j].CreationTimestamp
@@ -96,6 +115,8 @@ func (gc *ImageBuildGC) gc(ctx context.Context, namespace string) error {
 		return false
 	})
 	builds = builds[:len(builds)-gc.HistoryLimit]
+
+	logger.Info("Deleting ImageBuilds", "imageBuildsToRemove", len(builds))
 
 	var errList []error
 	for i := range builds {

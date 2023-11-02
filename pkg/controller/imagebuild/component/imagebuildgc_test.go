@@ -3,33 +3,65 @@ package component
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
-var ibGVR = schema.GroupVersionResource{
-	Group:    hephv1.SchemeGroupVersion.Group,
-	Version:  hephv1.SchemeGroupVersion.Version,
-	Resource: "imagebuilds",
-}
+var (
+	ibGVR = schema.GroupVersionResource{
+		Group:    hephv1.SchemeGroupVersion.Group,
+		Version:  hephv1.SchemeGroupVersion.Version,
+		Resource: "imagebuilds",
+	}
 
-var ibGVK = schema.GroupVersionKind{
-	Group:   hephv1.SchemeGroupVersion.Group,
-	Version: hephv1.SchemeGroupVersion.Version,
-	Kind:    hephv1.ImageBuildKind,
-}
+	ibGVK = schema.GroupVersionKind{
+		Group:   hephv1.SchemeGroupVersion.Group,
+		Version: hephv1.SchemeGroupVersion.Version,
+		Kind:    hephv1.ImageBuildKind,
+	}
+
+	scheme = sync.OnceValue(func() *runtime.Scheme {
+		s := runtime.NewScheme()
+		utilruntime.Must(kubescheme.AddToScheme(s))
+		utilruntime.Must(hephv1.AddToScheme(s))
+		return s
+	})
+
+	nsAloha = v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "aloha",
+		},
+	}
+
+	nsAloha2 = v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "aloha2",
+		},
+	}
+
+	nsAloha3 = v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "aloha3",
+		},
+	}
+)
 
 func TestGC(t *testing.T) {
 	now := time.Now()
+
 	ibSuccess := ib("Success", "aloha", now)
 
 	ibKeep := ib("keep", "aloha", now)
@@ -48,8 +80,10 @@ func TestGC(t *testing.T) {
 			[]string{""},
 			[]invocation{
 				invokeList(""),
-				invokeDelete(ibFailed),
+				invokeList("aloha"),
 				invokeDelete(ibSuccess),
+				invokeList("aloha2"),
+				invokeDelete(ibFailed),
 			},
 		},
 		{
@@ -65,8 +99,7 @@ func TestGC(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			schema, _ := hephv1.SchemeBuilder.Build()
-			fakeClient := fake.NewClientBuilder().WithScheme(schema).WithObjects(&ibSuccess, &ibKeep, &ibFailed).Build()
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme()).WithObjects(&ibSuccess, &ibKeep, &ibFailed, &nsAloha, &nsAloha2).Build()
 			recorder := newRecorder(fakeClient)
 
 			ctx := context.Background()
@@ -98,8 +131,7 @@ func TestGCSortOrder(t *testing.T) {
 	old3 := ib("keep", "aloha2", now)
 
 	ctx := context.Background()
-	schema, _ := hephv1.SchemeBuilder.Build()
-	fakeClient := fake.NewClientBuilder().WithScheme(schema).WithObjects(&old, &oldest, &older2, &oldest2, &older3, &old3).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme()).WithObjects(&old, &oldest, &older2, &oldest2, &older3, &old3, &nsAloha, &nsAloha2, &nsAloha3).Build()
 	recorder := newRecorder(fakeClient)
 
 	gc := &ImageBuildGC{
@@ -115,11 +147,12 @@ func TestGCSortOrder(t *testing.T) {
 
 	expected := []invocation{
 		invokeList(""),
+		invokeList("aloha"),
 		invokeDelete(oldest),
 		invokeDelete(oldest2),
+		invokeList("aloha2"),
 		invokeDelete(older2),
-		invokeDelete(older3),
-		invokeDelete(old),
+		invokeList("aloha3"),
 	}
 	checkInvokes(t, expected, recorder.invokes)
 }
@@ -127,8 +160,7 @@ func TestGCSortOrder(t *testing.T) {
 func TestGCIBsListErr(t *testing.T) {
 	errFailed := errors.New("failed")
 
-	schema, _ := hephv1.SchemeBuilder.Build()
-	fakeClient := fake.NewClientBuilder().WithScheme(schema).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme()).Build()
 	iFakeClient := interceptor.NewClient(fakeClient, interceptor.Funcs{
 		List: func(ctx context.Context, client client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
 			return errFailed
@@ -150,8 +182,7 @@ func TestGCIBsDeleteErr(t *testing.T) {
 	ib := ib("Success", "aloha", time.Now())
 
 	errFailed := errors.New("failed")
-	schema, _ := hephv1.SchemeBuilder.Build()
-	fakeClient := fake.NewClientBuilder().WithScheme(schema).WithObjects(&ib).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme()).WithObjects(&ib).Build()
 	iFakeClient := interceptor.NewClient(fakeClient, interceptor.Funcs{
 		Delete: func(ctx context.Context, client client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
 			return errFailed
@@ -170,8 +201,7 @@ func TestGCIBsDeleteErr(t *testing.T) {
 }
 
 func TestGCNoIBs(t *testing.T) {
-	schema, _ := hephv1.SchemeBuilder.Build()
-	fakeClient := fake.NewClientBuilder().WithScheme(schema).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme()).Build()
 	recorder := newRecorder(fakeClient)
 	gc := &ImageBuildGC{
 		HistoryLimit: 1,

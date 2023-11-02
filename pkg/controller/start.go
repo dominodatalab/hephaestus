@@ -11,6 +11,7 @@ import (
 	"github.com/newrelic/go-agent/v3/newrelic"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -107,8 +108,8 @@ func configureNewRelic(log *zap.Logger, cfg config.NewRelic) (*newrelic.Applicat
 func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 	log.Info("Adding API types to runtime scheme")
 	scheme := runtime.NewScheme()
-	_ = clientgoscheme.AddToScheme(scheme)
-	_ = hephv1.AddToScheme(scheme)
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(hephv1.AddToScheme(scheme))
 
 	// +kubebuilder:scaffold:scheme
 
