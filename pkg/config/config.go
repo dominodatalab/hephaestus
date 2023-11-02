@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -172,22 +173,37 @@ type NewRelic struct {
 }
 
 func LoadFromFile(filename string) (Controller, error) {
-	bs, err := os.ReadFile(filename)
+	f, err := os.Open(filename)
 	if err != nil {
 		return Controller{}, err
 	}
+	defer f.Close()
 
 	var cfg Controller
 	switch ext := filepath.Ext(filename); ext {
 	case ".yaml", ".yml":
-		err = yaml.Unmarshal(bs, &cfg)
+		decoder := yaml.NewDecoder(f)
+		decoder.KnownFields(true)
+		for {
+			if err = decoder.Decode(&cfg); err == io.EOF {
+				return cfg, nil
+			} else if err != nil {
+				return Controller{}, err
+			}
+		}
 	case ".json":
-		err = json.Unmarshal(bs, &cfg)
+		decoder := json.NewDecoder(f)
+		decoder.DisallowUnknownFields()
+		for {
+			if err = decoder.Decode(&cfg); err == io.EOF {
+				return cfg, nil
+			} else if err != nil {
+				return Controller{}, err
+			}
+		}
 	default:
 		return Controller{}, fmt.Errorf("file extension %q is not allowed", ext)
 	}
-
-	return cfg, err
 }
 
 func validatePort(port int) error {

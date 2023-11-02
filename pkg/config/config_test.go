@@ -30,6 +30,19 @@ func TestLoadFromFile(t *testing.T) {
 		}
 	})
 
+	t.Run("extra config", func(t *testing.T) {
+		file := createTempFile(t, []byte("extra: true"), "yaml")
+		_, err := LoadFromFile(file.Name())
+		if err == nil {
+			t.Error("expected an error")
+		}
+		file = createTempFile(t, []byte(`{"extra": true}`), "json")
+		_, err = LoadFromFile(file.Name())
+		if err == nil {
+			t.Error("expected an error")
+		}
+	})
+
 	t.Run("bad_format", func(t *testing.T) {
 		for _, ext := range []string{"yaml", "yml", "json"} {
 			file := createTempFile(t, []byte("01010101010101"), ext)
