@@ -15,22 +15,38 @@ import (
 	"github.com/dominodatalab/hephaestus/pkg/controller/imagebuild/predicate"
 )
 
-var ch = make(chan client.ObjectKey)
-
-func Register(mgr ctrl.Manager, cfg config.Controller, pool worker.Pool, nr *newrelic.Application) error {
-	return core.NewReconciler(mgr).
+func Register(mgr ctrl.Manager,
+	cfg config.Controller,
+	pool worker.Pool,
+	nr *newrelic.Application,
+	deleteChan chan client.ObjectKey,
+) error {
+	err := core.NewReconciler(mgr).
 		For(&hephv1.ImageBuild{}).
-		Component("build-dispatcher", component.BuildDispatcher(cfg.Buildkit, pool, nr, ch)).
-		WithControllerOptions(controller.Options{MaxConcurrentReconciles: cfg.ImageBuildMaxConcurrency}).
+		Component("build-dispatcher", component.BuildDispatcher(cfg.Buildkit, pool, nr, deleteChan)).
+		WithControllerOptions(controller.Options{MaxConcurrentReconciles: cfg.Manager.ImageBuild.Concurrency}).
 		WithWebhooks().
 		Complete()
+	if err != nil {
+		return err
+	}
+
+	namespaces := cfg.Manager.WatchNamespaces
+	if len(namespaces) == 0 {
+		namespaces = []string{""}
+	}
+	return mgr.Add(&component.ImageBuildGC{
+		HistoryLimit: cfg.Manager.ImageBuild.HistoryLimit,
+		Client:       mgr.GetClient(),
+		Namespaces:   namespaces,
+	})
 }
 
-func RegisterImageBuildDelete(mgr ctrl.Manager) error {
+func RegisterImageBuildDelete(mgr ctrl.Manager, deleteChan chan client.ObjectKey) error {
 	return core.NewReconciler(mgr).
 		For(&hephv1.ImageBuild{}, builder.WithPredicates(predicate.BlindDeletePredicate{})).
 		Named("imagebuilddelete").
-		Component("delete-broadcaster", component.DeleteBroadcaster(ch)).
+		Component("delete-broadcaster", component.DeleteBroadcaster(deleteChan)).
 		ReconcileNotFound().
 		Complete()
 }

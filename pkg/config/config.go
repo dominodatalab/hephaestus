@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -14,21 +15,24 @@ import (
 
 var CompressionMethod string
 
+type ImageBuild struct {
+	Concurrency  int `json:"concurrency" yaml:"concurrency"`
+	HistoryLimit int `json:"historyLimit" yaml:"historyLimit"`
+}
+
 type Controller struct {
 	Logging   Logging   `json:"logging" yaml:"logging"`
 	Manager   Manager   `json:"manager" yaml:"manager"`
 	Buildkit  Buildkit  `json:"buildkit" yaml:"buildkit"`
 	Messaging Messaging `json:"messaging" yaml:"messaging"`
 	NewRelic  NewRelic  `json:"newRelic" yaml:"newRelic"`
-
-	ImageBuildMaxConcurrency int `json:"imageBuildMaxConcurrency" yaml:"imageBuildMaxConcurrency"`
 }
 
 func (c Controller) Validate() error {
 	var errs []string
 
-	if c.ImageBuildMaxConcurrency < 1 {
-		errs = append(errs, "imageBuildMaxConcurrency must be greater than or equal to 1")
+	if c.Manager.ImageBuild.Concurrency < 1 {
+		errs = append(errs, "manager.imageBuild.concurrency must be greater than or equal to 1")
 	}
 	if c.Manager.HealthProbeAddr == "" {
 		errs = append(errs, "manager.healthProbeAddr cannot be blank")
@@ -80,11 +84,12 @@ type Logging struct {
 }
 
 type Manager struct {
-	HealthProbeAddr      string   `json:"healthProbeAddr" yaml:"healthProbeAddr"`
-	MetricsAddr          string   `json:"metricsAddr" yaml:"metricsAddr"`
-	WebhookPort          int      `json:"webhookPort" yaml:"webhookPort"`
-	WatchNamespaces      []string `json:"watchNamespaces" yaml:"watchNamespaces,omitempty"`
-	EnableLeaderElection bool     `json:"enableLeaderElection" yaml:"enableLeaderElection"`
+	HealthProbeAddr      string     `json:"healthProbeAddr" yaml:"healthProbeAddr"`
+	MetricsAddr          string     `json:"metricsAddr" yaml:"metricsAddr"`
+	WebhookPort          int        `json:"webhookPort" yaml:"webhookPort"`
+	WatchNamespaces      []string   `json:"watchNamespaces" yaml:"watchNamespaces,omitempty"`
+	EnableLeaderElection bool       `json:"enableLeaderElection" yaml:"enableLeaderElection"`
+	ImageBuild           ImageBuild `json:"imageBuild" yaml:"imageBuild"`
 }
 
 // Buildkit communication and discovery configuration.
@@ -168,22 +173,37 @@ type NewRelic struct {
 }
 
 func LoadFromFile(filename string) (Controller, error) {
-	bs, err := os.ReadFile(filename)
+	f, err := os.Open(filename)
 	if err != nil {
 		return Controller{}, err
 	}
+	defer f.Close()
 
 	var cfg Controller
 	switch ext := filepath.Ext(filename); ext {
 	case ".yaml", ".yml":
-		err = yaml.Unmarshal(bs, &cfg)
+		decoder := yaml.NewDecoder(f)
+		decoder.KnownFields(true)
+		for {
+			if err = decoder.Decode(&cfg); err == io.EOF {
+				return cfg, nil
+			} else if err != nil {
+				return Controller{}, err
+			}
+		}
 	case ".json":
-		err = json.Unmarshal(bs, &cfg)
+		decoder := json.NewDecoder(f)
+		decoder.DisallowUnknownFields()
+		for {
+			if err = decoder.Decode(&cfg); err == io.EOF {
+				return cfg, nil
+			} else if err != nil {
+				return Controller{}, err
+			}
+		}
 	default:
 		return Controller{}, fmt.Errorf("file extension %q is not allowed", ext)
 	}
-
-	return cfg, err
 }
 
 func validatePort(port int) error {

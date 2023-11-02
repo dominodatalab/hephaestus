@@ -30,6 +30,19 @@ func TestLoadFromFile(t *testing.T) {
 		}
 	})
 
+	t.Run("extra config", func(t *testing.T) {
+		file := createTempFile(t, []byte("extra: true"), "yaml")
+		_, err := LoadFromFile(file.Name())
+		if err == nil {
+			t.Error("expected an error")
+		}
+		file = createTempFile(t, []byte(`{"extra": true}`), "json")
+		_, err = LoadFromFile(file.Name())
+		if err == nil {
+			t.Error("expected an error")
+		}
+	})
+
 	t.Run("bad_format", func(t *testing.T) {
 		for _, ext := range []string{"yaml", "yml", "json"} {
 			file := createTempFile(t, []byte("01010101010101"), ext)
@@ -95,10 +108,10 @@ func TestControllerValidate(t *testing.T) {
 		}
 	})
 
-	t.Run("bad_image_build_max_concurrency", func(t *testing.T) {
+	t.Run("bad_image_build_concurrency", func(t *testing.T) {
 		config := genConfig()
 		for _, n := range []int{0, -5} {
-			config.ImageBuildMaxConcurrency = n
+			config.Manager.ImageBuild.Concurrency = n
 			assert.Error(t, config.Validate())
 		}
 	})
@@ -151,7 +164,6 @@ func createTempFile(t *testing.T, contents []byte, ext string) *os.File {
 
 func genConfig() Controller {
 	return Controller{
-		ImageBuildMaxConcurrency: 1,
 		Buildkit: Buildkit{
 			PodLabels: map[string]string{
 				"app": "buildkit",
@@ -163,6 +175,7 @@ func genConfig() Controller {
 			HealthProbeAddr: "5000",
 			MetricsAddr:     "6000",
 			WebhookPort:     8443,
+			ImageBuild:      ImageBuild{Concurrency: 1},
 		},
 	}
 }

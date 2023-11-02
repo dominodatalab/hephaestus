@@ -111,11 +111,6 @@ controller:
   # Additional volume mounts added to both the manager and vector containers
   extraVolumeMounts: []
 
-  completedImageBuildCleanup:
-    interval: "@daily"
-    retainMax: 5
-    backoffLimit: 3
-
   # Manager configuration
   manager:
     # Manager image (default image tag is the chart appVersion)
@@ -126,8 +121,10 @@ controller:
       pullPolicy: IfNotPresent
       pullSecrets: []
 
-    # Maximum number of concurrent builds which can be run
-    imageBuildMaxConcurrency: 5
+    imageBuild:
+      # Maximum number of concurrent builds which can be run
+      concurrency: 5
+      historyLimit: 5
 
     # Webhook server port
     webhookPort: 9443
