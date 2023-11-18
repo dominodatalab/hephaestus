@@ -236,7 +236,8 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	obj.Status.BuildTime = time.Since(start).Truncate(time.Millisecond).String()
 	buildSeg.End()
 
-	log.Info("Hello Annotations", fmt.Sprint(obj.Annotations))
+	annotations := fmt.Sprint(obj.Annotations)
+	log.Info("Hello Annotations", "annotations", annotations)
 	c.phase.SetSucceeded(ctx, obj)
 	return ctrl.Result{}, nil
 }
