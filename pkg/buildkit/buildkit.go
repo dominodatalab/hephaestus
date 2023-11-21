@@ -13,7 +13,6 @@ import (
 	"github.com/containerd/console"
 	"github.com/docker/cli/cli/config"
 	"github.com/go-logr/logr"
-	"github.com/labstack/gommon/log"
 	bkclient "github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/cmd/buildctl/build"
 	"github.com/moby/buildkit/session"
@@ -363,7 +362,7 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 
 		c.log.Info("Solve complete")
 		expresp := res.ExporterResponse
-		log.Info("Hello exporter response", "expresp", expresp)
+		c.log.Info("Hello exporter response", "expresp", expresp)
 		return nil
 	})
 
