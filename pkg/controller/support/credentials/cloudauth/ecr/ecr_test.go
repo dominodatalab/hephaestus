@@ -157,7 +157,9 @@ func TestAuthenticate(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			client = &tt.client
+			newClient = func(region string) ecrClient {
+				return &tt.client
+			}
 			authConfig, err := authenticate(defaultCtx, log, tt.serverUrl)
 
 			// Compare expected error condition.
