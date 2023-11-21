@@ -938,63 +938,6 @@ func TestPoolPodReconciliation(t *testing.T) {
 	}
 }
 
-// func TestPoolClose(t *testing.T) {
-// 	fakeClient := fake.NewSimpleClientset()
-// 	t.Run("Started", func(t *testing.T) {
-// 		wp := NewPool(fakeClient, testConfig, SyncWaitTime(10*time.Millisecond), MaxIdleTime(5*time.Minute), Logger(testr.New(t)))
-// 		if err := wp.Start(context.Background()); err != nil {
-// 			t.Error(err)
-// 		}
-// 		wp.Close()
-// 		<-wp.done
-// 		if err := context.Cause(wp.stopCtx); err != errPoolClosed {
-// 			t.Error(err)
-// 		}
-// 	})
-//
-// 	t.Run("ctx cancelled", func(t *testing.T) {
-// 		wp := NewPool(fakeClient, testConfig, SyncWaitTime(10*time.Millisecond), MaxIdleTime(5*time.Minute), Logger(testr.New(t)))
-// 		defer wp.Close()
-//
-// 		ctx, cancel := context.WithCancelCause(context.Background())
-// 		if err := wp.Start(ctx); err != nil {
-// 			t.Error(err)
-// 		}
-// 		myErr := errors.New("myErr")
-// 		// Start should exit and done should be closed
-// 		cancel(myErr)
-// 		<-wp.done
-// 		if err := context.Cause(wp.stopCtx); err != nil {
-// 			t.Error(err)
-// 		}
-// 	})
-//
-// 	t.Run("Never started", func(t *testing.T) {
-// 		wp := NewPool(fakeClient, testConfig, SyncWaitTime(10*time.Millisecond), MaxIdleTime(5*time.Minute), Logger(testr.New(t)))
-// 		closedCh := make(chan struct{})
-// 		go func() {
-// 			wp.Close()
-// 			close(closedCh)
-// 		}()
-// 		select {
-// 		case <-closedCh:
-// 			t.Error("unexpected")
-// 		default:
-// 		}
-// 		wp.Start(context.Background())
-// 		<-closedCh
-// 	})
-//
-// 	t.Run("Close twice", func(t *testing.T) {
-// 		wp := NewPool(fakeClient, testConfig, SyncWaitTime(10*time.Millisecond), MaxIdleTime(5*time.Minute), Logger(testr.New(t)))
-// 		if err := wp.Start(context.Background()); err != nil {
-// 			t.Error(err)
-// 		}
-// 		wp.Close()
-// 		wp.Close()
-// 	})
-// }
-
 func validSts() *appsv1.StatefulSet {
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{

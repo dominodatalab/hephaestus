@@ -2,6 +2,7 @@ package component
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -21,6 +22,8 @@ import (
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/phase"
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/secrets"
 )
+
+var errNotRunning = errors.New("build not running")
 
 type BuildDispatcherComponent struct {
 	cfg      config.Buildkit
@@ -66,36 +69,47 @@ func (c *BuildDispatcherComponent) Initialize(ctx *core.Context, _ *ctrl.Builder
 	return nil
 }
 
-func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, error) {
-	obj := ctx.Object.(*hephv1.ImageBuild)
+func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result, error) {
+	obj := coreCtx.Object.(*hephv1.ImageBuild)
 
-	log := ctx.Log
+	log := coreCtx.Log
 
 	buildLog := log.WithValues("logKey", obj.Spec.LogKey)
 
-	txn := c.newRelic.StartTransaction("BuildDispatcherComponent.Reconcile")
-	txn.AddAttribute("imagebuild", obj.ObjectKey().String())
-	defer txn.End()
+	switch obj.Status.Phase {
+	case hephv1.PhaseInitializing, hephv1.PhaseRunning:
+		var err error
+		if _, running := c.cancels.Load(obj.ObjectKey()); !running {
+			err = c.phase.SetFailed(coreCtx, obj, errNotRunning)
+		}
+		return ctrl.Result{}, err
 
-	buildCtx, cancel := context.WithCancel(ctx)
+	case hephv1.PhaseSucceeded, hephv1.PhaseFailed:
+		return ctrl.Result{}, nil
+	case "":
+		// new ImageBuild
+	default:
+		log.Info("Aborting reconcile, unknown status phase", "phase", obj.Status.Phase)
+		return ctrl.Result{}, nil
+	}
+
+	buildCtx, cancel := context.WithCancel(coreCtx)
 	c.cancels.Store(obj.ObjectKey(), cancel)
 	defer func() {
 		cancel()
 		c.cancels.Delete(obj.ObjectKey())
 	}()
 
-	if obj.Status.Phase != "" {
-		log.Info("Aborting reconcile, status phase is not blank", "phase", obj.Status.Phase)
-		txn.Ignore()
+	txn := c.newRelic.StartTransaction("BuildDispatcherComponent.Reconcile")
+	txn.AddAttribute("imagebuild", obj.ObjectKey().String())
+	defer txn.End()
 
-		return ctrl.Result{}, nil
-	}
-	c.phase.SetInitializing(ctx, obj)
+	c.phase.SetInitializing(coreCtx, obj)
 
 	// Extracts cluster secrets into data to pass to buildkit
 	log.Info("Processing references to build secrets")
 	secretsReadSeq := txn.StartSegment("cluster-secrets-read")
-	secretsData, err := secrets.ReadSecrets(ctx, obj, log, ctx.Config, ctx.Scheme)
+	secretsData, err := secrets.ReadSecrets(coreCtx, obj, log, coreCtx.Config, coreCtx.Scheme)
 	if err != nil {
 		err = fmt.Errorf("cluster secrets processing failed: %w", err)
 		txn.NoticeError(newrelic.Error{
@@ -103,13 +117,13 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 			Class:   "ClusterSecretsReadError",
 		})
 
-		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, err)
+		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, err)
 	}
 	secretsReadSeq.End()
 
 	log.Info("Processing and persisting registry credentials")
 	persistCredsSeg := txn.StartSegment("credentials-persist")
-	configDir, helpMessage, err := credentials.Persist(ctx, buildLog, ctx.Config, obj.Spec.RegistryAuth)
+	configDir, helpMessage, err := credentials.Persist(coreCtx, buildLog, coreCtx.Config, obj.Spec.RegistryAuth)
 	if err != nil {
 		err = fmt.Errorf("registry credentials processing failed: %w", err)
 		txn.NoticeError(newrelic.Error{
@@ -117,7 +131,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 			Class:   "CredentialsPersistError",
 		})
 
-		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, err)
+		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, err)
 	}
 	persistCredsSeg.End()
 
@@ -137,14 +151,14 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	}
 
 	buildLog.Info("Validating registry credentials")
-	if err = credentials.Verify(ctx, configDir, insecureRegistries, helpMessage); err != nil {
+	if err = credentials.Verify(coreCtx, configDir, insecureRegistries, helpMessage); err != nil {
 		txn.NoticeError(newrelic.Error{
 			Message: err.Error(),
 			Class:   "CredentialsValidateError",
 		})
 
 		buildLog.Error(err, fmt.Sprintf("Failed to validate registry credentials: %s", err.Error()))
-		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, err)
+		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, err)
 	}
 	validateCredsSeg.End()
 
@@ -153,7 +167,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 
 	leaseSeg := txn.StartSegment("worker-lease")
 	allocStart := time.Now()
-	addr, err := c.pool.Get(ctx, obj.ObjectKey().String())
+	addr, err := c.pool.Get(coreCtx, obj.ObjectKey().String())
 	if err != nil {
 		buildLog.Error(err, fmt.Sprintf("Failed to acquire buildkit worker: %s", err.Error()))
 		txn.NoticeError(newrelic.Error{
@@ -161,7 +175,7 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 			Class:   "WorkerLeaseError",
 		})
 
-		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("buildkit service lookup failed: %w", err))
+		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, fmt.Errorf("buildkit service lookup failed: %w", err))
 	}
 	leaseSeg.End()
 
@@ -170,30 +184,30 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 
 	defer func(pool worker.Pool, endpoint string) {
 		log.Info("Releasing buildkit worker", "endpoint", endpoint)
-		if err := pool.Release(ctx, endpoint); err != nil {
+		if err := pool.Release(buildCtx, endpoint); err != nil {
 			log.Error(err, "Failed to release pool endpoint", "endpoint", endpoint)
+		} else {
+			log.Info("Buildkit worker released")
 		}
-
-		log.Info("Buildkit worker released")
 	}(c.pool, addr)
 
 	log.Info("Building new buildkit client", "addr", addr)
 	clientInitSeg := txn.StartSegment("worker-client-init")
 	bldr := buildkit.
 		NewClientBuilder(addr).
-		WithLogger(ctx.Log.WithName("buildkit").WithValues("addr", addr, "logKey", obj.Spec.LogKey)).
+		WithLogger(coreCtx.Log.WithName("buildkit").WithValues("addr", addr, "logKey", obj.Spec.LogKey)).
 		WithDockerConfigDir(configDir)
 	if mtls := c.cfg.MTLS; mtls != nil {
 		bldr.WithMTLSAuth(mtls.CACertPath, mtls.CertPath, mtls.KeyPath)
 	}
 
-	bk, err := bldr.Build(context.Background())
+	bk, err := bldr.Build(buildCtx)
 	if err != nil {
 		txn.NoticeError(newrelic.Error{
 			Message: err.Error(),
 			Class:   "WorkerClientInitError",
 		})
-		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, err)
+		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, err)
 	}
 	clientInitSeg.End()
 
@@ -210,9 +224,12 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 	}
 	log.Info("Dispatching image build", "images", buildOpts.Images)
 
-	c.phase.SetRunning(ctx, obj)
+	c.phase.SetRunning(coreCtx, obj)
 	buildSeg := txn.StartSegment("image-build")
 	start := time.Now()
+
+	// best effort phase change regardless if the original context is "done"
+	coreCtx.Context = context.Background()
 	if err = bk.Build(buildCtx, buildOpts); err != nil {
 		// if the underlying buildkit pod is terminated via resource delete, then buildCtx will be closed and there will
 		// be an error on it. otherwise, some external event (e.g. pod terminated) cancelled the build, so we should
@@ -231,12 +248,12 @@ func (c *BuildDispatcherComponent) Reconcile(ctx *core.Context) (ctrl.Result, er
 			Message: err.Error(),
 			Class:   "ImageBuildError",
 		})
-		return ctrl.Result{}, c.phase.SetFailed(ctx, obj, fmt.Errorf("build failed: %w", err))
+		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, fmt.Errorf("build failed: %w", err))
 	}
 	obj.Status.BuildTime = time.Since(start).Truncate(time.Millisecond).String()
 	buildSeg.End()
 
-	c.phase.SetSucceeded(ctx, obj)
+	c.phase.SetSucceeded(coreCtx, obj)
 	return ctrl.Result{}, nil
 }
 
