@@ -43,6 +43,7 @@ var (
 	awsConfig aws.Config
 	newClient = newECRClient
 	urlRegex  = regexp.MustCompile(
+		//nolint:lll
 		`^(?P<aws_account_id>[a-zA-Z\d][a-zA-Z\d-_]*)\.dkr\.ecr(-fips)?\.(?P<region>[a-zA-Z\d][a-zA-Z\d-_]*)\.amazonaws\.com(\.cn)?`,
 	)
 	urlRegexRegionIndex = urlRegex.SubexpIndex("region")
