@@ -40,16 +40,21 @@ func (l awsLogger) Logf(classification logging.Classification, format string, v 
 }
 
 var (
-	client   ecrClient
-	urlRegex = regexp.MustCompile(
-		`^(?P<aws_account_id>[a-zA-Z\d][a-zA-Z\d-_]*)\.dkr\.ecr(-fips)?\.([a-zA-Z\d][a-zA-Z\d-_]*)\.amazonaws\.com(\.cn)?`,
+	awsConfig aws.Config
+	newClient = newECRClient
+	urlRegex  = regexp.MustCompile(
+		//nolint:lll
+		`^(?P<aws_account_id>[a-zA-Z\d][a-zA-Z\d-_]*)\.dkr\.ecr(-fips)?\.(?P<region>[a-zA-Z\d][a-zA-Z\d-_]*)\.amazonaws\.com(\.cn)?`,
 	)
+	urlRegexRegionIndex = urlRegex.SubexpIndex("region")
 )
 
 func Register(ctx context.Context, logger logr.Logger, registry *cloudauth.Registry) error {
 	clientMode := aws.LogRequest | aws.LogResponse | aws.LogRetries
 	clientLogger := &awsLogger{logger}
-	awsConfig, err := config.LoadDefaultConfig(
+
+	var err error
+	awsConfig, err = config.LoadDefaultConfig(
 		ctx,
 		config.WithEC2IMDSRegion(func(o *config.UseEC2IMDSRegion) {
 			o.Client = imds.New(imds.Options{
@@ -65,21 +70,28 @@ func Register(ctx context.Context, logger logr.Logger, registry *cloudauth.Regis
 		return nil
 	}
 
-	client = ecr.NewFromConfig(awsConfig)
-
 	registry.Register(urlRegex, authenticate)
 	logger.Info("ECR registered")
 	return nil
 }
 
+func newECRClient(region string) ecrClient {
+	c := awsConfig
+	c.Region = region
+	return ecr.NewFromConfig(c)
+}
+
 func authenticate(ctx context.Context, logger logr.Logger, url string) (*registry.AuthConfig, error) {
 	logger.WithName("ecr-auth-provider")
 
-	if !urlRegex.MatchString(url) {
+	match := urlRegex.FindStringSubmatch(url)
+	if len(match) == 0 {
 		err := fmt.Errorf("ECR URL is invalid: %q should match pattern %v", url, urlRegex)
 		logger.Info(err.Error())
 		return nil, err
 	}
+
+	client := newClient(match[urlRegexRegionIndex])
 	input := &ecr.GetAuthorizationTokenInput{}
 
 	resp, err := client.GetAuthorizationToken(ctx, input)
