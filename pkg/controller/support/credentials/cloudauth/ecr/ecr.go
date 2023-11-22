@@ -75,7 +75,7 @@ func Register(ctx context.Context, logger logr.Logger, registry *cloudauth.Regis
 }
 
 func newECRClient(region string) ecrClient {
-	c := awsConfig.Copy()
+	c := awsConfig
 	c.Region = region
 	return ecr.NewFromConfig(c)
 }
