@@ -287,6 +287,7 @@ func ib(name, ns string, creation time.Time) hephv1.ImageBuild {
 		Status: hephv1.ImageBuildStatus{
 			Phase: hephv1.PhaseSucceeded,
 		},
+		TypeMeta: metav1.TypeMeta{Kind: ibGVK.Kind, APIVersion: hephv1.SchemeGroupVersion.String()},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              name,
 			Namespace:         ns,
