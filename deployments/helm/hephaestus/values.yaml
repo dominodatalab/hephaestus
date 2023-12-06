@@ -224,7 +224,7 @@ controller:
     image:
       registry: ""
       repository: timberio/vector
-      tag: 0.33.X-distroless-static
+      tag: 0.34.X-distroless-static
       pullPolicy: IfNotPresent
       pullSecrets: []
 
