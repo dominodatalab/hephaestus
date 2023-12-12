@@ -24,6 +24,11 @@ func TestAuthenticate(t *testing.T) {
 	log := zapr.NewLogger(zap.New(observerCore))
 
 	validToken := "YWJjOmhp"
+	validTokenOutput := &ecr.GetAuthorizationTokenOutput{
+		AuthorizationData: []ecrTypes.AuthorizationData{
+			{AuthorizationToken: &validToken},
+		},
+	}
 
 	// expected errors
 	invalidServerErr := fmt.Errorf("ECR URL is invalid: \"0123456789012.dkr.ecr.us-west-2.amazonaws.io\" should match pattern %v", urlRegex)
@@ -42,6 +47,7 @@ func TestAuthenticate(t *testing.T) {
 		authConfig         *registry.AuthConfig
 		expectedLogMessage string
 		expectedError      error
+		expectedRegion     string
 	}{
 		{
 			name:               "invalid_server",
@@ -111,11 +117,7 @@ func TestAuthenticate(t *testing.T) {
 			name:      "success_server.com",
 			serverUrl: "0123456789012.dkr.ecr.us-west-2.amazonaws.com",
 			client: fakeECRClient{
-				TokenOutput: &ecr.GetAuthorizationTokenOutput{
-					AuthorizationData: []ecrTypes.AuthorizationData{
-						{AuthorizationToken: &validToken},
-					},
-				},
+				TokenOutput: validTokenOutput,
 			},
 			authConfig: &registry.AuthConfig{
 				Username: "abc",
@@ -126,13 +128,7 @@ func TestAuthenticate(t *testing.T) {
 		{
 			name:      "success_server.com.cn",
 			serverUrl: "0123456789012.dkr.ecr.us-west-2.amazonaws.com.cn",
-			client: fakeECRClient{
-				TokenOutput: &ecr.GetAuthorizationTokenOutput{
-					AuthorizationData: []ecrTypes.AuthorizationData{
-						{AuthorizationToken: &validToken},
-					},
-				},
-			},
+			client:    fakeECRClient{TokenOutput: validTokenOutput},
 			authConfig: &registry.AuthConfig{
 				Username: "abc",
 				Password: "hi",
@@ -142,22 +138,26 @@ func TestAuthenticate(t *testing.T) {
 		{
 			name:      "success_server.fips",
 			serverUrl: "0123456789012.dkr.ecr-fips.us-west-2.amazonaws.com",
-			client: fakeECRClient{
-				TokenOutput: &ecr.GetAuthorizationTokenOutput{
-					AuthorizationData: []ecrTypes.AuthorizationData{
-						{AuthorizationToken: &validToken},
-					},
-				},
-			},
+			client:    fakeECRClient{TokenOutput: validTokenOutput},
 			authConfig: &registry.AuthConfig{
 				Username: "abc",
 				Password: "hi",
 			},
 			expectedLogMessage: successMsg,
 		},
+		{
+			name:               "success_server.new_region",
+			serverUrl:          "0123456789012.dkr.ecr.us-east-1.amazonaws.com",
+			client:             fakeECRClient{TokenOutput: validTokenOutput},
+			expectedRegion:     "us-east-1",
+			expectedLogMessage: successMsg,
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			client = &tt.client
+			newClient = func(region string) ecrClient {
+				tt.client.region = region
+				return &tt.client
+			}
 			authConfig, err := authenticate(defaultCtx, log, tt.serverUrl)
 
 			// Compare expected error condition.
@@ -166,6 +166,10 @@ func TestAuthenticate(t *testing.T) {
 			} else {
 				require.Error(t, err)
 				assert.Equal(t, tt.expectedError.Error(), err.Error())
+			}
+
+			if tt.expectedRegion != "" {
+				assert.Equal(t, tt.expectedRegion, tt.client.region)
 			}
 
 			reflect.DeepEqual(tt.authConfig, authConfig)
@@ -182,6 +186,7 @@ func TestAuthenticate(t *testing.T) {
 type fakeECRClient struct {
 	errOut      bool
 	TokenOutput *ecr.GetAuthorizationTokenOutput
+	region      string
 }
 
 func (f *fakeECRClient) GetAuthorizationToken(

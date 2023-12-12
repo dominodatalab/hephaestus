@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -35,12 +34,9 @@ type Pool interface {
 	Start(ctx context.Context) error
 	Get(ctx context.Context, owner string) (workerAddr string, err error)
 	Release(ctx context.Context, workerAddr string) error
-	Close()
 }
 
 var (
-	ErrNoUnleasedPods = errors.New("no unleased pods found")
-
 	newUUID          = uuid.NewUUID
 	statefulPodRegex = regexp.MustCompile(`^.*-(\d+)$`)
 )
@@ -53,13 +49,13 @@ const (
 	expiryTimeAnnotation = "hephaestus.dominodatalab.com/expiry-time"
 )
 
+var errPoolClosed = errors.New("AutoscalingPool closed")
+
 type AutoscalingPool struct {
 	log logr.Logger
 
-	// system shutdown
-	stopCtx     context.Context
-	cancelCause context.CancelCauseFunc
-	done        chan struct{}
+	// shutdown
+	stopped chan struct{}
 
 	// incoming lease requests
 	requests RequestQueue
@@ -70,7 +66,6 @@ type AutoscalingPool struct {
 	notifyReconcile chan struct{}
 
 	// leasing
-	mu                  sync.Mutex
 	uuid                string
 	namespace           string
 	podClient           corev1typed.PodInterface
@@ -91,8 +86,6 @@ type AutoscalingPool struct {
 	statefulSetClient appsv1typed.StatefulSetInterface
 }
 
-var errPoolClosed = errors.New("AutoscalingPool closed")
-
 // NewPool creates a new worker pool that can be used to lease buildkit workers for image builds.
 func NewPool(
 	clientset kubernetes.Interface,
@@ -110,13 +103,9 @@ func NewPool(
 	esls := labels.SelectorFromSet(map[string]string{"kubernetes.io/service-name": conf.ServiceName})
 	endpointSliceListOptions := metav1.ListOptions{LabelSelector: esls.String()}
 
-	ctx, cancel := context.WithCancelCause(context.Background())
-	done := make(chan struct{})
 	wp := &AutoscalingPool{
-		stopCtx:                   ctx,
-		cancelCause:               cancel,
-		done:                      done,
 		log:                       o.Log,
+		stopped:                   make(chan struct{}),
 		poolSyncTime:              o.SyncWaitTime,
 		podMaxIdleTime:            o.MaxIdleTime,
 		endpointSliceWatchTimeout: o.EndpointWatchTimeoutSeconds,
@@ -140,38 +129,33 @@ func NewPool(
 
 func (p *AutoscalingPool) Start(ctx context.Context) error {
 	p.log.Info("Starting worker pod monitor", "syncTime", p.poolSyncTime.String())
-	go func() {
-		ticker := time.NewTicker(p.poolSyncTime)
 
-		defer func() {
-			ticker.Stop()
-			p.log.Info("Shutting down worker pod monitor")
-			for p.requests.Len() > 0 {
-				close(p.requests.Dequeue().result)
-			}
-			close(p.done)
-		}()
+	ticker := time.NewTicker(p.poolSyncTime)
 
-		for {
-			if err := p.reconcileWorkers(ctx); err != nil {
-				p.log.Error(err, "Failed to update worker pool")
-			}
-
-			select {
-			// break out of the select when triggered by notification or tick, this will trigger an update
-			case <-p.notifyReconcile:
-				p.log.Info("Reconciling pool, notify triggered")
-			case <-ticker.C:
-				p.log.Info("Reconciling pool, sync triggered")
-			case <-ctx.Done():
-				return
-			case <-p.stopCtx.Done():
-				return
-			}
+	defer func() {
+		ticker.Stop()
+		p.log.Info("Shutting down worker pod monitor")
+		for p.requests.Len() > 0 {
+			close(p.requests.Dequeue().result)
 		}
+		close(p.stopped)
 	}()
 
-	return nil
+	for {
+		if err := p.reconcileWorkers(ctx); err != nil {
+			p.log.Error(err, "Failed to update worker pool")
+		}
+
+		select {
+		// break out of the select when triggered by notification or tick, this will trigger an update
+		case <-p.notifyReconcile:
+			p.log.Info("Reconciling pool, notify triggered")
+		case <-ticker.C:
+			p.log.Info("Reconciling pool, sync triggered")
+		case <-ctx.Done():
+			return nil
+		}
+	}
 }
 
 // Get a lease for a worker in the pool and return a routable address.
@@ -203,11 +187,10 @@ func (p *AutoscalingPool) Get(ctx context.Context, owner string) (string, error)
 	case <-ctx.Done():
 		// context has been cancelled
 		return "", ctx.Err()
-	case <-p.stopCtx.Done():
-		return "", ctx.Err()
+	case <-p.stopped:
 	}
 
-	return "", ErrNoUnleasedPods
+	return "", errPoolClosed
 }
 
 // Release an address back into the worker pool.
@@ -215,9 +198,6 @@ func (p *AutoscalingPool) Get(ctx context.Context, owner string) (string, error)
 // Adds "expiry-time" and removes "lease"/"manager-identity" metadata.
 // The underlying worker will be terminated after its expiry time has passed.
 func (p *AutoscalingPool) Release(ctx context.Context, addr string) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	p.log.Info("Parsing lease addr", "addr", addr)
 	u, err := url.ParseRequestURI(addr)
 	if err != nil || u.Host == "" {
@@ -236,12 +216,6 @@ func (p *AutoscalingPool) Release(ctx context.Context, addr string) error {
 	}
 
 	return p.releasePod(ctx, *pod)
-}
-
-// Close shuts down the pool by terminating all background routines used to manage requests and garbage collection.
-func (p *AutoscalingPool) Close() {
-	p.cancelCause(errPoolClosed)
-	<-p.done
 }
 
 // applies lease metadata to given pod
@@ -371,9 +345,6 @@ func (p *AutoscalingPool) extractHostname(epSlice *discoveryv1.EndpointSlice, po
 
 // reconcile pods in worker pool
 func (p *AutoscalingPool) reconcileWorkers(ctx context.Context) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	p.log.Info("Querying for available buildkit pods", "namespace", p.namespace, "opts", p.podListOptions)
 	podList, err := p.podClient.List(ctx, p.podListOptions)
 	if err != nil {
