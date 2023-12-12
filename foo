@@ -1,0 +1,586 @@
+go test -v -timeout=5m -race ./...
+?   	github.com/dominodatalab/hephaestus/cmd/controller	[no test files]
+?   	github.com/dominodatalab/hephaestus/deployments/crds	[no test files]
+?   	github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1	[no test files]
+?   	github.com/dominodatalab/hephaestus/pkg/buildkit	[no test files]
+?   	github.com/dominodatalab/hephaestus/pkg/buildkit/archive	[no test files]
+?   	github.com/dominodatalab/hephaestus/pkg/clientset	[no test files]
+?   	github.com/dominodatalab/hephaestus/pkg/clientset/fake	[no test files]
+?   	github.com/dominodatalab/hephaestus/pkg/clientset/typed/hephaestus/v1	[no test files]
+?   	github.com/dominodatalab/hephaestus/pkg/clientset/scheme	[no test files]
+?   	github.com/dominodatalab/hephaestus/pkg/controller	[no test files]
+?   	github.com/dominodatalab/hephaestus/pkg/clientset/typed/hephaestus/v1/fake	[no test files]
+?   	github.com/dominodatalab/hephaestus/pkg/controller/imagebuild/predicate	[no test files]
+?   	github.com/dominodatalab/hephaestus/pkg/controller/imagebuildmessage	[no test files]
+?   	github.com/dominodatalab/hephaestus/pkg/cmd	[no test files]
+?   	github.com/dominodatalab/hephaestus/pkg/controller/imagebuild	[no test files]
+?   	github.com/dominodatalab/hephaestus/pkg/controller/imagecache	[no test files]
+?   	github.com/dominodatalab/hephaestus/pkg/controller/imagebuildmessage/component	[no test files]
+?   	github.com/dominodatalab/hephaestus/pkg/cmd/controller	[no test files]
+=== RUN   TestPoolGet
+=== RUN   TestPoolGet/running_pod
+=== RUN   TestPoolGet/non_running_pod
+=== RUN   TestPoolGet/lease_failure
+=== RUN   TestPoolGet/endpoints_failure
+=== RUN   TestPoolGet/endpoints_lag
+=== RUN   TestPoolGet/scale_up
+--- PASS: TestPoolGet (0.50s)
+    --- PASS: TestPoolGet/running_pod (0.39s)
+    --- PASS: TestPoolGet/non_running_pod (0.10s)
+    --- PASS: TestPoolGet/lease_failure (0.00s)
+    --- PASS: TestPoolGet/endpoints_failure (0.00s)
+    --- PASS: TestPoolGet/endpoints_lag (0.00s)
+    --- PASS: TestPoolGet/scale_up (0.00s)
+=== RUN   TestPoolGetFailedScaleUp
+--- PASS: TestPoolGetFailedScaleUp (0.00s)
+=== RUN   TestPoolGetAndClose
+--- PASS: TestPoolGetAndClose (0.00s)
+=== RUN   TestPoolGetAndCancel
+--- PASS: TestPoolGetAndCancel (0.00s)
+=== RUN   TestPoolRelease
+=== RUN   TestPoolRelease/success
+=== RUN   TestPoolRelease/invalid_address
+=== RUN   TestPoolRelease/missing_pod
+=== RUN   TestPoolRelease/patch_fail
+--- PASS: TestPoolRelease (0.00s)
+    --- PASS: TestPoolRelease/success (0.00s)
+    --- PASS: TestPoolRelease/invalid_address (0.00s)
+    --- PASS: TestPoolRelease/missing_pod (0.00s)
+    --- PASS: TestPoolRelease/patch_fail (0.00s)
+=== RUN   TestPoolPodReconciliation
+=== RUN   TestPoolPodReconciliation/no_pods
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=[] "suggestedReplicas"=0
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=0
+=== RUN   TestPoolPodReconciliation/no_pods_with_requests
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=1 "podObservations"=[] "suggestedReplicas"=1
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=1
+=== RUN   TestPoolPodReconciliation/unmanaged
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:96: "level"=0 "msg"="Eligible for termination, manager id mismatch" "podName"="buildkit-0" "expected"="manager-id" "actual"="3e237cf3-a54c-40b1-9c65-0400d1cfe364"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=["buildkit-0 - Unmanaged"] "suggestedReplicas"=0
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=0
+=== RUN   TestPoolPodReconciliation/unmanaged_with_requests
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:96: "level"=0 "msg"="Eligible for termination, manager id mismatch" "podName"="buildkit-0" "expected"="manager-id" "actual"="2e392b11-7c78-46e9-8d88-0f4781917e31"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=1 "podObservations"=["buildkit-0 - Unmanaged"] "suggestedReplicas"=0
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=0
+=== RUN   TestPoolPodReconciliation/leased
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:104: "level"=0 "msg"="Ineligible for termination, pod is leased" "podName"="buildkit-0"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=["buildkit-0 - Leased"] "suggestedReplicas"=1
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=1
+=== RUN   TestPoolPodReconciliation/leased_with_requests
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:104: "level"=0 "msg"="Ineligible for termination, pod is leased" "podName"="buildkit-0"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=1 "podObservations"=["buildkit-0 - Leased"] "suggestedReplicas"=2
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=2
+=== RUN   TestPoolPodReconciliation/pending
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:113: "level"=0 "msg"="Ineligible for termination, pending pod is not old enough" "podName"="buildkit-0"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=["buildkit-0 - Pending"] "suggestedReplicas"=1
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=1
+=== RUN   TestPoolPodReconciliation/pending_with_requests
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:113: "level"=0 "msg"="Ineligible for termination, pending pod is not old enough" "podName"="buildkit-0"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=["buildkit-0 - Pending"] "suggestedReplicas"=1
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=1
+=== RUN   TestPoolPodReconciliation/pending_old
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:116: "level"=0 "msg"="Eligible for termination, pending pod is older than max idle time" "podName"="buildkit-0"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=["buildkit-0 - PendingExpired"] "suggestedReplicas"=0
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=0
+=== RUN   TestPoolPodReconciliation/pending_old_with_requests
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:116: "level"=0 "msg"="Eligible for termination, pending pod is older than max idle time" "podName"="buildkit-0"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=1 "podObservations"=["buildkit-0 - PendingExpired"] "suggestedReplicas"=0
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=0
+=== RUN   TestPoolPodReconciliation/starting
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:150: "level"=0 "msg"="Ineligible for termination, starting pod is not old enough" "podName"="buildkit-0"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=["buildkit-0 - Starting"] "suggestedReplicas"=1
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=1
+=== RUN   TestPoolPodReconciliation/starting_old
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:153: "level"=0 "msg"="Eligible for termination, starting pod is older than max idle time" "podName"="buildkit-0"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=["buildkit-0 - StartingExpired"] "suggestedReplicas"=0
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=0
+=== RUN   TestPoolPodReconciliation/starting_with_requests
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:150: "level"=0 "msg"="Ineligible for termination, starting pod is not old enough" "podName"="buildkit-0"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=["buildkit-0 - Starting"] "suggestedReplicas"=1
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=1
+=== RUN   TestPoolPodReconciliation/operational
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:125: "level"=0 "msg"="Pod is operational" "podName"="buildkit-0"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=["buildkit-0 - Operational"] "suggestedReplicas"=1
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=1
+=== RUN   TestPoolPodReconciliation/operational_with_requests
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:125: "level"=0 "msg"="Pod is operational" "podName"="buildkit-0"
+    pool.go:400: "level"=0 "msg"="Processing dequeued pod request with operational pod"
+    pool.go:428: "level"=0 "msg"="Attempting to lease pod" "podName"="buildkit-0"
+    pool.go:261: "level"=0 "msg"="Applying pod metadata changes" "annotations"={"hephaestus.dominodatalab.com/leased-at":"2023-11-20T14:29:24-08:00","hephaestus.dominodatalab.com/leased-by":"","hephaestus.dominodatalab.com/manager-identity":"manager-id"}
+    pool.go:436: "level"=0 "msg"="Building endpoint URL" "podName"="buildkit-0"
+    pool.go:295: "level"=0 "msg"="Watching endpoints for new pod address" "podName"="buildkit-0"
+    pool_test.go:1001: added endpoints
+    pool.go:364: "level"=0 "msg"="Found eligible endpoint address" "hostname"="buildkit-0.buildkit.test-namespace"
+    pool.go:319: "level"=0 "msg"="Finished watching endpoints" "podName"="buildkit-0" "duration"="80µs"
+    pool.go:449: "level"=0 "msg"="Pod successfully leased, passing address to request owner" "podName"="buildkit-0"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=["buildkit-0 - Leased"] "suggestedReplicas"=1
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=1
+=== RUN   TestPoolPodReconciliation/operational_past_expiry
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:125: "level"=0 "msg"="Pod is operational" "podName"="buildkit-0"
+    scalearbiter.go:135: "level"=0 "msg"="Eligible for termination, ttl has expired" "podName"="buildkit-0" "expiry"="2023-11-20 14:19:24 -0800 PST"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=["buildkit-0 - OperationalExpired"] "suggestedReplicas"=0
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=0
+=== RUN   TestPoolPodReconciliation/operational_invalid_expiry
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:125: "level"=0 "msg"="Pod is operational" "podName"="buildkit-0"
+    scalearbiter.go:132: "level"=0 "msg"="Cannot parse expiry time, assuming expired" "podName"="buildkit-0" "expiry"="0001-01-01 00:00:00 +0000 UTC"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=["buildkit-0 - OperationalInvalidExpiry"] "suggestedReplicas"=0
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=0
+=== RUN   TestPoolPodReconciliation/unknown
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:161: "level"=0 "msg"="Eligible for termination, unknown phase or incomplete startup detected" "podName"="buildkit-0" "phase"="" "conditions"=[{"type":"PodScheduled","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"},{"type":"Initialized","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"},{"type":"ContainersReady","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"},{"type":"Ready","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"}] "containerStatuses"=[]
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=["buildkit-0 - Unusable"] "suggestedReplicas"=0
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=0
+=== RUN   TestPoolPodReconciliation/unknown_with_requests
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:161: "level"=0 "msg"="Eligible for termination, unknown phase or incomplete startup detected" "podName"="buildkit-0" "phase"="" "conditions"=[{"type":"PodScheduled","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"},{"type":"Initialized","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"},{"type":"ContainersReady","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"},{"type":"Ready","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"}] "containerStatuses"=[]
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=1 "podObservations"=["buildkit-0 - Unusable"] "suggestedReplicas"=0
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=0
+=== RUN   TestPoolPodReconciliation/combo_preserve_all
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:125: "level"=0 "msg"="Pod is operational" "podName"="buildkit-0"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-1"
+    scalearbiter.go:104: "level"=0 "msg"="Ineligible for termination, pod is leased" "podName"="buildkit-1"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-2"
+    scalearbiter.go:125: "level"=0 "msg"="Pod is operational" "podName"="buildkit-2"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=["buildkit-0 - Operational","buildkit-1 - Leased","buildkit-2 - Operational"] "suggestedReplicas"=3
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=3
+=== RUN   TestPoolPodReconciliation/combo_remove_all
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:125: "level"=0 "msg"="Pod is operational" "podName"="buildkit-0"
+    scalearbiter.go:135: "level"=0 "msg"="Eligible for termination, ttl has expired" "podName"="buildkit-0" "expiry"="2023-11-20 14:19:24 -0800 PST"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-1"
+    scalearbiter.go:116: "level"=0 "msg"="Eligible for termination, pending pod is older than max idle time" "podName"="buildkit-1"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-2"
+    scalearbiter.go:125: "level"=0 "msg"="Pod is operational" "podName"="buildkit-2"
+    scalearbiter.go:139: "level"=0 "msg"="Eligible for termination, missing expiry time and pod age older than max idle time" "podName"="buildkit-2"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=["buildkit-0 - OperationalExpired","buildkit-1 - PendingExpired","buildkit-2 - OperationalExpired"] "suggestedReplicas"=0
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=0
+=== RUN   TestPoolPodReconciliation/combo_wait_for_pending
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:104: "level"=0 "msg"="Ineligible for termination, pod is leased" "podName"="buildkit-0"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-1"
+    scalearbiter.go:113: "level"=0 "msg"="Ineligible for termination, pending pod is not old enough" "podName"="buildkit-1"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-2"
+    scalearbiter.go:113: "level"=0 "msg"="Ineligible for termination, pending pod is not old enough" "podName"="buildkit-2"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=["buildkit-0 - Leased","buildkit-1 - Pending","buildkit-2 - Pending"] "suggestedReplicas"=3
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=3
+=== RUN   TestPoolPodReconciliation/combo_wait_for_pending_with_requests
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:104: "level"=0 "msg"="Ineligible for termination, pod is leased" "podName"="buildkit-0"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-1"
+    scalearbiter.go:113: "level"=0 "msg"="Ineligible for termination, pending pod is not old enough" "podName"="buildkit-1"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-2"
+    scalearbiter.go:113: "level"=0 "msg"="Ineligible for termination, pending pod is not old enough" "podName"="buildkit-2"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=["buildkit-0 - Leased","buildkit-1 - Pending","buildkit-2 - Pending"] "suggestedReplicas"=3
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=3
+=== RUN   TestPoolPodReconciliation/combo_grow_pending_with_requests
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:104: "level"=0 "msg"="Ineligible for termination, pod is leased" "podName"="buildkit-0"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-1"
+    scalearbiter.go:113: "level"=0 "msg"="Ineligible for termination, pending pod is not old enough" "podName"="buildkit-1"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-2"
+    scalearbiter.go:113: "level"=0 "msg"="Ineligible for termination, pending pod is not old enough" "podName"="buildkit-2"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=1 "podObservations"=["buildkit-0 - Leased","buildkit-1 - Pending","buildkit-2 - Pending"] "suggestedReplicas"=4
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=4
+=== RUN   TestPoolPodReconciliation/combo_trim_tail
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:104: "level"=0 "msg"="Ineligible for termination, pod is leased" "podName"="buildkit-0"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-1"
+    scalearbiter.go:125: "level"=0 "msg"="Pod is operational" "podName"="buildkit-1"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-2"
+    scalearbiter.go:125: "level"=0 "msg"="Pod is operational" "podName"="buildkit-2"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-3"
+    scalearbiter.go:96: "level"=0 "msg"="Eligible for termination, manager id mismatch" "podName"="buildkit-3" "expected"="manager-id" "actual"="2508b20a-20a1-4022-8e25-a65d72c72b09"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-4"
+    scalearbiter.go:125: "level"=0 "msg"="Pod is operational" "podName"="buildkit-4"
+    scalearbiter.go:135: "level"=0 "msg"="Eligible for termination, ttl has expired" "podName"="buildkit-4" "expiry"="2023-11-20 14:09:24 -0800 PST"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-5"
+    scalearbiter.go:116: "level"=0 "msg"="Eligible for termination, pending pod is older than max idle time" "podName"="buildkit-5"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=["buildkit-0 - Leased","buildkit-1 - Operational","buildkit-2 - Operational","buildkit-3 - Unmanaged","buildkit-4 - OperationalExpired","buildkit-5 - PendingExpired"] "suggestedReplicas"=3
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=3
+=== RUN   TestPoolPodReconciliation/combo_trim_tail_with_equal_requests
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:104: "level"=0 "msg"="Ineligible for termination, pod is leased" "podName"="buildkit-0"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-1"
+    scalearbiter.go:125: "level"=0 "msg"="Pod is operational" "podName"="buildkit-1"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-2"
+    scalearbiter.go:125: "level"=0 "msg"="Pod is operational" "podName"="buildkit-2"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-3"
+    scalearbiter.go:96: "level"=0 "msg"="Eligible for termination, manager id mismatch" "podName"="buildkit-3" "expected"="manager-id" "actual"="fb174266-b526-4771-a343-5acc7a463bf3"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-4"
+    scalearbiter.go:125: "level"=0 "msg"="Pod is operational" "podName"="buildkit-4"
+    scalearbiter.go:135: "level"=0 "msg"="Eligible for termination, ttl has expired" "podName"="buildkit-4" "expiry"="2023-11-20 14:09:24 -0800 PST"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-5"
+    scalearbiter.go:116: "level"=0 "msg"="Eligible for termination, pending pod is older than max idle time" "podName"="buildkit-5"
+    pool.go:400: "level"=0 "msg"="Processing dequeued pod request with operational pod"
+    pool.go:428: "level"=0 "msg"="Attempting to lease pod" "podName"="buildkit-1"
+    pool.go:261: "level"=0 "msg"="Applying pod metadata changes" "annotations"={"hephaestus.dominodatalab.com/leased-at":"2023-11-20T14:29:24-08:00","hephaestus.dominodatalab.com/leased-by":"","hephaestus.dominodatalab.com/manager-identity":"manager-id"}
+    pool.go:436: "level"=0 "msg"="Building endpoint URL" "podName"="buildkit-1"
+    pool.go:295: "level"=0 "msg"="Watching endpoints for new pod address" "podName"="buildkit-1"
+    pool_test.go:1001: added endpoints
+    pool.go:364: "level"=0 "msg"="Found eligible endpoint address" "hostname"="buildkit-1.buildkit.test-namespace"
+    pool.go:319: "level"=0 "msg"="Finished watching endpoints" "podName"="buildkit-1" "duration"="149.667µs"
+    pool.go:449: "level"=0 "msg"="Pod successfully leased, passing address to request owner" "podName"="buildkit-1"
+    pool.go:400: "level"=0 "msg"="Processing dequeued pod request with operational pod"
+    pool.go:428: "level"=0 "msg"="Attempting to lease pod" "podName"="buildkit-2"
+    pool.go:261: "level"=0 "msg"="Applying pod metadata changes" "annotations"={"hephaestus.dominodatalab.com/leased-by":"","hephaestus.dominodatalab.com/manager-identity":"manager-id","hephaestus.dominodatalab.com/leased-at":"2023-11-20T14:29:24-08:00"}
+    pool.go:436: "level"=0 "msg"="Building endpoint URL" "podName"="buildkit-2"
+    pool.go:295: "level"=0 "msg"="Watching endpoints for new pod address" "podName"="buildkit-2"
+    pool_test.go:1001: added endpoints
+    pool.go:364: "level"=0 "msg"="Found eligible endpoint address" "hostname"="buildkit-2.buildkit.test-namespace"
+    pool.go:319: "level"=0 "msg"="Finished watching endpoints" "podName"="buildkit-2" "duration"="62.125µs"
+    pool.go:449: "level"=0 "msg"="Pod successfully leased, passing address to request owner" "podName"="buildkit-2"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=["buildkit-0 - Leased","buildkit-1 - Leased","buildkit-2 - Leased","buildkit-3 - Unmanaged","buildkit-4 - OperationalExpired","buildkit-5 - PendingExpired"] "suggestedReplicas"=3
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=3
+=== RUN   TestPoolPodReconciliation/combo_trim_tail_with_extended_requests
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:104: "level"=0 "msg"="Ineligible for termination, pod is leased" "podName"="buildkit-0"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-1"
+    scalearbiter.go:125: "level"=0 "msg"="Pod is operational" "podName"="buildkit-1"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-2"
+    scalearbiter.go:125: "level"=0 "msg"="Pod is operational" "podName"="buildkit-2"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-3"
+    scalearbiter.go:96: "level"=0 "msg"="Eligible for termination, manager id mismatch" "podName"="buildkit-3" "expected"="manager-id" "actual"="8d4919f1-2186-4dd4-b8b5-93cfaf9a5d13"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-4"
+    scalearbiter.go:125: "level"=0 "msg"="Pod is operational" "podName"="buildkit-4"
+    scalearbiter.go:135: "level"=0 "msg"="Eligible for termination, ttl has expired" "podName"="buildkit-4" "expiry"="2023-11-20 14:19:24 -0800 PST"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-5"
+    scalearbiter.go:116: "level"=0 "msg"="Eligible for termination, pending pod is older than max idle time" "podName"="buildkit-5"
+    pool.go:400: "level"=0 "msg"="Processing dequeued pod request with operational pod"
+    pool.go:428: "level"=0 "msg"="Attempting to lease pod" "podName"="buildkit-1"
+    pool.go:261: "level"=0 "msg"="Applying pod metadata changes" "annotations"={"hephaestus.dominodatalab.com/leased-by":"","hephaestus.dominodatalab.com/manager-identity":"manager-id","hephaestus.dominodatalab.com/leased-at":"2023-11-20T14:29:24-08:00"}
+    pool.go:436: "level"=0 "msg"="Building endpoint URL" "podName"="buildkit-1"
+    pool.go:295: "level"=0 "msg"="Watching endpoints for new pod address" "podName"="buildkit-1"
+    pool_test.go:1001: added endpoints
+    pool.go:364: "level"=0 "msg"="Found eligible endpoint address" "hostname"="buildkit-1.buildkit.test-namespace"
+    pool.go:319: "level"=0 "msg"="Finished watching endpoints" "podName"="buildkit-1" "duration"="57.459µs"
+    pool.go:449: "level"=0 "msg"="Pod successfully leased, passing address to request owner" "podName"="buildkit-1"
+    pool.go:400: "level"=0 "msg"="Processing dequeued pod request with operational pod"
+    pool.go:428: "level"=0 "msg"="Attempting to lease pod" "podName"="buildkit-2"
+    pool.go:261: "level"=0 "msg"="Applying pod metadata changes" "annotations"={"hephaestus.dominodatalab.com/leased-at":"2023-11-20T14:29:24-08:00","hephaestus.dominodatalab.com/leased-by":"","hephaestus.dominodatalab.com/manager-identity":"manager-id"}
+    pool.go:436: "level"=0 "msg"="Building endpoint URL" "podName"="buildkit-2"
+    pool.go:295: "level"=0 "msg"="Watching endpoints for new pod address" "podName"="buildkit-2"
+    pool_test.go:1001: added endpoints
+    pool.go:364: "level"=0 "msg"="Found eligible endpoint address" "hostname"="buildkit-2.buildkit.test-namespace"
+    pool.go:319: "level"=0 "msg"="Finished watching endpoints" "podName"="buildkit-2" "duration"="48.75µs"
+    pool.go:449: "level"=0 "msg"="Pod successfully leased, passing address to request owner" "podName"="buildkit-2"
+    pool.go:400: "level"=0 "msg"="Processing dequeued pod request with operational pod"
+    pool.go:428: "level"=0 "msg"="Attempting to lease pod" "podName"="buildkit-4"
+    pool.go:261: "level"=0 "msg"="Applying pod metadata changes" "annotations"={"hephaestus.dominodatalab.com/leased-by":"","hephaestus.dominodatalab.com/manager-identity":"manager-id","hephaestus.dominodatalab.com/leased-at":"2023-11-20T14:29:24-08:00"}
+    pool.go:436: "level"=0 "msg"="Building endpoint URL" "podName"="buildkit-4"
+    pool.go:295: "level"=0 "msg"="Watching endpoints for new pod address" "podName"="buildkit-4"
+    pool_test.go:1001: added endpoints
+    pool.go:364: "level"=0 "msg"="Found eligible endpoint address" "hostname"="buildkit-4.buildkit.test-namespace"
+    pool.go:319: "level"=0 "msg"="Finished watching endpoints" "podName"="buildkit-4" "duration"="43.667µs"
+    pool.go:449: "level"=0 "msg"="Pod successfully leased, passing address to request owner" "podName"="buildkit-4"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=["buildkit-0 - Leased","buildkit-1 - Leased","buildkit-2 - Leased","buildkit-3 - Unmanaged","buildkit-4 - Leased","buildkit-5 - PendingExpired"] "suggestedReplicas"=5
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=5
+=== RUN   TestPoolPodReconciliation/combo_embedded_failure_growth
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:113: "level"=0 "msg"="Ineligible for termination, pending pod is not old enough" "podName"="buildkit-0"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-1"
+    scalearbiter.go:161: "level"=0 "msg"="Eligible for termination, unknown phase or incomplete startup detected" "podName"="buildkit-1" "phase"="Unschedulable" "conditions"=[{"type":"PodScheduled","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"},{"type":"Initialized","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"},{"type":"ContainersReady","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"},{"type":"Ready","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"}] "containerStatuses"=[]
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-2"
+    scalearbiter.go:161: "level"=0 "msg"="Eligible for termination, unknown phase or incomplete startup detected" "podName"="buildkit-2" "phase"="Failed" "conditions"=[{"type":"PodScheduled","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"},{"type":"Initialized","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"},{"type":"ContainersReady","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"},{"type":"Ready","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"}] "containerStatuses"=[]
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-3"
+    scalearbiter.go:113: "level"=0 "msg"="Ineligible for termination, pending pod is not old enough" "podName"="buildkit-3"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=2 "podObservations"=["buildkit-0 - Pending","buildkit-1 - Unusable","buildkit-2 - Unusable","buildkit-3 - Pending"] "suggestedReplicas"=4
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=4
+=== RUN   TestPoolPodReconciliation/combo_embedded_failure_trim
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:113: "level"=0 "msg"="Ineligible for termination, pending pod is not old enough" "podName"="buildkit-0"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-1"
+    scalearbiter.go:161: "level"=0 "msg"="Eligible for termination, unknown phase or incomplete startup detected" "podName"="buildkit-1" "phase"="Unschedulable" "conditions"=[{"type":"PodScheduled","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"},{"type":"Initialized","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"},{"type":"ContainersReady","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"},{"type":"Ready","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"}] "containerStatuses"=[]
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-2"
+    scalearbiter.go:161: "level"=0 "msg"="Eligible for termination, unknown phase or incomplete startup detected" "podName"="buildkit-2" "phase"="Failed" "conditions"=[{"type":"PodScheduled","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"},{"type":"Initialized","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"},{"type":"ContainersReady","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"},{"type":"Ready","status":"True","lastProbeTime":"0001-01-01 00:00:00 +0000 UTC","lastTransitionTime":"0001-01-01 00:00:00 +0000 UTC"}] "containerStatuses"=[]
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-3"
+    scalearbiter.go:116: "level"=0 "msg"="Eligible for termination, pending pod is older than max idle time" "podName"="buildkit-3"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=["buildkit-0 - Pending","buildkit-1 - Unusable","buildkit-2 - Unusable","buildkit-3 - PendingExpired"] "suggestedReplicas"=1
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=1
+=== RUN   TestPoolPodReconciliation/combo_trim_expired
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-0"
+    scalearbiter.go:104: "level"=0 "msg"="Ineligible for termination, pod is leased" "podName"="buildkit-0"
+    pool.go:391: "level"=0 "msg"="Evaluating pod metadata and status" "podName"="buildkit-1"
+    scalearbiter.go:125: "level"=0 "msg"="Pod is operational" "podName"="buildkit-1"
+    scalearbiter.go:135: "level"=0 "msg"="Eligible for termination, ttl has expired" "podName"="buildkit-1" "expiry"="2023-11-20 14:19:24 -0800 PST"
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=["buildkit-0 - Leased","buildkit-1 - OperationalExpired"] "suggestedReplicas"=1
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=1
+--- PASS: TestPoolPodReconciliation (0.02s)
+    --- PASS: TestPoolPodReconciliation/no_pods (0.00s)
+    --- PASS: TestPoolPodReconciliation/no_pods_with_requests (0.00s)
+    --- PASS: TestPoolPodReconciliation/unmanaged (0.00s)
+    --- PASS: TestPoolPodReconciliation/unmanaged_with_requests (0.00s)
+    --- PASS: TestPoolPodReconciliation/leased (0.00s)
+    --- PASS: TestPoolPodReconciliation/leased_with_requests (0.00s)
+    --- PASS: TestPoolPodReconciliation/pending (0.00s)
+    --- PASS: TestPoolPodReconciliation/pending_with_requests (0.00s)
+    --- PASS: TestPoolPodReconciliation/pending_old (0.00s)
+    --- PASS: TestPoolPodReconciliation/pending_old_with_requests (0.00s)
+    --- PASS: TestPoolPodReconciliation/starting (0.00s)
+    --- PASS: TestPoolPodReconciliation/starting_old (0.00s)
+    --- PASS: TestPoolPodReconciliation/starting_with_requests (0.00s)
+    --- PASS: TestPoolPodReconciliation/operational (0.00s)
+    --- PASS: TestPoolPodReconciliation/operational_with_requests (0.01s)
+    --- PASS: TestPoolPodReconciliation/operational_past_expiry (0.00s)
+    --- PASS: TestPoolPodReconciliation/operational_invalid_expiry (0.00s)
+    --- PASS: TestPoolPodReconciliation/unknown (0.00s)
+    --- PASS: TestPoolPodReconciliation/unknown_with_requests (0.00s)
+    --- PASS: TestPoolPodReconciliation/combo_preserve_all (0.00s)
+    --- PASS: TestPoolPodReconciliation/combo_remove_all (0.00s)
+    --- PASS: TestPoolPodReconciliation/combo_wait_for_pending (0.00s)
+    --- PASS: TestPoolPodReconciliation/combo_wait_for_pending_with_requests (0.00s)
+    --- PASS: TestPoolPodReconciliation/combo_grow_pending_with_requests (0.00s)
+    --- PASS: TestPoolPodReconciliation/combo_trim_tail (0.00s)
+    --- PASS: TestPoolPodReconciliation/combo_trim_tail_with_equal_requests (0.00s)
+    --- PASS: TestPoolPodReconciliation/combo_trim_tail_with_extended_requests (0.00s)
+    --- PASS: TestPoolPodReconciliation/combo_embedded_failure_growth (0.00s)
+    --- PASS: TestPoolPodReconciliation/combo_embedded_failure_trim (0.00s)
+    --- PASS: TestPoolPodReconciliation/combo_trim_expired (0.00s)
+=== RUN   TestPoolClose
+=== RUN   TestPoolClose/Started
+    pool.go:142: "level"=0 "msg"="Starting worker pod monitor" "syncTime"="10ms"
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=[] "suggestedReplicas"=0
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=0
+    pool.go:157: "msg"="Failed to update worker pool" "error"="statefulsets.apps \"\" not found"
+    pool.go:148: "level"=0 "msg"="Shutting down worker pod monitor"
+=== RUN   TestPoolClose/ctx_cancelled
+    pool.go:142: "level"=0 "msg"="Starting worker pod monitor" "syncTime"="10ms"
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=[] "suggestedReplicas"=0
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=0
+    pool.go:157: "msg"="Failed to update worker pool" "error"="statefulsets.apps \"\" not found"
+    pool.go:148: "level"=0 "msg"="Shutting down worker pod monitor"
+=== RUN   TestPoolClose/Never_started
+    pool.go:142: "level"=0 "msg"="Starting worker pod monitor" "syncTime"="10ms"
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=[] "suggestedReplicas"=0
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=0
+    pool.go:157: "msg"="Failed to update worker pool" "error"="statefulsets.apps \"\" not found"
+    pool.go:148: "level"=0 "msg"="Shutting down worker pod monitor"
+=== RUN   TestPoolClose/Close_twice
+    pool.go:142: "level"=0 "msg"="Starting worker pod monitor" "syncTime"="10ms"
+    pool.go:377: "level"=0 "msg"="Querying for available buildkit pods" "namespace"="test-namespace" "opts"={,"labelSelector":"owned-by=testing"}
+    scalearbiter.go:216: "level"=0 "msg"="Pod scale determination complete" "requests"=0 "podObservations"=[] "suggestedReplicas"=0
+    pool.go:408: "level"=0 "msg"="Using statefulset scale" "replicas"=0
+    pool.go:157: "msg"="Failed to update worker pool" "error"="statefulsets.apps \"\" not found"
+    pool.go:148: "level"=0 "msg"="Shutting down worker pod monitor"
+--- PASS: TestPoolClose (0.00s)
+    --- PASS: TestPoolClose/Started (0.00s)
+    --- PASS: TestPoolClose/ctx_cancelled (0.00s)
+    --- PASS: TestPoolClose/Never_started (0.00s)
+    --- PASS: TestPoolClose/Close_twice (0.00s)
+=== RUN   TestPoolOptions
+--- PASS: TestPoolOptions (0.00s)
+=== RUN   TestRequestQueue
+--- PASS: TestRequestQueue (0.00s)
+PASS
+ok  	github.com/dominodatalab/hephaestus/pkg/buildkit/worker	(cached)
+=== RUN   TestLoadFromFile
+=== RUN   TestLoadFromFile/valid
+=== RUN   TestLoadFromFile/extra_config
+=== RUN   TestLoadFromFile/bad_format
+=== RUN   TestLoadFromFile/bad_extension
+=== RUN   TestLoadFromFile/missing_file
+--- PASS: TestLoadFromFile (0.02s)
+    --- PASS: TestLoadFromFile/valid (0.01s)
+    --- PASS: TestLoadFromFile/extra_config (0.00s)
+    --- PASS: TestLoadFromFile/bad_format (0.00s)
+    --- PASS: TestLoadFromFile/bad_extension (0.00s)
+    --- PASS: TestLoadFromFile/missing_file (0.00s)
+=== RUN   TestControllerValidate
+=== RUN   TestControllerValidate/valid
+=== RUN   TestControllerValidate/bad_health_probe_addr
+=== RUN   TestControllerValidate/bad_metrics_addr
+=== RUN   TestControllerValidate/bad_buildkit_labels
+=== RUN   TestControllerValidate/bad_buildkit_namespace
+=== RUN   TestControllerValidate/bad_buildkit_daemon_port
+=== RUN   TestControllerValidate/bad_image_build_concurrency
+=== RUN   TestControllerValidate/bad_new_relic
+--- PASS: TestControllerValidate (0.00s)
+    --- PASS: TestControllerValidate/valid (0.00s)
+    --- PASS: TestControllerValidate/bad_health_probe_addr (0.00s)
+    --- PASS: TestControllerValidate/bad_metrics_addr (0.00s)
+    --- PASS: TestControllerValidate/bad_buildkit_labels (0.00s)
+    --- PASS: TestControllerValidate/bad_buildkit_namespace (0.00s)
+    --- PASS: TestControllerValidate/bad_buildkit_daemon_port (0.00s)
+    --- PASS: TestControllerValidate/bad_image_build_concurrency (0.00s)
+    --- PASS: TestControllerValidate/bad_new_relic (0.00s)
+=== RUN   TestSensitiveDataRedaction
+--- PASS: TestSensitiveDataRedaction (0.00s)
+PASS
+ok  	github.com/dominodatalab/hephaestus/pkg/config	(cached)
+FAIL	github.com/dominodatalab/hephaestus/pkg/controller/imagebuild/component [build failed]
+?   	github.com/dominodatalab/hephaestus/pkg/controller/imagecache/component	[no test files]
+?   	github.com/dominodatalab/hephaestus/pkg/controller/imagecache/eventhandler	[no test files]
+?   	github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth/cloudauthtest	[no test files]
+?   	github.com/dominodatalab/hephaestus/pkg/controller/support/phase	[no test files]
+=== RUN   TestPersist
+=== RUN   TestPersist/all_secret_auths
+--- PASS: TestPersist (0.00s)
+    --- PASS: TestPersist/all_secret_auths (0.00s)
+PASS
+ok  	github.com/dominodatalab/hephaestus/pkg/controller/support/credentials	(cached)
+=== RUN   TestRegistry_RetrieveAuthorization
+--- PASS: TestRegistry_RetrieveAuthorization (0.00s)
+PASS
+ok  	github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth	(cached)
+=== RUN   TestAuthenticate
+=== RUN   TestAuthenticate/success_foo.azurecr.us
+=== RUN   TestAuthenticate/success_foo.azurecr.cn
+=== RUN   TestAuthenticate/success_foo.azurecr.de
+=== RUN   TestAuthenticate/success_foo.azurecr.io
+=== RUN   TestAuthenticate/invalid_server
+=== RUN   TestAuthenticate/failed_get_from_exchange
+=== RUN   TestAuthenticate/failed_get_token
+=== RUN   TestAuthenticate/failed_default_challenge_login_server
+--- PASS: TestAuthenticate (0.00s)
+    --- PASS: TestAuthenticate/success_foo.azurecr.us (0.00s)
+    --- PASS: TestAuthenticate/success_foo.azurecr.cn (0.00s)
+    --- PASS: TestAuthenticate/success_foo.azurecr.de (0.00s)
+    --- PASS: TestAuthenticate/success_foo.azurecr.io (0.00s)
+    --- PASS: TestAuthenticate/invalid_server (0.00s)
+    --- PASS: TestAuthenticate/failed_get_from_exchange (0.00s)
+    --- PASS: TestAuthenticate/failed_get_token (0.00s)
+    --- PASS: TestAuthenticate/failed_default_challenge_login_server (0.00s)
+PASS
+ok  	github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth/acr	(cached)
+=== RUN   TestAuthenticate
+=== RUN   TestAuthenticate/invalid_server
+=== RUN   TestAuthenticate/errored_authorization_token
+=== RUN   TestAuthenticate/failed_authorization_data
+=== RUN   TestAuthenticate/invalid_ecr_auth_token
+=== RUN   TestAuthenticate/invalid_ecr_auth_token_base_64
+=== RUN   TestAuthenticate/invalid_ecr_auth_token_len_err
+=== RUN   TestAuthenticate/success_server.com
+=== RUN   TestAuthenticate/success_server.com.cn
+=== RUN   TestAuthenticate/success_server.fips
+--- PASS: TestAuthenticate (0.00s)
+    --- PASS: TestAuthenticate/invalid_server (0.00s)
+    --- PASS: TestAuthenticate/errored_authorization_token (0.00s)
+    --- PASS: TestAuthenticate/failed_authorization_data (0.00s)
+    --- PASS: TestAuthenticate/invalid_ecr_auth_token (0.00s)
+    --- PASS: TestAuthenticate/invalid_ecr_auth_token_base_64 (0.00s)
+    --- PASS: TestAuthenticate/invalid_ecr_auth_token_len_err (0.00s)
+    --- PASS: TestAuthenticate/success_server.com (0.00s)
+    --- PASS: TestAuthenticate/success_server.com.cn (0.00s)
+    --- PASS: TestAuthenticate/success_server.fips (0.00s)
+PASS
+ok  	github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth/ecr	(cached)
+=== RUN   TestAuthenticate
+=== RUN   TestAuthenticate/invalid_url
+=== RUN   TestAuthenticate/oauth2_error
+=== RUN   TestAuthenticate/failed_challenge_ts_error
+=== RUN   TestAuthenticate/failed_do_request
+=== RUN   TestAuthenticate/non_200_response_code
+=== RUN   TestAuthenticate/failed_no_token_in_response
+=== RUN   TestAuthenticate/token_response_has_access_token
+=== RUN   TestAuthenticate/token_response
+=== RUN   TestAuthenticate/refresh_token_response
+--- PASS: TestAuthenticate (0.00s)
+    --- PASS: TestAuthenticate/invalid_url (0.00s)
+    --- PASS: TestAuthenticate/oauth2_error (0.00s)
+    --- PASS: TestAuthenticate/failed_challenge_ts_error (0.00s)
+    --- PASS: TestAuthenticate/failed_do_request (0.00s)
+    --- PASS: TestAuthenticate/non_200_response_code (0.00s)
+    --- PASS: TestAuthenticate/failed_no_token_in_response (0.00s)
+    --- PASS: TestAuthenticate/token_response_has_access_token (0.00s)
+    --- PASS: TestAuthenticate/token_response (0.00s)
+    --- PASS: TestAuthenticate/refresh_token_response (0.00s)
+PASS
+ok  	github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth/gcr	(cached)
+=== RUN   TestReadSecrets
+=== RUN   TestReadSecrets/returns_empty_data_for_empty_secret
+=== RUN   TestReadSecrets/returns_all_data_within_a_secret,_including_multiline_data
+=== RUN   TestReadSecrets/returns_data_for_secrets_in_different_namespace
+=== RUN   TestReadSecrets/uses_namespace_to_differentiate_secrets
+=== RUN   TestReadSecrets/errors_for_missing_secrets
+=== RUN   TestReadSecrets/requires_secrets_to_have_hephaestus-accessible_label
+=== RUN   TestReadSecrets/returns_data_for_secret_in_same_namespace
+--- PASS: TestReadSecrets (0.00s)
+    --- PASS: TestReadSecrets/returns_empty_data_for_empty_secret (0.00s)
+    --- PASS: TestReadSecrets/returns_all_data_within_a_secret,_including_multiline_data (0.00s)
+    --- PASS: TestReadSecrets/returns_data_for_secrets_in_different_namespace (0.00s)
+    --- PASS: TestReadSecrets/uses_namespace_to_differentiate_secrets (0.00s)
+    --- PASS: TestReadSecrets/errors_for_missing_secrets (0.00s)
+    --- PASS: TestReadSecrets/requires_secrets_to_have_hephaestus-accessible_label (0.00s)
+    --- PASS: TestReadSecrets/returns_data_for_secret_in_same_namespace (0.00s)
+=== RUN   TestReadSecretsTakesOwnership
+=== RUN   TestReadSecretsTakesOwnership/does_not_change_owner_by_default
+=== RUN   TestReadSecretsTakesOwnership/updates_owner_reference_to_ImageBuild_when_hephaestus-owned_label_set
+=== RUN   TestReadSecretsTakesOwnership/does_not_update_owner_references_across_namespaces,_but_still_returns_data
+--- PASS: TestReadSecretsTakesOwnership (0.00s)
+    --- PASS: TestReadSecretsTakesOwnership/does_not_change_owner_by_default (0.00s)
+    --- PASS: TestReadSecretsTakesOwnership/updates_owner_reference_to_ImageBuild_when_hephaestus-owned_label_set (0.00s)
+    --- PASS: TestReadSecretsTakesOwnership/does_not_update_owner_references_across_namespaces,_but_still_returns_data (0.00s)
+PASS
+ok  	github.com/dominodatalab/hephaestus/pkg/controller/support/secrets	(cached)
+?   	github.com/dominodatalab/hephaestus/pkg/kubernetes	[no test files]
+?   	github.com/dominodatalab/hephaestus/pkg/messaging/kafka	[no test files]
+?   	github.com/dominodatalab/hephaestus/pkg/logger	[no test files]
+=== RUN   TestApply
+=== RUN   TestApply/create
+=== RUN   TestApply/update
+=== RUN   TestApply/error
+--- PASS: TestApply (0.04s)
+    --- PASS: TestApply/create (0.02s)
+    --- PASS: TestApply/update (0.02s)
+    --- PASS: TestApply/error (0.00s)
+=== RUN   TestDelete
+=== RUN   TestDelete/success
+=== RUN   TestDelete/not_found
+=== RUN   TestDelete/error
+--- PASS: TestDelete (0.03s)
+    --- PASS: TestDelete/success (0.01s)
+    --- PASS: TestDelete/not_found (0.01s)
+    --- PASS: TestDelete/error (0.00s)
+PASS
+ok  	github.com/dominodatalab/hephaestus/pkg/crd	(cached)
+?   	github.com/dominodatalab/hephaestus/prototype/openapiv3	[no test files]
+?   	github.com/dominodatalab/hephaestus/scripts/sdk	[no test files]
+FAIL
