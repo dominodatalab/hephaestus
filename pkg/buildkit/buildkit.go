@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/containerd/console"
+	"github.com/containers/image/v5/docker"
 	"github.com/docker/cli/cli/config"
 	"github.com/go-logr/logr"
 	bkclient "github.com/moby/buildkit/client"
@@ -363,6 +364,22 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 		c.log.Info("Solve complete")
 		expresp := res.ExporterResponse
 		c.log.Info("Hello exporter response", "expresp", expresp)
+		ref, err := docker.ParseReference("//fedora")
+		if err != nil {
+			panic(err)
+		}
+		ctx := context.Background()
+		img, err := ref.NewImage(ctx, nil)
+		if err != nil {
+			panic(err)
+		}
+		defer img.Close()
+		b, _, err := img.Manifest(ctx)
+		if err != nil {
+			panic(err)
+		}
+		foo := string(b)
+		c.log.Info("Hello foo", "foo", foo)
 		return nil
 	})
 
