@@ -368,7 +368,6 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 		if err != nil {
 			panic(err)
 		}
-		ctx := context.Background()
 		img, err := ref.NewImage(ctx, nil)
 		if err != nil {
 			panic(err)
