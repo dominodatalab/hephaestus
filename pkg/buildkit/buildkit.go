@@ -5,14 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/url"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/containerd/console"
-	"github.com/containers/image/v5/docker"
+	"github.com/containers/image/docker"
 	"github.com/docker/cli/cli/config"
+	"github.com/docker/docker/client"
 	"github.com/go-logr/logr"
 	bkclient "github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/cmd/buildctl/build"
@@ -364,6 +366,22 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 		c.log.Info("Solve complete")
 		expresp := res.ExporterResponse
 		c.log.Info("Hello exporter response", "expresp", expresp)
+		imageName := expresp["image.name"]
+		cli, err := client.NewClientWithOpts(
+			client.FromEnv,
+			client.WithAPIVersionNegotiation(),
+		)
+		if err != nil {
+			log.Fatal(err)
+		}
+		inspectResult, _, err := cli.ImageInspectWithRaw(ctx, imageName)
+		if err != nil {
+			log.Fatal(err)
+		}
+		size := inspectResult.Size
+		c.log.Info("Hello size", "size", size)
+
+		fmt.Printf("Size: %d bytes\n", inspectResult.Size)
 		ref, err := docker.ParseReference("//fedora")
 		if err != nil {
 			panic(err)
@@ -373,11 +391,6 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 			panic(err)
 		}
 		defer img.Close()
-		size, err := img.Size()
-		if err != nil {
-			panic(err)
-		}
-		c.log.Info("Hello size", "size", size)
 		b, _, err := img.Manifest(ctx)
 		if err != nil {
 			panic(err)
