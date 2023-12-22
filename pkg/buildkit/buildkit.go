@@ -374,14 +374,14 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 		if err != nil {
 			log.Fatal(err)
 		}
-		inspectResult, _, err := cli.ImageInspectWithRaw(ctx, imageName)
+		inspectResult, inspectResultBody, err := cli.ImageInspectWithRaw(ctx, imageName)
 		if err != nil {
 			log.Fatal(err)
 		}
 		size := inspectResult.Size
 		c.log.Info("Hello size", "size", size)
-
-		fmt.Printf("Size: %d bytes\n", inspectResult.Size)
+		inspectResultStr := string(inspectResultBody)
+		c.log.Info("Hello inspectResultStr", "inspectResultStr", inspectResultStr)
 		ref, err := docker.ParseReference("//fedora")
 		if err != nil {
 			panic(err)
