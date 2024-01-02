@@ -389,8 +389,8 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 
 		for _, image := range images {
 			for _, tag := range image.RepoTags {
-				fmt.Println("Image ID:", image.ID)
-				fmt.Println("Image tag:", tag)
+				c.log.Info("Image ID:", "imageId", image.ID)
+				c.log.Info("Image tag:", "tag", tag)
 				// fmt.Println("Image Digest:", image.RepoDigests[0])
 				// if tag == imageName+":"+imageTag {
 				// 	fmt.Println("Image ID:", image.ID)
