@@ -366,13 +366,6 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 		expresp := res.ExporterResponse
 		c.log.Info("Hello exporter response", "expresp", expresp)
 		// imageName := expresp["image.name"]
-		// cli, err := client.NewClientWithOpts(
-		// 	client.FromEnv,
-		// 	client.WithAPIVersionNegotiation(),
-		// )
-		// if err != nil {
-		// 	log.Fatal(err)
-		// }
 		// inspectResult, inspectResultBody, err := cli.ImageInspectWithRaw(ctx, imageName)
 		// if err != nil {
 		// 	log.Fatal(err)
@@ -380,16 +373,17 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 		// size := inspectResult.Size
 		cli, err := client.NewClientWithOpts(client.FromEnv)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		images, err := cli.ImageList(ctx, types.ImageListOptions{All: true})
 		if err != nil {
-			panic(err)
+			return err
 		}
 
 		for _, image := range images {
+			imageId := image.ID
 			for _, tag := range image.RepoTags {
-				c.log.Info("Image ID:", "imageId", image.ID)
+				c.log.Info("Image ID:", "imageId", imageId)
 				c.log.Info("Image tag:", "tag", tag)
 				// fmt.Println("Image Digest:", image.RepoDigests[0])
 				// if tag == imageName+":"+imageTag {
