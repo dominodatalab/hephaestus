@@ -5,15 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/url"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/containerd/console"
-	"github.com/containers/image/docker"
 	"github.com/docker/cli/cli/config"
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/go-logr/logr"
 	bkclient "github.com/moby/buildkit/client"
@@ -366,37 +365,40 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 		c.log.Info("Solve complete")
 		expresp := res.ExporterResponse
 		c.log.Info("Hello exporter response", "expresp", expresp)
-		imageName := expresp["image.name"]
-		cli, err := client.NewClientWithOpts(
-			client.FromEnv,
-			client.WithAPIVersionNegotiation(),
-		)
-		if err != nil {
-			log.Fatal(err)
-		}
-		inspectResult, inspectResultBody, err := cli.ImageInspectWithRaw(ctx, imageName)
-		if err != nil {
-			log.Fatal(err)
-		}
-		size := inspectResult.Size
-		c.log.Info("Hello size", "size", size)
-		inspectResultStr := string(inspectResultBody)
-		c.log.Info("Hello inspectResultStr", "inspectResultStr", inspectResultStr)
-		ref, err := docker.ParseReference("//fedora")
+		// imageName := expresp["image.name"]
+		// cli, err := client.NewClientWithOpts(
+		// 	client.FromEnv,
+		// 	client.WithAPIVersionNegotiation(),
+		// )
+		// if err != nil {
+		// 	log.Fatal(err)
+		// }
+		// inspectResult, inspectResultBody, err := cli.ImageInspectWithRaw(ctx, imageName)
+		// if err != nil {
+		// 	log.Fatal(err)
+		// }
+		// size := inspectResult.Size
+		cli, err := client.NewClientWithOpts(client.FromEnv)
 		if err != nil {
 			panic(err)
 		}
-		img, err := ref.NewImage(ctx, nil)
+		images, err := cli.ImageList(ctx, types.ImageListOptions{All: true})
 		if err != nil {
 			panic(err)
 		}
-		defer img.Close()
-		b, _, err := img.Manifest(ctx)
-		if err != nil {
-			panic(err)
+
+		for _, image := range images {
+			for _, tag := range image.RepoTags {
+				fmt.Println("Image ID:", image.ID)
+				fmt.Println("Image tag:", tag)
+				// fmt.Println("Image Digest:", image.RepoDigests[0])
+				// if tag == imageName+":"+imageTag {
+				// 	fmt.Println("Image ID:", image.ID)
+				// 	fmt.Println("Image Digest:", image.RepoDigests[0])
+				// }
+			}
 		}
-		foo := string(b)
-		c.log.Info("Hello foo", "foo", foo)
+
 		return nil
 	})
 
