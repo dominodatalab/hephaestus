@@ -339,6 +339,30 @@ func (c *Client) solveWith(ctx context.Context, modify func(buildDir string, sol
 	return c.runSolve(ctx, solveOpt)
 }
 
+func (c *Client) ResolveAuth(registryHostname string) (authn.Authenticator, error) {
+	cf, err := config.Load(c.dockerConfigDir)
+	if err != nil {
+		c.log.Error(err, "Error loading config file")
+	}
+	c.log.Info("Hello cf", "cf", cf)
+	// See:
+	// https://github.com/google/ko/issues/90
+	// https://github.com/moby/moby/blob/fc01c2b481097a6057bec3cd1ab2d7b4488c50c4/registry/config.go#L397-L404
+	cfg, err := cf.GetAuthConfig(registryHostname)
+	if err != nil {
+		return nil, err
+	}
+	c.log.Info("Hello cfg", "cfg", cfg)
+
+	return authn.FromConfig(authn.AuthConfig{
+		Username:      cfg.Username,
+		Password:      cfg.Password,
+		Auth:          cfg.Auth,
+		IdentityToken: cfg.IdentityToken,
+		RegistryToken: cfg.RegistryToken,
+	}), nil
+}
+
 func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 	lw := &LogWriter{Logger: c.log}
 	ch := make(chan *bkclient.SolveStatus)
@@ -372,6 +396,14 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 			return err
 		}
 		c.log.Info("Hello ref", "ref", ref)
+		registryName := ref.Context().RegistryStr()
+		c.log.Info("Hello registryName", "registryName", registryName)
+		auth, err := c.ResolveAuth(registryName)
+		if err != nil {
+			// Handle error
+			panic(err)
+		}
+		fmt.Println("auth:", auth)
 		img, err := remote.Image(ref, remote.WithContext(ctx), remote.WithAuthFromKeychain(authn.DefaultKeychain))
 		if err != nil {
 			return err
