@@ -12,9 +12,9 @@ import (
 
 	"github.com/containerd/console"
 	"github.com/docker/cli/cli/config"
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
 	"github.com/go-logr/logr"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	bkclient "github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/cmd/buildctl/build"
 	"github.com/moby/buildkit/session"
@@ -365,33 +365,32 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 		c.log.Info("Solve complete")
 		expresp := res.ExporterResponse
 		c.log.Info("Hello exporter response", "expresp", expresp)
-		// imageName := expresp["image.name"]
-		// inspectResult, inspectResultBody, err := cli.ImageInspectWithRaw(ctx, imageName)
-		// if err != nil {
-		// 	log.Fatal(err)
-		// }
-		// size := inspectResult.Size
-		cli, err := client.NewClientWithOpts(client.FromEnv)
+		imageName := expresp["image.name"]
+		ref, err := name.ParseReference(imageName)
 		if err != nil {
 			return err
 		}
-		images, err := cli.ImageList(ctx, types.ImageListOptions{All: true})
+		c.log.Info("Hello ref", "ref", ref)
+		img, err := remote.Image(ref)
 		if err != nil {
 			return err
+		}
+		c.log.Info("Hello img", "img", img)
+		layers, err := img.Layers()
+		if err != nil {
+			return err
+		}
+		c.log.Info("Hello layers", "layers", layers)
+		var size int64
+		for _, layer := range layers {
+			compressedSize, err := layer.Size()
+			if err != nil {
+				return err
+			}
+			size += compressedSize
 		}
 
-		for _, image := range images {
-			imageID := image.ID
-			for _, tag := range image.RepoTags {
-				c.log.Info("Image ID:", "imageID", imageID)
-				c.log.Info("Image tag:", "tag", tag)
-				// fmt.Println("Image Digest:", image.RepoDigests[0])
-				// if tag == imageName+":"+imageTag {
-				// 	fmt.Println("Image ID:", image.ID)
-				// 	fmt.Println("Image Digest:", image.RepoDigests[0])
-				// }
-			}
-		}
+		c.log.Info("Image Size:", "size", size)
 
 		return nil
 	})

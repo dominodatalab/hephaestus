@@ -24,6 +24,7 @@ require (
 	github.com/dominodatalab/controller-util v0.1.0
 	github.com/go-logr/logr v1.3.0
 	github.com/go-logr/zapr v1.3.0
+	github.com/google/go-containerregistry v0.15.2
 	github.com/h2non/filetype v1.1.3
 	github.com/hashicorp/go-retryablehttp v0.7.5
 	github.com/moby/buildkit v0.12.4
@@ -150,6 +151,7 @@ require (
 	github.com/tonistiigi/fsutil v0.0.0-20230629203738-36ef4d8c0dbb // indirect
 	github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea // indirect
 	github.com/tonistiigi/vt100 v0.0.0-20230623042737-f9a4f7ef6531 // indirect
+	github.com/vbatts/tar-split v0.11.5 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.46.1 // indirect
 	go.opentelemetry.io/otel v1.21.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.21.0 // indirect
