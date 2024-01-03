@@ -371,7 +371,7 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 			return err
 		}
 		c.log.Info("Hello ref", "ref", ref)
-		img, err := remote.Image(ref)
+		img, err := remote.Image(ref, remote.WithContext(ctx))
 		if err != nil {
 			return err
 		}
