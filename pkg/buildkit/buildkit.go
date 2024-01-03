@@ -13,6 +13,7 @@ import (
 	"github.com/containerd/console"
 	"github.com/docker/cli/cli/config"
 	"github.com/go-logr/logr"
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	bkclient "github.com/moby/buildkit/client"
@@ -371,7 +372,7 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 			return err
 		}
 		c.log.Info("Hello ref", "ref", ref)
-		img, err := remote.Image(ref, remote.WithContext(ctx))
+		img, err := remote.Image(ref, remote.WithContext(ctx), remote.WithAuthFromKeychain(authn.DefaultKeychain))
 		if err != nil {
 			return err
 		}
