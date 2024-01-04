@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -69,6 +70,7 @@ func (c *BuildDispatcherComponent) Initialize(ctx *core.Context, _ *ctrl.Builder
 	return nil
 }
 
+//nolint:funlen
 func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result, error) {
 	obj := coreCtx.Object.(*hephv1.ImageBuild)
 
@@ -230,7 +232,8 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 
 	// best effort phase change regardless if the original context is "done"
 	coreCtx.Context = context.Background()
-	if err = bk.Build(buildCtx, buildOpts); err != nil {
+	imageSize, err := bk.Build(buildCtx, buildOpts)
+	if err != nil {
 		// if the underlying buildkit pod is terminated via resource delete, then buildCtx will be closed and there will
 		// be an error on it. otherwise, some external event (e.g. pod terminated) cancelled the build, so we should
 		// mark the build as failed.
@@ -253,8 +256,9 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 	obj.Status.BuildTime = time.Since(start).Truncate(time.Millisecond).String()
 	buildSeg.End()
 
-	annotations := fmt.Sprint(obj.Annotations)
-	log.Info("Hello Annotations", "annotations", annotations)
+	// annotations := fmt.Sprint(obj.Annotations)
+	log.Info("Hello imageSize", "imageSize", imageSize)
+	obj.Annotations["compressedImageSize"] = strconv.FormatInt(imageSize, 10)
 	c.phase.SetSucceeded(coreCtx, obj)
 	return ctrl.Result{}, nil
 }

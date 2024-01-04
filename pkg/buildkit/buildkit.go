@@ -147,11 +147,11 @@ func validateCompression(compression string, name string) map[string]string {
 	return attrs
 }
 
-func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
+func (c *Client) Build(ctx context.Context, opts BuildOptions) (int64, error) {
 	// setup build directory
 	buildDir, err := os.MkdirTemp("", "hephaestus-build-")
 	if err != nil {
-		return fmt.Errorf("failed to create build dir: %w", err)
+		return 0, fmt.Errorf("failed to create build dir: %w", err)
 	}
 
 	defer func(path string) {
@@ -175,7 +175,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
 		c.log.Info("Fetching remote context", "url", opts.Context)
 		extract, err := archive.FetchAndExtract(ctx, c.log, opts.Context, buildDir, opts.FetchAndExtractTimeout)
 		if err != nil {
-			return fmt.Errorf("cannot fetch remote context: %w", err)
+			return 0, fmt.Errorf("cannot fetch remote context: %w", err)
 		}
 
 		contentsDir = extract.ContentsDir
@@ -185,13 +185,13 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
 	// verify manifest is present
 	dockerfile := filepath.Join(contentsDir, "Dockerfile")
 	if _, err := os.Stat(dockerfile); errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("build requires a Dockerfile inside context dir: %w", err)
+		return 0, fmt.Errorf("build requires a Dockerfile inside context dir: %w", err)
 	}
 
 	if l := c.log.V(1); l.Enabled() {
 		bs, err := os.ReadFile(dockerfile)
 		if err != nil {
-			return fmt.Errorf("cannot read Dockerfile: %w", err)
+			return 0, fmt.Errorf("cannot read Dockerfile: %w", err)
 		}
 		l.Info("Dockerfile contents:\n" + string(bs))
 	}
@@ -202,7 +202,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
 	for name, path := range opts.Secrets {
 		contents, err := os.ReadFile(path)
 		if err != nil {
-			return err
+			return 0, err
 		}
 
 		secrets[name] = contents
@@ -259,7 +259,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
 
 		attrs, err := build.ParseOpt(args)
 		if err != nil {
-			return fmt.Errorf("cannot parse build args: %w", err)
+			return 0, fmt.Errorf("cannot parse build args: %w", err)
 		}
 
 		for k, v := range attrs {
@@ -336,7 +336,8 @@ func (c *Client) solveWith(ctx context.Context, modify func(buildDir string, sol
 		return err
 	}
 
-	return c.runSolve(ctx, solveOpt)
+	_, err = c.runSolve(ctx, solveOpt)
+	return err
 }
 
 func (c *Client) ResolveAuth(registryHostname string) (authn.Authenticator, error) {
@@ -361,7 +362,7 @@ func (c *Client) ResolveAuth(registryHostname string) (authn.Authenticator, erro
 	}), nil
 }
 
-func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
+func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (int64, error) {
 	lw := &LogWriter{Logger: c.log}
 	ch := make(chan *bkclient.SolveStatus)
 	eg, ctx := errgroup.WithContext(ctx)
@@ -378,6 +379,8 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 
 		return err
 	})
+
+	var size int64
 
 	eg.Go(func() error {
 		res, err := c.bk.Solve(ctx, nil, so, ch)
@@ -406,39 +409,25 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 			c.log.Info(err.Error())
 			return err
 		}
-		c.log.Info("Hello layers3", "layers", layers)
-		var size int64
-		for i, layer := range layers {
+		c.log.Info("Hello layers5", "layers", layers)
+		for _, layer := range layers {
 			compressedSize, err := layer.Size()
 			if err != nil {
 				c.log.Info(err.Error())
 				return err
 			}
 			size += compressedSize
-			c.log.Info(fmt.Sprintf("%d/%d: +%d = %d\n", i+1, len(layers), compressedSize, size))
-
-			// compressedIO, err := layer.Compressed()
-			// if err != nil {
-			// 	c.log.Info(err.Error())
-			// 	return err
-			// }
-			// c.log.Info("Compressed io:", "compressedIO", compressedIO)
-			// calcSize, err := getSize(compressedIO)
-			// if err != nil {
-			// 	c.log.Info(err.Error())
-			// 	return err
-			// }
-			// c.log.Info("calc size:", "calcSize", calcSize)
+			// c.log.Info(fmt.Sprintf("%d/%d: +%d = %d\n", i+1, len(layers), compressedSize, size))
 		}
-		c.log.Info("Image Size:", "size", size)
+		c.log.Info(fmt.Sprintf("Image size %d", size))
 
 		return nil
 	})
 
 	if err := eg.Wait(); err != nil {
 		c.log.Info(fmt.Sprintf("Build failed: %s", err.Error()))
-		return fmt.Errorf("buildkit solve issue: %w", err)
+		return 0, fmt.Errorf("buildkit solve issue: %w", err)
 	}
 
-	return nil
+	return size, nil
 }
