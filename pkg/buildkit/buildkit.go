@@ -416,7 +416,7 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 			c.log.Info(err.Error())
 			return err
 		}
-		c.log.Info("Hello layers2", "layers", layers)
+		c.log.Info("Hello layers3", "layers", layers)
 		var size int64
 		for i, layer := range layers {
 			compressedSize, err := layer.Size()
@@ -425,20 +425,20 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 				return err
 			}
 			size += compressedSize
-			c.log.Info(fmt.Sprintf("%d/%d: %d\n", i+1, len(layers), compressedSize))
+			c.log.Info(fmt.Sprintf("%d/%d: +%d = %d\n", i+1, len(layers), compressedSize, size))
 
-			compressedIO, err := layer.Compressed()
-			if err != nil {
-				c.log.Info(err.Error())
-				return err
-			}
-			c.log.Info("Compressed io:", "compressedIO", compressedIO)
-			calcSize, err := getSize(compressedIO)
-			if err != nil {
-				c.log.Info(err.Error())
-				return err
-			}
-			c.log.Info("calc size:", "calcSize", calcSize)
+			// compressedIO, err := layer.Compressed()
+			// if err != nil {
+			// 	c.log.Info(err.Error())
+			// 	return err
+			// }
+			// c.log.Info("Compressed io:", "compressedIO", compressedIO)
+			// calcSize, err := getSize(compressedIO)
+			// if err != nil {
+			// 	c.log.Info(err.Error())
+			// 	return err
+			// }
+			// c.log.Info("calc size:", "calcSize", calcSize)
 		}
 		c.log.Info("Image Size:", "size", size)
 
