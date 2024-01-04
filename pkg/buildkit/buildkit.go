@@ -1,6 +1,7 @@
 package buildkit
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -342,9 +343,8 @@ func (c *Client) solveWith(ctx context.Context, modify func(buildDir string, sol
 func (c *Client) ResolveAuth(registryHostname string) (authn.Authenticator, error) {
 	cf, err := config.Load(c.dockerConfigDir)
 	if err != nil {
-		c.log.Error(err, "Error loading config file")
+		return nil, err
 	}
-	c.log.Info("Hello cf", "cf", cf)
 	// See:
 	// https://github.com/google/ko/issues/90
 	// https://github.com/moby/moby/blob/fc01c2b481097a6057bec3cd1ab2d7b4488c50c4/registry/config.go#L397-L404
@@ -352,7 +352,6 @@ func (c *Client) ResolveAuth(registryHostname string) (authn.Authenticator, erro
 	if err != nil {
 		return nil, err
 	}
-	c.log.Info("Hello cfg", "cfg", cfg)
 
 	return authn.FromConfig(authn.AuthConfig{
 		Username:      cfg.Username,
@@ -361,6 +360,15 @@ func (c *Client) ResolveAuth(registryHostname string) (authn.Authenticator, erro
 		IdentityToken: cfg.IdentityToken,
 		RegistryToken: cfg.RegistryToken,
 	}), nil
+}
+
+func getSize(reader io.Reader) (int, error) {
+	buffer := new(bytes.Buffer)
+	size, err := io.Copy(buffer, reader)
+	if err != nil {
+		return 0, err
+	}
+	return int(size), nil
 }
 
 func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
@@ -389,26 +397,20 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 
 		c.log.Info("Solve complete")
 		expresp := res.ExporterResponse
-		c.log.Info("Hello exporter response", "expresp", expresp)
 		imageName := expresp["image.name"]
 		ref, err := name.ParseReference(imageName)
 		if err != nil {
 			return err
 		}
-		c.log.Info("Hello ref", "ref", ref)
 		registryName := ref.Context().RegistryStr()
-		c.log.Info("Hello registryName", "registryName", registryName)
 		auth, err := c.ResolveAuth(registryName)
 		if err != nil {
-			// Handle error
-			panic(err)
+			return err
 		}
-		fmt.Println("auth:", auth)
 		img, err := remote.Image(ref, remote.WithContext(ctx), remote.WithAuth(auth))
 		if err != nil {
 			return err
 		}
-		c.log.Info("Hello img", "img", img)
 		layers, err := img.Layers()
 		if err != nil {
 			return err
@@ -420,9 +422,20 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 			if err != nil {
 				return err
 			}
+			c.log.Info("Hello size delta:", "compressedSize", compressedSize)
 			size += compressedSize
-		}
 
+			compressedIO, err := layer.Compressed()
+			if err != nil {
+				return err
+			}
+			fmt.Println("Compressed io:", compressedIO)
+			calcSize, err := getSize(compressedIO)
+			if err != nil {
+				return err
+			}
+			fmt.Println("calc size:", calcSize)
+		}
 		c.log.Info("Image Size:", "size", size)
 
 		return nil
