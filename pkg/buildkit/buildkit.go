@@ -404,7 +404,7 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 			panic(err)
 		}
 		fmt.Println("auth:", auth)
-		img, err := remote.Image(ref, remote.WithContext(ctx), remote.WithAuthFromKeychain(authn.DefaultKeychain))
+		img, err := remote.Image(ref, remote.WithContext(ctx), remote.WithAuth(auth))
 		if err != nil {
 			return err
 		}
