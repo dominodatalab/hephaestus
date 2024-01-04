@@ -256,8 +256,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 	obj.Status.BuildTime = time.Since(start).Truncate(time.Millisecond).String()
 	buildSeg.End()
 
-	// annotations := fmt.Sprint(obj.Annotations)
-	log.Info("Hello imageSize", "imageSize", imageSize)
+	log.Info("Final image size: ", "imageSize", imageSize)
 	obj.Annotations["compressedImageSize"] = strconv.FormatInt(imageSize, 10)
 	c.phase.SetSucceeded(coreCtx, obj)
 	return ctrl.Result{}, nil

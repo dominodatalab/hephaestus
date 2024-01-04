@@ -345,9 +345,6 @@ func (c *Client) ResolveAuth(registryHostname string) (authn.Authenticator, erro
 	if err != nil {
 		return nil, err
 	}
-	// See:
-	// https://github.com/google/ko/issues/90
-	// https://github.com/moby/moby/blob/fc01c2b481097a6057bec3cd1ab2d7b4488c50c4/registry/config.go#L397-L404
 	cfg, err := cf.GetAuthConfig(registryHostname)
 	if err != nil {
 		return nil, err
@@ -406,20 +403,15 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (int64, err
 		}
 		layers, err := img.Layers()
 		if err != nil {
-			c.log.Info(err.Error())
 			return err
 		}
-		c.log.Info("Hello layers5", "layers", layers)
 		for _, layer := range layers {
 			compressedSize, err := layer.Size()
 			if err != nil {
-				c.log.Info(err.Error())
 				return err
 			}
 			size += compressedSize
-			// c.log.Info(fmt.Sprintf("%d/%d: +%d = %d\n", i+1, len(layers), compressedSize, size))
 		}
-		c.log.Info(fmt.Sprintf("Image size %d", size))
 
 		return nil
 	})
@@ -429,5 +421,6 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (int64, err
 		return 0, fmt.Errorf("buildkit solve issue: %w", err)
 	}
 
+	c.log.Info(fmt.Sprintf("Final image size: %d", size))
 	return size, nil
 }
