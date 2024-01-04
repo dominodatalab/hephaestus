@@ -1,7 +1,6 @@
 package buildkit
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -360,15 +359,6 @@ func (c *Client) ResolveAuth(registryHostname string) (authn.Authenticator, erro
 		IdentityToken: cfg.IdentityToken,
 		RegistryToken: cfg.RegistryToken,
 	}), nil
-}
-
-func getSize(reader io.Reader) (int, error) {
-	buffer := new(bytes.Buffer)
-	size, err := io.Copy(buffer, reader)
-	if err != nil {
-		return 0, err
-	}
-	return int(size), nil
 }
 
 func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
