@@ -417,12 +417,12 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 		}
 		c.log.Info("Hello layers", "layers", layers)
 		var size int64
-		for _, layer := range layers {
+		for i, layer := range layers {
 			compressedSize, err := layer.Size()
 			if err != nil {
 				return err
 			}
-			c.log.Info("Hello size delta:", "compressedSize", compressedSize)
+			fmt.Printf("%d/%d", i, len(layers))
 			size += compressedSize
 
 			compressedIO, err := layer.Compressed()
