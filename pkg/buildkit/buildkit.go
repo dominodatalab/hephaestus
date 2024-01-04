@@ -413,13 +413,15 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 		}
 		layers, err := img.Layers()
 		if err != nil {
+			c.log.Info(err.Error())
 			return err
 		}
-		c.log.Info("Hello layers", "layers", layers)
+		c.log.Info("Hello layers2", "layers", layers)
 		var size int64
 		for i, layer := range layers {
 			compressedSize, err := layer.Size()
 			if err != nil {
+				c.log.Info(err.Error())
 				return err
 			}
 			size += compressedSize
@@ -427,11 +429,13 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 
 			compressedIO, err := layer.Compressed()
 			if err != nil {
+				c.log.Info(err.Error())
 				return err
 			}
 			c.log.Info("Compressed io:", "compressedIO", compressedIO)
 			calcSize, err := getSize(compressedIO)
 			if err != nil {
+				c.log.Info(err.Error())
 				return err
 			}
 			c.log.Info("calc size:", "calcSize", calcSize)
