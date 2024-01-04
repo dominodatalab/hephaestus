@@ -57,6 +57,7 @@ func (c *AMQPMessengerComponent) Initialize(_ *core.Context, bldr *ctrl.Builder)
 	return nil
 }
 
+//nolint:maintidx
 func (c *AMQPMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, error) {
 	log := ctx.Log
 	obj := ctx.Object
