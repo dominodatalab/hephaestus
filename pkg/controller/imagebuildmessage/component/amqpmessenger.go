@@ -201,6 +201,7 @@ func (c *AMQPMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 				images = append(images, reference.TagNameOnly(named).String())
 			}
 			message.ImageURLs = images
+			message.Annotations["imagebuilder.dominodatalab.com/image-size"] = "123456789"
 		case hephv1.PhaseFailed:
 			if ib.Status.Conditions == nil {
 				return ctrl.Result{Requeue: true}, nil
