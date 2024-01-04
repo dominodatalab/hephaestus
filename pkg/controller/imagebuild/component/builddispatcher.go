@@ -258,6 +258,8 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 
 	log.Info("Final image size: ", "imageSize", imageSize)
 	obj.Annotations["compressedImageSize"] = strconv.FormatInt(imageSize, 10)
+	annotations := obj.Annotations
+	log.Info("Final annotations: ", "annotations", annotations)
 	c.phase.SetSucceeded(coreCtx, obj)
 	return ctrl.Result{}, nil
 }

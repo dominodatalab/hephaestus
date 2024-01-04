@@ -386,8 +386,7 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (int64, err
 		}
 
 		c.log.Info("Solve complete")
-		expresp := res.ExporterResponse
-		imageName := expresp["image.name"]
+		imageName := res.ExporterResponse["image.name"]
 		ref, err := name.ParseReference(imageName)
 		if err != nil {
 			return err
