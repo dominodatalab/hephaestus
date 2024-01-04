@@ -422,19 +422,19 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) error {
 			if err != nil {
 				return err
 			}
-			fmt.Printf("%d/%d", i, len(layers))
 			size += compressedSize
+			c.log.Info(fmt.Sprintf("%d/%d: %d\n", i+1, len(layers), compressedSize))
 
 			compressedIO, err := layer.Compressed()
 			if err != nil {
 				return err
 			}
-			fmt.Println("Compressed io:", compressedIO)
+			c.log.Info("Compressed io:", "compressedIO", compressedIO)
 			calcSize, err := getSize(compressedIO)
 			if err != nil {
 				return err
 			}
-			fmt.Println("calc size:", calcSize)
+			c.log.Info("calc size:", "calcSize", calcSize)
 		}
 		c.log.Info("Image Size:", "size", size)
 
