@@ -363,7 +363,11 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (int64, err
 	lw := &LogWriter{Logger: c.log}
 	ch := make(chan *bkclient.SolveStatus)
 	eg, ctx := errgroup.WithContext(ctx)
-	c.log.Info("Hello solve", "opt", so)
+	c.log.Info("Hello solve",
+		"opt", so.LocalDirs,
+		"", so.CacheImports,
+		"", so.FrontendAttrs,
+		"", so.Exports)
 
 	eg.Go(func() error {
 		var c console.Console
@@ -387,7 +391,11 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (int64, err
 		}
 
 		c.log.Info("Solve complete")
-		c.log.Info("Hello solve", "opt", so)
+		c.log.Info("Hello2 solve",
+			"opt", so.LocalDirs,
+			"", so.CacheImports,
+			"", so.FrontendAttrs,
+			"", so.Exports)
 		imageName := res.ExporterResponse["image.name"]
 		ref, err := name.ParseReference(imageName)
 		if err != nil {
