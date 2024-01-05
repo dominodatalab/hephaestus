@@ -70,7 +70,6 @@ func (c *BuildDispatcherComponent) Initialize(ctx *core.Context, _ *ctrl.Builder
 	return nil
 }
 
-//nolint:funlen
 func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result, error) {
 	obj := coreCtx.Object.(*hephv1.ImageBuild)
 
@@ -253,7 +252,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 		})
 		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, fmt.Errorf("build failed: %w", err))
 	}
-	obj.Status.BuildTime = "foobar"
+	obj.Status.BuildTime = time.Since(start).Truncate(time.Millisecond).String()
 	buildSeg.End()
 
 	obj.Status.CompressedImageSize = strconv.FormatInt(imageSize, 10)

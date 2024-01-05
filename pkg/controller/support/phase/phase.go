@@ -65,7 +65,7 @@ func (h *TransitionHelper) SetFailed(ctx *core.Context, obj PhasedObject, err er
 }
 
 func (h *TransitionHelper) updateStatus(ctx *core.Context, obj PhasedObject) {
-	ctx.Log.Info("Transitioning status", "phase", obj.GetPhase(), "annotations", obj.GetAnnotations())
+	ctx.Log.Info("Transitioning status", "phase", obj.GetPhase())
 
 	if err := ctx.Client.Status().Update(ctx, obj); err != nil {
 		ctx.Log.Error(err, "Failed to update status, emitting event")
