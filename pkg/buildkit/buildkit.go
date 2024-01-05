@@ -363,6 +363,7 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (int64, err
 	lw := &LogWriter{Logger: c.log}
 	ch := make(chan *bkclient.SolveStatus)
 	eg, ctx := errgroup.WithContext(ctx)
+	c.log.Info("Ready solve", "opt", so)
 
 	eg.Go(func() error {
 		var c console.Console
