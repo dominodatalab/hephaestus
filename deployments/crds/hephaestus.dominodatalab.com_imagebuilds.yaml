@@ -150,9 +150,9 @@ spec:
                 description: BuilderAddr is the routable address to the buildkit pod
                   used during the image build process.
                 type: string
-              compressedImageSize:
-                description: CompressedImageSize is the total size of all the compressed
-                  layers in the image.
+              compressedImageSizeBytes:
+                description: CompressedImageSizeBytes is the total size of all the
+                  compressed layers in the image.
                 type: string
               conditions:
                 items:

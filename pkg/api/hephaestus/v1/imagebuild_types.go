@@ -49,8 +49,8 @@ type ImageBuildStatus struct {
 	BuildTime string `json:"buildTime,omitempty"`
 	// BuilderAddr is the routable address to the buildkit pod used during the image build process.
 	BuilderAddr string `json:"builderAddr,omitempty"`
-	// CompressedImageSize is the total size of all the compressed layers in the image.
-	CompressedImageSize string `json:"compressedImageSize,omitempty"`
+	// CompressedImageSizeBytes is the total size of all the compressed layers in the image.
+	CompressedImageSizeBytes string `json:"compressedImageSizeBytes,omitempty"`
 
 	Conditions  []metav1.Condition     `json:"conditions,omitempty"`
 	Transitions []ImageBuildTransition `json:"transitions,omitempty"`
