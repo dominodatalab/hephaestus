@@ -259,10 +259,11 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 	log.Info("Final image size: ", "imageSize", imageSize)
 	annotations := obj.GetAnnotations()
 	annotations["imagebuilder.dominodatalab.com/image-size"] = strconv.FormatInt(imageSize, 10)
+	obj.Status.CompressedImageSize = strconv.FormatInt(imageSize, 10)
 	obj.SetAnnotations(annotations)
 
 	annotations = obj.GetAnnotations()
-	log.Info("Final annotations: ", "annotations", annotations, "uid", obj.GetUID(), "name", obj.GetName())
+	log.Info("Final annotations: ", "annotations", annotations, "uid", obj.GetUID(), "name", obj.GetName(), "status", obj.Status, "size", obj.Status.CompressedImageSize)
 	c.phase.SetSucceeded(coreCtx, obj)
 	return ctrl.Result{}, nil
 }
