@@ -359,6 +359,46 @@ func (c *Client) ResolveAuth(registryHostname string) (authn.Authenticator, erro
 	}), nil
 }
 
+func (c *Client) help(path string) error {
+	files, err := os.ReadDir(path)
+	if err != nil {
+		c.log.Info("Hello3", "err", err)
+		return err
+	}
+
+	for _, file := range files {
+		if !file.IsDir() {
+			i, _ := file.Info()
+			c.log.Info("Hello3",
+				"name", file.Name(),
+				"size", i.Size())
+		}
+	}
+
+	totalSize := int64(0)
+
+	err = filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() {
+			totalSize += int64(info.Size())
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		c.log.Info("Hello3", "err", err)
+		return err
+	}
+
+	c.log.Info("Hello3",
+		"totalsize", totalSize)
+	return nil
+}
+
 func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (int64, error) {
 	lw := &LogWriter{Logger: c.log}
 	ch := make(chan *bkclient.SolveStatus)
@@ -391,6 +431,7 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (int64, err
 			"cache", so.CacheImports,
 			"attr", so.FrontendAttrs,
 			"exp", so.Exports)
+		c.help(so.LocalDirs["context"])
 		imageName := res.ExporterResponse["image.name"]
 		ref, err := name.ParseReference(imageName)
 		if err != nil {
