@@ -202,7 +202,7 @@ func (c *AMQPMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 				images = append(images, reference.TagNameOnly(named).String())
 			}
 			message.ImageURLs = images
-			log.Info("Hello3 annotations", "ib.GetAnnotations()", ib.GetAnnotations())
+			log.Info("Hello3 annotations", "ib.GetAnnotations()", ib.GetAnnotations(), "uid", ib.GetUID(), "name", ib.GetName())
 			message.Annotations["imagebuilder.dominodatalab.com/image-size"] = "123456789"
 		case hephv1.PhaseFailed:
 			if ib.Status.Conditions == nil {
