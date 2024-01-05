@@ -267,7 +267,8 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 		"annotations", annotations,
 		"uid", obj.GetUID(),
 		"name", obj.GetName(),
-		"status", obj.Status)
+		"status", obj.Status,
+		"buildtime", time.Since(start).Truncate(time.Millisecond).String())
 	c.phase.SetSucceeded(coreCtx, obj)
 	return ctrl.Result{}, nil
 }
