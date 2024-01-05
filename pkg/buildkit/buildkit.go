@@ -383,7 +383,7 @@ func (c *Client) help(path string) error {
 		}
 
 		if !info.IsDir() {
-			totalSize += int64(info.Size())
+			totalSize += info.Size()
 		}
 
 		return nil
@@ -431,7 +431,10 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (int64, err
 			"cache", so.CacheImports,
 			"attr", so.FrontendAttrs,
 			"exp", so.Exports)
-		c.help(so.LocalDirs["context"])
+		err = c.help(so.LocalDirs["context"])
+		if err != nil {
+			return err
+		}
 		imageName := res.ExporterResponse["image.name"]
 		ref, err := name.ParseReference(imageName)
 		if err != nil {
