@@ -263,7 +263,12 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 	obj.SetAnnotations(annotations)
 
 	annotations = obj.GetAnnotations()
-	log.Info("Final annotations: ", "annotations", annotations, "uid", obj.GetUID(), "name", obj.GetName(), "status", obj.Status, "size", obj.Status.CompressedImageSize)
+	log.Info("Final annotations: ",
+		"annotations", annotations,
+		"uid", obj.GetUID(),
+		"name", obj.GetName(),
+		"status", obj.Status,
+		"size", obj.Status.CompressedImageSize)
 	c.phase.SetSucceeded(coreCtx, obj)
 	return ctrl.Result{}, nil
 }
