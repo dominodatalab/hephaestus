@@ -206,8 +206,7 @@ func (c *AMQPMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 				"ib.GetAnnotations()", ib.GetAnnotations(),
 				"uid", ib.GetUID(),
 				"name", ib.GetName(),
-				"status", ib.Status,
-				"size", ib.Status.CompressedImageSize)
+				"status", ib.Status)
 			message.Annotations["imagebuilder.dominodatalab.com/image-size-alt"] = "123456789"
 		case hephv1.PhaseFailed:
 			if ib.Status.Conditions == nil {
