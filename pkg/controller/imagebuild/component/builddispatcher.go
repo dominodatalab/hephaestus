@@ -253,7 +253,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 		})
 		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, fmt.Errorf("build failed: %w", err))
 	}
-	obj.Status.BuildTime = time.Since(start).Truncate(time.Millisecond).String()
+	obj.Status.BuildTime = "foobar"
 	buildSeg.End()
 
 	log.Info("Final image size: ", "imageSize", imageSize)
