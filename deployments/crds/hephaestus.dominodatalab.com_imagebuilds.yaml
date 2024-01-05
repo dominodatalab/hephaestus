@@ -138,6 +138,10 @@ spec:
             type: object
           status:
             properties:
+              CompressedImageSize:
+                description: CompressedImageSize is the total size of all the compressed
+                  layers in the image.
+                type: string
               allocationTime:
                 description: AllocationTime is the total time spent allocating a build
                   pod.
