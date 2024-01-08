@@ -359,43 +359,31 @@ func (c *Client) ResolveAuth(registryHostname string) (authn.Authenticator, erro
 	}), nil
 }
 
-func (c *Client) help(path string) error {
-	files, err := os.ReadDir(path)
+func (c *Client) retrieveImageSize(ctx context.Context, imageName string, sizePtr *int64) error {
+	ref, err := name.ParseReference(imageName)
 	if err != nil {
-		c.log.Info("Hello3", "err", err)
 		return err
 	}
-
-	for _, file := range files {
-		if !file.IsDir() {
-			i, _ := file.Info()
-			c.log.Info("Hello3",
-				"name", file.Name(),
-				"size", i.Size())
-		}
+	registryName := ref.Context().RegistryStr()
+	auth, err := c.ResolveAuth(registryName)
+	if err != nil {
+		return err
 	}
-
-	totalSize := int64(0)
-
-	err = filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+	img, err := remote.Image(ref, remote.WithContext(ctx), remote.WithAuth(auth))
+	if err != nil {
+		return err
+	}
+	layers, err := img.Layers()
+	if err != nil {
+		return err
+	}
+	for _, layer := range layers {
+		compressedSize, err := layer.Size()
 		if err != nil {
 			return err
 		}
-
-		if !info.IsDir() {
-			totalSize += info.Size()
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		c.log.Info("Hello3", "err", err)
-		return err
+		*sizePtr += compressedSize
 	}
-
-	c.log.Info("Hello3",
-		"totalsize", totalSize)
 	return nil
 }
 
@@ -426,39 +414,10 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (int64, err
 		}
 
 		c.log.Info("Solve complete")
-		c.log.Info("Hello2 solve",
-			"localdir", so.LocalDirs,
-			"cache", so.CacheImports,
-			"attr", so.FrontendAttrs,
-			"exp", so.Exports)
-		err = c.help(so.LocalDirs["context"])
-		if err != nil {
-			return err
-		}
 		imageName := res.ExporterResponse["image.name"]
-		ref, err := name.ParseReference(imageName)
+		err = c.retrieveImageSize(ctx, imageName, &size)
 		if err != nil {
-			return err
-		}
-		registryName := ref.Context().RegistryStr()
-		auth, err := c.ResolveAuth(registryName)
-		if err != nil {
-			return err
-		}
-		img, err := remote.Image(ref, remote.WithContext(ctx), remote.WithAuth(auth))
-		if err != nil {
-			return err
-		}
-		layers, err := img.Layers()
-		if err != nil {
-			return err
-		}
-		for _, layer := range layers {
-			compressedSize, err := layer.Size()
-			if err != nil {
-				return err
-			}
-			size += compressedSize
+			c.log.Error(err, "Cannot retrieve image size from registry", "imageName", imageName)
 		}
 
 		return nil
