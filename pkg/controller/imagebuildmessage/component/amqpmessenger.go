@@ -28,7 +28,10 @@ import (
 	"github.com/dominodatalab/hephaestus/pkg/config"
 )
 
-const publishContentType = "application/json"
+const (
+	publishContentType                 = "application/json"
+	compressedImageSizeBytesAnnotation = "imagebuilder.dominodatalab.com/compressed-image-size-bytes"
+)
 
 type AMQPMessengerComponent struct {
 	cfg      config.Messaging
@@ -57,6 +60,7 @@ func (c *AMQPMessengerComponent) Initialize(_ *core.Context, bldr *ctrl.Builder)
 	return nil
 }
 
+//nolint:maintidx
 func (c *AMQPMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, error) {
 	log := ctx.Log
 	obj := ctx.Object
@@ -201,6 +205,7 @@ func (c *AMQPMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 				images = append(images, reference.TagNameOnly(named).String())
 			}
 			message.ImageURLs = images
+			message.Annotations[compressedImageSizeBytesAnnotation] = ib.Status.CompressedImageSizeBytes
 		case hephv1.PhaseFailed:
 			if ib.Status.Conditions == nil {
 				return ctrl.Result{Requeue: true}, nil
