@@ -224,7 +224,7 @@ controller:
     image:
       registry: ""
       repository: timberio/vector
-      tag: 0.34.X-distroless-static
+      tag: 0.35.X-distroless-static
       pullPolicy: IfNotPresent
       pullSecrets: []
 
@@ -273,7 +273,7 @@ buildkit:
   image:
     registry: ""
     repository: moby/buildkit
-    tag: v0.12.4-rootless
+    tag: v0.12.5-rootless
     pullPolicy: IfNotPresent
     pullSecrets: []
 
