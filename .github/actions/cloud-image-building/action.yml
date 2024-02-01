@@ -21,7 +21,7 @@ runs:
       shell: bash
 
     - name: Install Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
         go-version-file: test/functional/go.mod
         cache-dependency-path: test/functional/go.sum
