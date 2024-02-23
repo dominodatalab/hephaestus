@@ -222,6 +222,12 @@ spec:
                   - type
                   type: object
                 type: array
+              labels:
+                additionalProperties:
+                  type: string
+                description: 'Map of string keys and values roughly corresponding
+                  to Kubernetes Labels More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels'
+                type: object
               phase:
                 description: Phase represents a step in a resource processing lifecycle.
                 type: string

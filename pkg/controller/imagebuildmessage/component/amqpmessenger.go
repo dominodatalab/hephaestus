@@ -206,6 +206,9 @@ func (c *AMQPMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 			}
 			message.ImageURLs = images
 			message.Annotations[compressedImageSizeBytesAnnotation] = ib.Status.CompressedImageSizeBytes
+			for key, value := range ib.Status.Labels {
+				message.Annotations[key] = value
+			}
 		case hephv1.PhaseFailed:
 			if ib.Status.Conditions == nil {
 				return ctrl.Result{Requeue: true}, nil

@@ -11,6 +11,9 @@ import (
 
 	"github.com/dominodatalab/controller-util/core"
 	"github.com/go-logr/logr"
+	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/newrelic/go-agent/v3/newrelic"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -70,6 +73,7 @@ func (c *BuildDispatcherComponent) Initialize(ctx *core.Context, _ *ctrl.Builder
 	return nil
 }
 
+//nolint:funlen
 func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result, error) {
 	obj := coreCtx.Object.(*hephv1.ImageBuild)
 
@@ -231,7 +235,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 
 	// best effort phase change regardless if the original context is "done"
 	coreCtx.Context = context.Background()
-	imageSize, err := bk.Build(buildCtx, buildOpts)
+	imageName, err := bk.Build(buildCtx, buildOpts)
 	if err != nil {
 		// if the underlying buildkit pod is terminated via resource delete, then buildCtx will be closed and there will
 		// be an error on it. otherwise, some external event (e.g. pod terminated) cancelled the build, so we should
@@ -255,9 +259,34 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 	obj.Status.BuildTime = time.Since(start).Truncate(time.Millisecond).String()
 	buildSeg.End()
 
-	obj.Status.CompressedImageSizeBytes = strconv.FormatInt(imageSize, 10)
+	img, err := retrieveImage(buildCtx, bk, imageName)
+	if err != nil {
+		log.Error(err, "Cannot retrieve image from registry", "imageName", imageName)
+		buildLog.Error(err, "Cannot retrieve image from registry", "imageName", imageName)
+	}
+	populateBuildStatus(obj, buildLog, img, imageName)
 	c.phase.SetSucceeded(coreCtx, obj)
 	return ctrl.Result{}, nil
+}
+
+func populateBuildStatus(obj *hephv1.ImageBuild, log logr.Logger, img v1.Image, imageName string) {
+	imageSize, err := calculateImageSize(img)
+	if err != nil {
+		log.Error(err, "Cannot calculate image size", "imageName", imageName)
+	}
+	labels, err := calculateLabels(img)
+	if err != nil {
+		log.Error(err, "Cannot calculate image labels", "imageName", imageName)
+	}
+
+	log.Info(fmt.Sprintf("Final image size: %d", imageSize))
+	obj.Status.CompressedImageSizeBytes = strconv.FormatInt(imageSize, 10)
+	obj.Status.Labels = make(map[string]string)
+	for key, value := range labels {
+		if len(value) > 0 {
+			obj.Status.Labels[key] = value
+		}
+	}
 }
 
 func (c *BuildDispatcherComponent) processCancellations(log logr.Logger) {
@@ -274,4 +303,46 @@ func (c *BuildDispatcherComponent) processCancellations(log logr.Logger) {
 		}
 		log.Info("Ignoring message, cancellation not found")
 	}
+}
+
+func retrieveImage(ctx context.Context, c *buildkit.Client, imageName string) (v1.Image, error) {
+	ref, err := name.ParseReference(imageName)
+	if err != nil {
+		return nil, err
+	}
+	registryName := ref.Context().RegistryStr()
+	auth, err := c.ResolveAuth(registryName)
+	if err != nil {
+		return nil, err
+	}
+	img, err := remote.Image(ref, remote.WithContext(ctx), remote.WithAuth(auth))
+	if err != nil {
+		return nil, err
+	}
+	return img, nil
+}
+
+func calculateImageSize(img v1.Image) (int64, error) {
+	layers, err := img.Layers()
+	if err != nil {
+		return 0, err
+	}
+
+	var size int64
+	for _, layer := range layers {
+		compressedSize, err := layer.Size()
+		if err != nil {
+			return 0, err
+		}
+		size += compressedSize
+	}
+	return size, nil
+}
+
+func calculateLabels(img v1.Image) (map[string]string, error) {
+	config, err := img.ConfigFile()
+	if err != nil {
+		return nil, err
+	}
+	return config.Config.Labels, nil
 }
