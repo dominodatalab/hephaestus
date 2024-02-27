@@ -225,8 +225,8 @@ spec:
               labels:
                 additionalProperties:
                   type: string
-                description: 'Map of string keys and values roughly corresponding
-                  to Kubernetes Labels More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels'
+                description: Map of string keys and values corresponding OCI image
+                  config labels Labels contains arbitrary metadata for the container
                 type: object
               phase:
                 description: Phase represents a step in a resource processing lifecycle.

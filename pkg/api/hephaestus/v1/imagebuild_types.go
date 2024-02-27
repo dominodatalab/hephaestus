@@ -51,8 +51,8 @@ type ImageBuildStatus struct {
 	BuilderAddr string `json:"builderAddr,omitempty"`
 	// CompressedImageSizeBytes is the total size of all the compressed layers in the image.
 	CompressedImageSizeBytes string `json:"compressedImageSizeBytes,omitempty"`
-	// Map of string keys and values roughly corresponding to Kubernetes Labels
-	// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels
+	// Map of string keys and values corresponding OCI image config labels
+	// Labels contains arbitrary metadata for the container
 	Labels map[string]string `json:"labels,omitempty"`
 
 	Conditions  []metav1.Condition     `json:"conditions,omitempty"`
