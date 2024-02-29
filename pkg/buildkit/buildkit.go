@@ -14,8 +14,6 @@ import (
 	"github.com/docker/cli/cli/config"
 	"github.com/go-logr/logr"
 	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
 	bkclient "github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/cmd/buildctl/build"
 	"github.com/moby/buildkit/session"
@@ -147,11 +145,11 @@ func validateCompression(compression string, name string) map[string]string {
 	return attrs
 }
 
-func (c *Client) Build(ctx context.Context, opts BuildOptions) (int64, error) {
+func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 	// setup build directory
 	buildDir, err := os.MkdirTemp("", "hephaestus-build-")
 	if err != nil {
-		return 0, fmt.Errorf("failed to create build dir: %w", err)
+		return "", fmt.Errorf("failed to create build dir: %w", err)
 	}
 
 	defer func(path string) {
@@ -175,7 +173,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (int64, error) {
 		c.log.Info("Fetching remote context", "url", opts.Context)
 		extract, err := archive.FetchAndExtract(ctx, c.log, opts.Context, buildDir, opts.FetchAndExtractTimeout)
 		if err != nil {
-			return 0, fmt.Errorf("cannot fetch remote context: %w", err)
+			return "", fmt.Errorf("cannot fetch remote context: %w", err)
 		}
 
 		contentsDir = extract.ContentsDir
@@ -185,13 +183,13 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (int64, error) {
 	// verify manifest is present
 	dockerfile := filepath.Join(contentsDir, "Dockerfile")
 	if _, err := os.Stat(dockerfile); errors.Is(err, os.ErrNotExist) {
-		return 0, fmt.Errorf("build requires a Dockerfile inside context dir: %w", err)
+		return "", fmt.Errorf("build requires a Dockerfile inside context dir: %w", err)
 	}
 
 	if l := c.log.V(1); l.Enabled() {
 		bs, err := os.ReadFile(dockerfile)
 		if err != nil {
-			return 0, fmt.Errorf("cannot read Dockerfile: %w", err)
+			return "", fmt.Errorf("cannot read Dockerfile: %w", err)
 		}
 		l.Info("Dockerfile contents:\n" + string(bs))
 	}
@@ -202,7 +200,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (int64, error) {
 	for name, path := range opts.Secrets {
 		contents, err := os.ReadFile(path)
 		if err != nil {
-			return 0, err
+			return "", err
 		}
 
 		secrets[name] = contents
@@ -259,7 +257,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (int64, error) {
 
 		attrs, err := build.ParseOpt(args)
 		if err != nil {
-			return 0, fmt.Errorf("cannot parse build args: %w", err)
+			return "", fmt.Errorf("cannot parse build args: %w", err)
 		}
 
 		for k, v := range attrs {
@@ -359,35 +357,7 @@ func (c *Client) ResolveAuth(registryHostname string) (authn.Authenticator, erro
 	}), nil
 }
 
-func (c *Client) retrieveImageSize(ctx context.Context, imageName string, sizePtr *int64) error {
-	ref, err := name.ParseReference(imageName)
-	if err != nil {
-		return err
-	}
-	registryName := ref.Context().RegistryStr()
-	auth, err := c.ResolveAuth(registryName)
-	if err != nil {
-		return err
-	}
-	img, err := remote.Image(ref, remote.WithContext(ctx), remote.WithAuth(auth))
-	if err != nil {
-		return err
-	}
-	layers, err := img.Layers()
-	if err != nil {
-		return err
-	}
-	for _, layer := range layers {
-		compressedSize, err := layer.Size()
-		if err != nil {
-			return err
-		}
-		*sizePtr += compressedSize
-	}
-	return nil
-}
-
-func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (int64, error) {
+func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (string, error) {
 	lw := &LogWriter{Logger: c.log}
 	ch := make(chan *bkclient.SolveStatus)
 	eg, ctx := errgroup.WithContext(ctx)
@@ -405,7 +375,7 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (int64, err
 		return err
 	})
 
-	var size int64
+	var imageName string
 
 	eg.Go(func() error {
 		res, err := c.bk.Solve(ctx, nil, so, ch)
@@ -414,20 +384,16 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (int64, err
 		}
 
 		c.log.Info("Solve complete")
-		imageName := res.ExporterResponse["image.name"]
-		err = c.retrieveImageSize(ctx, imageName, &size)
-		if err != nil {
-			c.log.Error(err, "Cannot retrieve image size from registry", "imageName", imageName)
-		}
+		imageName = res.ExporterResponse["image.name"]
 
 		return nil
 	})
 
 	if err := eg.Wait(); err != nil {
 		c.log.Info(fmt.Sprintf("Build failed: %s", err.Error()))
-		return 0, fmt.Errorf("buildkit solve issue: %w", err)
+		return "", fmt.Errorf("buildkit solve issue: %w", err)
 	}
 
-	c.log.Info(fmt.Sprintf("Final image size: %d", size))
-	return size, nil
+	c.log.Info(fmt.Sprintf("Final image name: %s", imageName))
+	return imageName, nil
 }
