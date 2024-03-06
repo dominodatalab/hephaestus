@@ -53,6 +53,7 @@ spec:
             seccompProfile:
               type: Unconfined
             {{- else }}
+            allowPrivilegeEscalation: true
             privileged: true
             {{- end }}
           image: {{ include "hephaestus.buildkit.image" . }}
