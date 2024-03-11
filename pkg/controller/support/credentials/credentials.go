@@ -7,13 +7,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	typesregistry "github.com/docker/docker/api/types/registry"
+	"github.com/docker/docker/errdefs"
 	"github.com/docker/docker/registry"
 	"github.com/go-logr/logr"
 	"go.uber.org/multierr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -36,6 +39,12 @@ type AuthConfigs map[string]typesregistry.AuthConfig
 // DockerConfigJSON models the structure of .dockerconfigjson data.
 type DockerConfigJSON struct {
 	Auths AuthConfigs `json:"auths"`
+}
+
+var defaultBackoff = wait.Backoff{ // retries after 1s 2s 4s 8s 16s
+	Duration: time.Second,
+	Factor:   2,
+	Steps:    6,
 }
 
 func Persist(
@@ -107,7 +116,7 @@ func Persist(
 			}
 
 			ac = *pac
-			helpMessage = append(helpMessage, "cloud provider access configuration")
+			helpMessage = append(helpMessage, fmt.Sprintf("cloud provider access configuration (server: %s)", cred.Server))
 		}
 
 		auths[cred.Server] = ac
@@ -149,7 +158,18 @@ func Verify(ctx context.Context, configDir string, insecureRegistries []string, 
 		auth := auth
 		auth.ServerAddress = server
 
-		if _, _, err = svc.Auth(ctx, &auth, "DominoDataLab_Hephaestus/1.0"); err != nil {
+		err := wait.ExponentialBackoffWithContext(ctx, defaultBackoff, func(ctx context.Context) (bool, error) {
+			if _, _, err = svc.Auth(ctx, &auth, "DominoDataLab_Hephaestus/1.0"); err != nil {
+				if errdefs.IsUnauthorized(err) {
+					return false, err
+				}
+				return false, nil
+			}
+
+			return true, nil
+		})
+
+		if err != nil {
 			//nolint:lll
 			detailedErr := fmt.Errorf("client credentials are invalid for registry %q.\nMake sure the following sources of credentials are correct: %s.\nUnderlying error: %w", server, strings.Join(helpMessage, ", "), err)
 			errs = append(errs, detailedErr)
