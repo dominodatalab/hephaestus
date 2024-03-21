@@ -83,6 +83,9 @@ jobs:
         with:
           cmd: yq '.buildkit.image.tag' deployments/helm/hephaestus/values.yaml
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -99,6 +102,7 @@ jobs:
           push: true
           target: rootless
           context: build/buildkit
+          platforms: linux/amd64,linux/arm64
           build-args: BUILDKIT_TAG=${{ steps.image_tag.outputs.result }}
           tags: quay.io/domino/buildkit:${{ steps.image_tag.outputs.result }}
 
@@ -116,6 +120,9 @@ jobs:
         with:
           cmd: yq '.buildkit.image.tag' deployments/helm/hephaestus/values.yaml | sed 's/-rootless//'
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -132,6 +139,7 @@ jobs:
           push: true
           target: root
           context: build/buildkit
+          platforms: linux/amd64,linux/arm64
           build-args: BUILDKIT_TAG=${{ steps.image_tag.outputs.result }}
           tags: quay.io/domino/buildkit:${{ steps.image_tag.outputs.result }}
 
