@@ -8,6 +8,7 @@ on:
 
 env:
   GO_VERSION: "1.21"
+  BUILD_PLATFORMS: linux/amd64,linux/arm64
 
 jobs:
   build:
@@ -71,6 +72,7 @@ jobs:
           repository: domino/hephaestus
           username: ${{ secrets.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_PASSWORD }}
+          platforms: ${{ env.BUILD_PLATFORMS }}
 
   vendor-buildkit-rootless:
     runs-on: ubuntu-latest
@@ -105,7 +107,7 @@ jobs:
           push: true
           target: rootless
           context: build/buildkit
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ env.BUILD_PLATFORMS }}
           build-args: BUILDKIT_TAG=${{ steps.image_tag.outputs.result }}
           tags: quay.io/domino/buildkit:${{ steps.image_tag.outputs.result }}
 
@@ -142,7 +144,7 @@ jobs:
           push: true
           target: root
           context: build/buildkit
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ env.BUILD_PLATFORMS }}
           build-args: BUILDKIT_TAG=${{ steps.image_tag.outputs.result }}
           tags: quay.io/domino/buildkit:${{ steps.image_tag.outputs.result }}
 
