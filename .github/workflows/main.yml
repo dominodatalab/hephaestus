@@ -64,6 +64,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+          platforms: ${{ env.BUILD_PLATFORMS }}
 
       - name: Push Docker image to Quay
         uses: ./.github/actions/push-docker-image
