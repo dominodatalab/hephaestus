@@ -10,10 +10,14 @@ inputs:
     default: ${{ github.repository }}
   username:
     required: true
-    description: Private regsitry username
+    description: Private registry username
   password:
     required: true
-    description: Private regsitry password
+    description: Private registry password
+  platforms:
+    required: true
+    description: Docker image architectures to build/push
+    default: linux/amd64,linux/arm64
 outputs:
   version:
     description: Docker image version
@@ -42,6 +46,7 @@ runs:
       uses: docker/build-push-action@v5
       with:
         context: .
+        platforms: ${{ inputs.platforms }}
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}

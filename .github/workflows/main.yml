@@ -8,6 +8,7 @@ on:
 
 env:
   GO_VERSION: "1.21"
+  BUILD_PLATFORMS: linux/amd64,linux/arm64
 
 jobs:
   build:
@@ -50,6 +51,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -60,6 +64,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+          platforms: ${{ env.BUILD_PLATFORMS }}
 
       - name: Push Docker image to Quay
         uses: ./.github/actions/push-docker-image
@@ -68,6 +73,7 @@ jobs:
           repository: domino/hephaestus
           username: ${{ secrets.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_PASSWORD }}
+          platforms: ${{ env.BUILD_PLATFORMS }}
 
   vendor-buildkit-rootless:
     runs-on: ubuntu-latest
@@ -82,6 +88,9 @@ jobs:
         uses: mikefarah/yq@v4.33.2
         with:
           cmd: yq '.buildkit.image.tag' deployments/helm/hephaestus/values.yaml
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -99,6 +108,7 @@ jobs:
           push: true
           target: rootless
           context: build/buildkit
+          platforms: ${{ env.BUILD_PLATFORMS }}
           build-args: BUILDKIT_TAG=${{ steps.image_tag.outputs.result }}
           tags: quay.io/domino/buildkit:${{ steps.image_tag.outputs.result }}
 
@@ -116,6 +126,9 @@ jobs:
         with:
           cmd: yq '.buildkit.image.tag' deployments/helm/hephaestus/values.yaml | sed 's/-rootless//'
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -132,6 +145,7 @@ jobs:
           push: true
           target: root
           context: build/buildkit
+          platforms: ${{ env.BUILD_PLATFORMS }}
           build-args: BUILDKIT_TAG=${{ steps.image_tag.outputs.result }}
           tags: quay.io/domino/buildkit:${{ steps.image_tag.outputs.result }}
 
