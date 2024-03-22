@@ -19,7 +19,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"k8s.io/utils/pointer"
 )
 
 func TestAKSFunctionality(t *testing.T) {
@@ -73,8 +72,7 @@ func (suite *AKSTestSuite) testCloudAuth(ctx context.Context, t *testing.T) {
 		python39JupyterBuildContext,
 		image,
 		&hephv1.RegistryCredentials{
-			Server:        cloudRegistry,
-			CloudProvided: pointer.Bool(true),
+			Server: cloudRegistry,
 		},
 	)
 	ib := createBuild(t, ctx, suite.hephClient, build)

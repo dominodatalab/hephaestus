@@ -15,7 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	auth "golang.org/x/oauth2/google"
-	"k8s.io/utils/pointer"
 )
 
 func TestGKEFunctionality(t *testing.T) {
@@ -66,8 +65,7 @@ func (suite *GKETestSuite) testCloudAuth(ctx context.Context, t *testing.T) {
 		python39JupyterBuildContext,
 		fmt.Sprintf("%s/%s", cloudRegistry, image),
 		&hephv1.RegistryCredentials{
-			Server:        cloudRegistry,
-			CloudProvided: pointer.Bool(true),
+			Server: cloudRegistry,
 		},
 	)
 	ib := createBuild(t, ctx, suite.hephClient, build)

@@ -67,6 +67,10 @@ spec:
                           type: string
                       type: object
                     cloudProvided:
+                      description: 'NOTE: this field was previously used to determine
+                        whether to fetch credentials from the cloud a given server.
+                        this is now done automatically and this field is no longer
+                        necessary.'
                       type: boolean
                     secret:
                       properties:
