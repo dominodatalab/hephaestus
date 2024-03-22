@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/containerd/console"
@@ -172,14 +173,14 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 	case err == nil && fi.IsDir():
 		c.log.Info("Using context dir", "dir", opts.ContextDir)
 		contentsDir = opts.ContextDir
-	case opts.Context != "":
+	case strings.TrimSpace(opts.Context) != "":
 		c.log.Info("Fetching remote context", "url", opts.Context)
 		extract, extractErr := archive.FetchAndExtract(ctx, c.log, opts.Context, buildDir, opts.FetchAndExtractTimeout)
 		if extractErr != nil {
 			return "", fmt.Errorf("cannot fetch remote context: %w", err)
 		}
 		contentsDir = extract.ContentsDir
-	case opts.DockerfileContents != "":
+	case strings.TrimSpace(opts.DockerfileContents) != "":
 		c.log.Info("Creating context from DockerfileContents")
 		contentsDir, err = os.MkdirTemp(buildDir, "dockerfile-contents-")
 		if err != nil {
