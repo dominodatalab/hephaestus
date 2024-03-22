@@ -218,6 +218,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 
 	buildOpts := buildkit.BuildOptions{
 		Context:                  obj.Spec.Context,
+		DockerfileContents:       obj.Spec.DockerfileContents,
 		Images:                   obj.Spec.Images,
 		BuildArgs:                obj.Spec.BuildArgs,
 		NoCache:                  obj.Spec.DisableLocalBuildCache,

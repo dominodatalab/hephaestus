@@ -42,12 +42,16 @@ func (in *ImageBuild) validateImageBuild(action string) (admission.Warnings, err
 	var errList field.ErrorList
 	fp := field.NewPath("spec")
 
-	if strings.TrimSpace(in.Spec.Context) == "" {
-		log.V(1).Info("Context is blank")
-		errList = append(errList, field.Required(fp.Child("context"), "must not be blank"))
-	} else if _, err := url.ParseRequestURI(in.Spec.Context); err != nil {
-		log.V(1).Info("Context is not a valid URL")
-		errList = append(errList, field.Invalid(fp.Child("context"), in.Spec.Context, err.Error()))
+	if strings.TrimSpace(in.Spec.Context) == "" && strings.TrimSpace(in.Spec.DockerfileContents) == "" {
+		log.V(1).Info("Context and DockerfileContents are blank")
+		errList = append(errList, field.Required(fp.Child("context and dockerFileContents"), "must not be blank"))
+	}
+
+	if strings.TrimSpace(in.Spec.Context) != "" {
+		if _, err := url.ParseRequestURI(in.Spec.Context); err != nil {
+			log.V(1).Info("Context is not a valid URL")
+			errList = append(errList, field.Invalid(fp.Child("context"), in.Spec.Context, err.Error()))
+		}
 	}
 
 	if errs := validateImages(log, fp.Child("images"), in.Spec.Images); errs != nil {

@@ -67,7 +67,8 @@ spec:
                   type: string
                 type: array
               context:
-                description: Context is a remote URL used to fetch the build context.
+                description: Context is a remote URL used to fetch the build context.  Overrides
+                  dockerfileContents if present.
                 type: string
               disableBuildCache:
                 description: DisableLocalBuildCache  will disable the use of the local
@@ -77,6 +78,10 @@ spec:
                 description: DisableCacheLayerExport will remove the "inline" cache
                   metadata from the image configuration.
                 type: boolean
+              dockerfileContents:
+                description: DockerfileContents specifies the contents of the Dockerfile
+                  directly in the CR.  Ignored if context is present.
+                type: string
               images:
                 description: Images is a list of images to build and push.
                 items:

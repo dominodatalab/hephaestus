@@ -14,8 +14,10 @@ type ImageBuildAMQPOverrides struct {
 
 // ImageBuildSpec specifies the desired state of an ImageBuild resource.
 type ImageBuildSpec struct {
-	// Context is a remote URL used to fetch the build context.
+	// Context is a remote URL used to fetch the build context.  Overrides dockerfileContents if present.
 	Context string `json:"context,omitempty"`
+	// DockerfileContents specifies the contents of the Dockerfile directly in the CR.  Ignored if context is present.
+	DockerfileContents string `json:"dockerfileContents,omitempty"`
 	// Images is a list of images to build and push.
 	Images []string `json:"images,omitempty"`
 	// BuildArgs are applied to the build at runtime.
