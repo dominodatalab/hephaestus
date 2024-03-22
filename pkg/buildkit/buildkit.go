@@ -181,7 +181,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 		contentsDir = extract.ContentsDir
 	case opts.DockerfileContents != "":
 		c.log.Info("Creating context from DockerfileContents")
-		contentsDir, err = os.MkdirTemp("", "dockerfileContents*")
+		contentsDir, err = os.MkdirTemp(buildDir, "dockerfile-contents-")
 		if err != nil {
 			return "", fmt.Errorf("cannot create temp directory for dockerfileContents: %w", err)
 		}
