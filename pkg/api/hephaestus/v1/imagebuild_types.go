@@ -53,6 +53,8 @@ type ImageBuildStatus struct {
 	BuilderAddr string `json:"builderAddr,omitempty"`
 	// CompressedImageSizeBytes is the total size of all the compressed layers in the image.
 	CompressedImageSizeBytes string `json:"compressedImageSizeBytes,omitempty"`
+	// Digest is the image digest
+	Digest string `json:"digest,omitempty"`
 	// Map of string keys and values corresponding OCI image config labels.
 	// Labels contains arbitrary metadata for the container.
 	Labels map[string]string `json:"labels,omitempty"`
