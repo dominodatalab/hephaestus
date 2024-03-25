@@ -227,6 +227,9 @@ spec:
                   - type
                   type: object
                 type: array
+              digest:
+                description: Digest is the image digest
+                type: string
               labels:
                 additionalProperties:
                   type: string
