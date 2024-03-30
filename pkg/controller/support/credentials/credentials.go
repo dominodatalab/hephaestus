@@ -110,9 +110,9 @@ func Persist(
 			pac, err := CloudAuthRegistry.RetrieveAuthorization(ctx, logger, cred.Server)
 			if err != nil {
 				if err != cloudauth.ErrNoLoader {
-					return "", nil, fmt.Errorf("cloud registry authorization failed: %w", err)
+					return "", nil, fmt.Errorf("registry authorization failed: %w", err)
 				}
-				return "", nil, fmt.Errorf("credential %v is missing auth section", cred)
+				return "", nil, fmt.Errorf("failed to authorize server %s, credentials may be misconfigured", cred.Server)
 			}
 
 			ac = *pac
