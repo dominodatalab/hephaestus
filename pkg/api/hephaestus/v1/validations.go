@@ -7,7 +7,6 @@ import (
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	"k8s.io/utils/ptr"
 )
 
 func validateImages(log logr.Logger, fp *field.Path, images []string) (errs field.ErrorList) {
@@ -41,9 +40,8 @@ func validateRegistryAuth(log logr.Logger, fp *field.Path, registryAuth []Regist
 
 		ba := auth.BasicAuth != nil
 		sa := auth.Secret != nil
-		ca := ptr.Deref(auth.CloudProvided, false)
 
-		if (ba && sa) || (ba && ca) || (sa && ca) {
+		if ba && sa {
 			log.V(1).Info("Multiple registry credential sources provided")
 			errs = append(errs, field.Forbidden(fp, "cannot specify more than 1 credential source"))
 
@@ -69,11 +67,8 @@ func validateRegistryAuth(log logr.Logger, fp *field.Path, registryAuth []Regist
 				log.V(1).Info("Registry credentials secret namespace is missing")
 				errs = append(errs, field.Required(fp.Child("secret", "namespace"), "must not be blank"))
 			}
-		case ca:
-			log.V(1).Info("Registry credential using cloud provided authentication")
 		default:
 			log.V(1).Info("No registry credential sources provided")
-			errs = append(errs, field.Required(fp, "must specify 1 credential source"))
 		}
 	}
 
