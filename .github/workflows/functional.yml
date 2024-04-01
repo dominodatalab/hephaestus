@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: Update PR Comment
         if: github.event_name != 'pull_request'
-        uses: peter-evans/create-or-update-comment@v3
+        uses: peter-evans/create-or-update-comment@v4
         with:
           comment-id: ${{ github.event.comment.id }}
           reactions: rocket
