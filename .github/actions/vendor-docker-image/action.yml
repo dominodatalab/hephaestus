@@ -18,7 +18,7 @@ runs:
   steps:
     - id: image_source
       name: Extract image details from Helm values
-      uses: mikefarah/yq@v4.33.2
+      uses: mikefarah/yq@v4.43.1
       with:
         cmd: yq '${{ inputs.query }} | .repository + ":" + .tag' deployments/helm/hephaestus/values.yaml
 
