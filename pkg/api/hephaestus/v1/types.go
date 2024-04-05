@@ -53,9 +53,12 @@ type RegistryCredentials struct {
 	//  credential types.
 	Server string `json:"server,omitempty"`
 
-	CloudProvided *bool                 `json:"cloudProvided,omitempty"`
-	BasicAuth     *BasicAuthCredentials `json:"basicAuth,omitempty"`
-	Secret        *SecretCredentials    `json:"secret,omitempty"`
+	// NOTE: this field was previously used to determine whether to fetch credentials from the cloud a given server.
+	// this is now done automatically and this field is no longer necessary.
+	CloudProvided *bool `json:"cloudProvided,omitempty"`
+
+	BasicAuth *BasicAuthCredentials `json:"basicAuth,omitempty"`
+	Secret    *SecretCredentials    `json:"secret,omitempty"`
 }
 
 type SecretReference struct {
