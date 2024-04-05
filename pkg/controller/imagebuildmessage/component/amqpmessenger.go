@@ -205,6 +205,9 @@ func (c *AMQPMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 				images = append(images, reference.TagNameOnly(named).String())
 			}
 			message.ImageURLs = images
+			if message.Annotations == nil {
+				message.Annotations = map[string]string{}
+			}
 			message.Annotations[compressedImageSizeBytesAnnotation] = ib.Status.CompressedImageSizeBytes
 			for key, value := range ib.Status.Labels {
 				message.Annotations[key] = value
