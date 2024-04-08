@@ -16,7 +16,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.14.11
 	github.com/aws/aws-sdk-go-v2/service/ecr v1.24.7
 	github.com/aws/smithy-go v1.19.0
-	github.com/containerd/console v1.0.3
+	github.com/containerd/console v1.0.4
 	github.com/distribution/reference v0.5.0
 	github.com/docker/cli v24.0.9+incompatible
 	github.com/docker/docker v24.0.9+incompatible
