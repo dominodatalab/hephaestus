@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/containerd/console"
 	"github.com/docker/cli/cli/config"
 	"github.com/go-logr/logr"
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -20,6 +19,7 @@ import (
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/session/secrets/secretsprovider"
 	"github.com/moby/buildkit/util/progress/progressui"
+	"github.com/moby/buildkit/util/progress/progresswriter"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -70,7 +70,7 @@ func (b *ClientBuilder) WithLogger(log logr.Logger) *ClientBuilder {
 }
 
 func (b *ClientBuilder) Build(ctx context.Context) (*Client, error) {
-	bk, err := bkclient.New(ctx, b.addr, append(b.bkOpts, bkclient.WithFailFast())...)
+	bk, err := bkclient.New(ctx, b.addr, b.bkOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create buildkit client: %w", err)
 	}
@@ -220,7 +220,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 			"dockerfile": contentsDir,
 		},
 		Session: []session.Attachable{
-			authprovider.NewDockerAuthProvider(dockerConfig),
+			authprovider.NewDockerAuthProvider(dockerConfig, nil),
 			secretsprovider.FromMap(secrets),
 		},
 		CacheExports: []bkclient.CacheOptionsEntry{
@@ -326,7 +326,7 @@ func (c *Client) solveWith(ctx context.Context, modify func(buildDir string, sol
 		Frontend:      "dockerfile.v0",
 		FrontendAttrs: map[string]string{},
 		Session: []session.Attachable{
-			authprovider.NewDockerAuthProvider(dockerConfig),
+			authprovider.NewDockerAuthProvider(dockerConfig, nil),
 		},
 	}
 
@@ -362,18 +362,14 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (string, er
 	ch := make(chan *bkclient.SolveStatus)
 	eg, ctx := errgroup.WithContext(ctx)
 
-	eg.Go(func() error {
-		var c console.Console
-		if cn, err := console.ConsoleFromFile(os.Stderr); err != nil {
-			c = cn
-		}
+	pw, err := progresswriter.NewPrinter(ctx, lw, string(progressui.PlainMode))
+	if err != nil {
+		return "", fmt.Errorf("buildkit setup issue: %w", err)
+	}
 
-		// this operation should return cleanly when solve returns (either by itself or when cancelled) so there's no
-		// need to cancel it explicitly. see https://github.com/moby/buildkit/pull/1721 for details.
-		_, err := progressui.DisplaySolveStatus(context.Background(), c, lw, ch)
-
-		return err
-	})
+	defer func() {
+		<-pw.Done()
+	}()
 
 	var imageName string
 
