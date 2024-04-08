@@ -186,7 +186,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("cannot create temp directory for dockerfileContents: %w", err)
 		}
-		err = os.WriteFile(path.Join(contentsDir, "Dockerfile"), []byte(opts.DockerfileContents), os.FileMode(0755))
+		err = os.WriteFile(path.Join(contentsDir, "Dockerfile"), []byte(opts.DockerfileContents), os.FileMode(0644))
 		if err != nil {
 			return "", fmt.Errorf("cannot write temporary file for dockerfileContents: %w", err)
 		}

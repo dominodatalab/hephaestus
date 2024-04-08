@@ -44,7 +44,8 @@ func (in *ImageBuild) validateImageBuild(action string) (admission.Warnings, err
 
 	if strings.TrimSpace(in.Spec.Context) == "" && strings.TrimSpace(in.Spec.DockerfileContents) == "" {
 		log.V(1).Info("Context and DockerfileContents are both blank")
-		errList = append(errList, field.Required(fp.Child("context or dockerFileContents"), "must not be blank"))
+		errList = append(errList, field.Required(fp.Child("context"), "must not be blank if "+
+			fp.Child("dockerfileContents").String()+" is blank"))
 	}
 
 	if strings.TrimSpace(in.Spec.Context) != "" {
