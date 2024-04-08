@@ -218,6 +218,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 
 	buildOpts := buildkit.BuildOptions{
 		Context:                  obj.Spec.Context,
+		DockerfileContents:       obj.Spec.DockerfileContents,
 		Images:                   obj.Spec.Images,
 		BuildArgs:                obj.Spec.BuildArgs,
 		NoCache:                  obj.Spec.DisableLocalBuildCache,
@@ -278,9 +279,15 @@ func populateBuildStatus(obj *hephv1.ImageBuild, log logr.Logger, img v1.Image, 
 	if err != nil {
 		log.Error(err, "Cannot calculate image labels", "imageName", imageName)
 	}
+	digest, err := img.Digest()
+	if err != nil {
+		log.Error(err, "Cannot retrieve image digest", "imageName", imageName)
+	}
 
 	log.Info(fmt.Sprintf("Final image size: %d", imageSize))
+
 	obj.Status.CompressedImageSizeBytes = strconv.FormatInt(imageSize, 10)
+	obj.Status.Digest = digest.String()
 	obj.Status.Labels = make(map[string]string)
 	for key, value := range labels {
 		if len(value) > 0 {
