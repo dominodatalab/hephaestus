@@ -16,7 +16,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.1
 	github.com/aws/aws-sdk-go-v2/service/ecr v1.27.4
 	github.com/aws/smithy-go v1.20.2
-	github.com/containerd/console v1.0.4
 	github.com/distribution/reference v0.6.0
 	github.com/docker/cli v26.0.0+incompatible
 	github.com/docker/docker v26.0.0+incompatible
@@ -78,6 +77,7 @@ require (
 	github.com/banzaicloud/k8s-objectmatcher v1.8.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/containerd/console v1.0.4 // indirect
 	github.com/containerd/containerd v1.7.15 // indirect
 	github.com/containerd/continuity v0.4.3 // indirect
 	github.com/containerd/log v0.1.0 // indirect
