@@ -34,9 +34,7 @@ runs:
       shell: bash
 
     - name: Install Helm
-      uses: azure/setup-helm@v3
-      with:
-        version: v3.13.1
+      uses: azure/setup-helm@v4
 
     - name: Run tests
       env:

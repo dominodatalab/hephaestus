@@ -3,10 +3,12 @@ name: Functional Tests
 on:
   issue_comment:
     types: [created]
+  pull_request:
+    types: [synchronize]
 
 jobs:
   gate:
-    if: ${{ github.event.issue.pull_request && github.event.comment.body == '/functional-test' }}
+    # if: ${{ github.event.issue.pull_request && github.event.comment.body == '/functional-test' }}
     runs-on: ubuntu-latest
     steps:
       - name: Update PR Comment
