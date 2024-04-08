@@ -258,7 +258,7 @@ jobs:
             $MAVEN_DOCKER_IMAGE mvn --settings settings.xml --activate-profiles github -DskipTests deploy
 
       - name: Publish Jar to Artifactory
-        uses: nick-fields/retry@v2
+        uses: nick-fields/retry@v3
         with:
           retry_on: error
           max_attempts: 10
