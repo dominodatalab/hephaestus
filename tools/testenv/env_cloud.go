@@ -125,7 +125,7 @@ func (m *CloudEnvManager) HelmfileDestroy(ctx context.Context) error {
 	}
 	defer cleanup()
 
-	destroyImpl := config.NewDestroyImpl(m.helmfileGlobalImpl, &config.DestroyOptions{SkipDeps: true})
+	destroyImpl := config.NewDestroyImpl(m.helmfileGlobalImpl, &config.DestroyOptions{})
 	helmfile := app.New(destroyImpl)
 
 	if err = helmfile.Destroy(destroyImpl); err != nil {
