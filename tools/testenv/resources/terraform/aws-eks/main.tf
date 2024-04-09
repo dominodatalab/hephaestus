@@ -7,8 +7,9 @@ resource "random_string" "name_suffix" {
 }
 
 locals {
-  name         = "testenv-eks-${random_string.name_suffix.result}"
-  cluster_name = "${local.name}-cluster"
+  name            = "testenv-eks-${random_string.name_suffix.result}"
+  kubeconfig_file = "${path.module}/kubeconfig"
+  cluster_name    = "${local.name}-cluster"
 }
 
 provider "aws" {
@@ -31,13 +32,9 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-data "aws_eks_cluster_auth" "this" {
-  name = module.eks.cluster_id
-}
-
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
-  version = "~> 3.18"
+  version = "~> 5.7"
 
   enable_nat_gateway = true
   cidr               = "10.0.0.0/16"
@@ -55,15 +52,15 @@ module "vpc" {
 
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "~> 18.30"
+  version = "~> 20.8"
 
   cluster_name    = local.cluster_name
   cluster_version = var.kubernetes_version
 
+  cluster_endpoint_public_access = true
+
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
-
-  manage_aws_auth_configmap = true
 
   eks_managed_node_groups = {
     default = {
@@ -112,14 +109,6 @@ module "eks" {
       type                          = "ingress"
       source_cluster_security_group = true
     }
-    ingress_cluster_hephaestus_webhooks = {
-      description                   = "Cluster API to node Hephaestus webhooks"
-      protocol                      = "TCP"
-      from_port                     = 9443
-      to_port                       = 9443
-      type                          = "ingress"
-      source_cluster_security_group = true
-    }
     ingress_cluster_cert_manager_webhooks = {
       description                   = "Cluster API to node cert-manager webhooks"
       protocol                      = "TCP"
@@ -151,7 +140,7 @@ module "eks" {
 
 module "ecr" {
   source  = "terraform-aws-modules/ecr/aws"
-  version = "~> 1.4"
+  version = "~> 2.2"
 
   repository_name         = "${local.name}-ecr-repository"
   repository_force_delete = true
@@ -238,20 +227,21 @@ resource "aws_iam_role_policy_attachment" "node_access" {
   role       = module.eks.cluster_iam_role_name
 }
 
-resource "null_resource" "kubeconfig" {
+resource "terraform_data" "kubeconfig" {
   provisioner "local-exec" {
     when    = create
-    command = "aws eks update-kubeconfig --kubeconfig ${self.triggers.kubeconfig_file} --region ${self.triggers.region} --name ${self.triggers.cluster_name}"
+    command = "aws eks update-kubeconfig --kubeconfig ${local.kubeconfig_file} --region ${var.region} --name ${local.cluster_name}"
   }
 
-  triggers = {
-    domino_eks_cluster_ca = module.eks.cluster_certificate_authority_data
-    cluster_name          = local.cluster_name
-    kubeconfig_file       = "${path.module}/kubeconfig"
-    region                = var.region
-  }
+  triggers_replace = [
+    module.eks.cluster_certificate_authority_data,
+    local.cluster_name,
+    local.kubeconfig_file,
+    var.region
+  ]
 }
 
 data "local_file" "kubeconfig" {
-  filename = null_resource.kubeconfig.triggers.kubeconfig_file
+  filename   = local.kubeconfig_file
+  depends_on = [terraform_data.kubeconfig]
 }

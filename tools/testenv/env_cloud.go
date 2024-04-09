@@ -18,7 +18,7 @@ import (
 	"github.com/helmfile/helmfile/pkg/helmexec"
 )
 
-const terraformVersion = "1.3.1"
+const terraformVersion = "1.7.5"
 
 var terraformInstallDir = filepath.Join(runtimePath, fmt.Sprintf("terraform-%s", terraformVersion))
 

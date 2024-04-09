@@ -2,7 +2,7 @@ module github.com/dominodatalab/hephaestus/test/functional
 
 go 1.21
 
-// replace github.com/dominodatalab/testenv => ../../../testenv
+replace github.com/dominodatalab/testenv => ../../tools/testenv
 
 replace github.com/dominodatalab/hephaestus => ../../
 
