@@ -33,7 +33,7 @@ resource "azurerm_subnet" "main" {
 
 module "aks" {
   source  = "Azure/aks/azurerm"
-  version = "~> 6.2"
+  version = "~> 8.0"
 
   prefix                          = local.name
   resource_group_name             = azurerm_resource_group.main.name
