@@ -16,18 +16,6 @@ provider "aws" {
   region = var.region
 }
 
-provider "kubernetes" {
-  host                   = module.eks.cluster_endpoint
-  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
-
-  exec {
-    api_version = "client.authentication.k8s.io/v1"
-    command     = "aws"
-    # This requires the awscli to be installed locally where Terraform is executed
-    args = ["eks", "get-token", "--cluster-name", module.eks.cluster_id, "--region", var.region]
-  }
-}
-
 data "aws_availability_zones" "available" {
   state = "available"
 }
@@ -57,7 +45,8 @@ module "eks" {
   cluster_name    = local.cluster_name
   cluster_version = var.kubernetes_version
 
-  cluster_endpoint_public_access = true
+  cluster_endpoint_public_access           = true
+  enable_cluster_creator_admin_permissions = true
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
