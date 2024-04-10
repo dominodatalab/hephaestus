@@ -11,6 +11,9 @@ repositories:
   - name: istio
     url: https://istio-release.storage.googleapis.com/charts
 
+helmDefaults:
+  timeout: 600
+
 releases:
   - name: istio-base
     namespace: istio-system
