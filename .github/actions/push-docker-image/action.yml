@@ -17,7 +17,8 @@ inputs:
   platforms:
     required: true
     description: Docker image architectures to build/push
-    default: linux/amd64,linux/arm64
+    default: linux/amd64
+    # ,linux/arm64
 outputs:
   version:
     description: Docker image version
