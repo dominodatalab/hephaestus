@@ -288,7 +288,12 @@ func (c *BuildDispatcherComponent) processCancellations(log logr.Logger) {
 	}
 }
 
-func retrieveImage(ctx context.Context, c *buildkit.Client, imageName string, insecureRegistries []string) (v1.Image, error) {
+func retrieveImage(
+	ctx context.Context,
+	c *buildkit.Client,
+	imageName string,
+	insecureRegistries []string,
+) (v1.Image, error) {
 	ref, err := name.ParseReference(imageName)
 	if err != nil {
 		return nil, err
