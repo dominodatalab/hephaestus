@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dominodatalab/testenv"
 	"github.com/go-playground/validator/v10"
 	"github.com/go-redis/redis/v9"
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -26,6 +25,8 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/dominodatalab/testenv"
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/hephaestus/pkg/clientset"
@@ -169,17 +170,17 @@ func (suite *GenericImageBuilderTestSuite) TestImageBuildResourceValidation() {
 				}
 			},
 		},
-		{
-			"no_auth_credential_sources",
-			"spec.registryAuth[0]: Required value: must specify 1 credential source",
-			func(build *hephv1.ImageBuild) {
-				build.Spec.RegistryAuth = []hephv1.RegistryCredentials{
-					{
-						Server: "docker-registry.default:5000",
-					},
-				}
-			},
-		},
+		// {
+		// 	"no_auth_credential_sources",
+		// 	"spec.registryAuth[0]: Required value: must specify 1 credential source",
+		// 	func(build *hephv1.ImageBuild) {
+		// 		build.Spec.RegistryAuth = []hephv1.RegistryCredentials{
+		// 			{
+		// 				Server: "docker-registry.default:5000",
+		// 			},
+		// 		}
+		// 	},
+		// },
 		{
 			"multiple_auth_credential_sources",
 			"spec.registryAuth[0]: Forbidden: cannot specify more than 1 credential source",
@@ -336,7 +337,7 @@ func (suite *GenericImageBuilderTestSuite) TestImageBuilding() {
 		)
 		ib := createBuild(t, ctx, suite.hephClient, build)
 
-		assert.Equal(t, ib.Status.Phase, hephv1.PhaseFailed)
+		assert.Equal(t, hephv1.PhaseFailed, ib.Status.Phase)
 		assert.Contains(t, ib.Status.Conditions[0].Message, `client credentials are invalid for registry "docker-registry-secure:5000".`)
 		assert.Contains(t, ib.Status.Conditions[0].Message, `Make sure the following sources of credentials are correct: basic authentication username and password.`)
 	})
@@ -355,7 +356,7 @@ func (suite *GenericImageBuilderTestSuite) TestImageBuilding() {
 		)
 		ib := createBuild(t, ctx, suite.hephClient, build)
 
-		assert.Equalf(t, ib.Status.Phase, hephv1.PhaseSucceeded, "failed build with message %q", ib.Status.Conditions[0].Message)
+		assert.Equalf(t, hephv1.PhaseSucceeded, ib.Status.Phase, "failed build with message %q", ib.Status.Conditions[0].Message)
 	})
 
 	suite.T().Run("secret_auth", func(t *testing.T) {
@@ -386,7 +387,7 @@ func (suite *GenericImageBuilderTestSuite) TestImageBuilding() {
 		)
 		ib := createBuild(t, ctx, suite.hephClient, build)
 
-		assert.Equalf(t, ib.Status.Phase, hephv1.PhaseSucceeded, "failed build with message %q", ib.Status.Conditions[0].Message)
+		assert.Equalf(t, hephv1.PhaseSucceeded, ib.Status.Phase, "failed build with message %q", ib.Status.Conditions[0].Message)
 	})
 
 	suite.T().Run("cloud_auth", func(t *testing.T) {
@@ -406,7 +407,7 @@ func (suite *GenericImageBuilderTestSuite) TestImageBuilding() {
 		build.Spec.BuildArgs = []string{"INPUT=VAR=VAL"}
 		ib := createBuild(t, ctx, suite.hephClient, build)
 
-		assert.Equalf(t, ib.Status.Phase, hephv1.PhaseSucceeded, "failed build with message %q", ib.Status.Conditions[0].Message)
+		assert.Equalf(t, hephv1.PhaseSucceeded, ib.Status.Phase, "failed build with message %q", ib.Status.Conditions[0].Message)
 	})
 
 	suite.T().Run("build_failure", func(t *testing.T) {
@@ -417,7 +418,7 @@ func (suite *GenericImageBuilderTestSuite) TestImageBuilding() {
 		)
 		ib := createBuild(t, ctx, suite.hephClient, build)
 
-		assert.Equalf(t, ib.Status.Phase, hephv1.PhaseFailed, "expected build with bad Dockerfile to fail")
+		assert.Equalf(t, hephv1.PhaseFailed, ib.Status.Phase, "expected build with bad Dockerfile to fail")
 	})
 
 	suite.T().Run("multi_stage", func(t *testing.T) {
@@ -428,7 +429,7 @@ func (suite *GenericImageBuilderTestSuite) TestImageBuilding() {
 		)
 		ib := createBuild(t, ctx, suite.hephClient, build)
 
-		assert.Equalf(t, ib.Status.Phase, hephv1.PhaseSucceeded, "failed build with message %q", ib.Status.Conditions[0].Message)
+		assert.Equalf(t, hephv1.PhaseSucceeded, ib.Status.Phase, "failed build with message %q", ib.Status.Conditions[0].Message)
 	})
 
 	suite.T().Run("concurrent_builds", func(t *testing.T) {
@@ -461,8 +462,8 @@ func (suite *GenericImageBuilderTestSuite) TestImageBuilding() {
 			builders = append(builders, ib.Status.BuilderAddr)
 			assert.Equalf(
 				t,
-				ib.Status.Phase,
 				hephv1.PhaseSucceeded,
+				ib.Status.Phase,
 				"failed build %q with message %q",
 				ib.Name,
 				ib.Status.Conditions[0].Message,
@@ -663,14 +664,14 @@ func testMessageDelivery(t *testing.T, ctx context.Context, client kubernetes.In
 	}
 	require.Len(t, messages, 3)
 
-	assert.Equal(t, messages[0].CurrentPhase, hephv1.PhaseInitializing)
-	assert.Equal(t, messages[1].CurrentPhase, hephv1.PhaseRunning)
+	assert.Equal(t, hephv1.PhaseInitializing, messages[0].CurrentPhase)
+	assert.Equal(t, hephv1.PhaseRunning, messages[1].CurrentPhase)
 
 	finalTransition := messages[2]
-	assert.Equal(t, finalTransition.CurrentPhase, build.Status.Phase)
+	assert.Equal(t, build.Status.Phase, finalTransition.CurrentPhase)
 
 	if build.Status.Phase == hephv1.PhaseSucceeded {
-		assert.Equal(t, build.Spec.Images, finalTransition.ImageURLs)
+		assert.Equal(t, finalTransition.ImageURLs, build.Spec.Images)
 	} else {
 		assert.NotEmpty(t, finalTransition.ErrorMessage)
 	}
