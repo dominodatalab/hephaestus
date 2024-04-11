@@ -36,15 +36,18 @@ jobs:
       - name: Run functional test suite
         uses: ./.github/actions/cloud-image-building
         env:
+          AZURE_LOCATION: ${{ secrets.AZURE_LOCATION }}
           ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          AZURE_LOCATION: ${{ secrets.AZURE_LOCATION }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         with:
           target: aks
           github_token: ${{ secrets.GITHUB_TOKEN }}
-        secrets: inherit
 
   gke:
     name: GKE image building
@@ -72,7 +75,6 @@ jobs:
         with:
           target: gke
           github_token: ${{ secrets.GITHUB_TOKEN }}
-        secrets: inherit
 
   eks:
     name: EKS image building
@@ -99,4 +101,3 @@ jobs:
         with:
           target: eks
           github_token: ${{ secrets.GITHUB_TOKEN }}
-        secrets: inherit
