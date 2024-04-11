@@ -7,7 +7,9 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/docker/cli/cli/config"
@@ -104,6 +106,7 @@ func (b *ClientBuilder) Build(ctx context.Context) (*Client, error) {
 type BuildOptions struct {
 	Context                  string
 	ContextDir               string
+	DockerfileContents       string
 	Images                   []string
 	BuildArgs                []string
 	NoCache                  bool
@@ -166,18 +169,30 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 
 	// process build context
 	var contentsDir string
-
-	if fi, err := os.Stat(opts.ContextDir); err == nil && fi.IsDir() {
+	fi, err := os.Stat(opts.ContextDir)
+	switch {
+	case err == nil && fi.IsDir():
 		c.log.Info("Using context dir", "dir", opts.ContextDir)
 		contentsDir = opts.ContextDir
-	} else {
+	case strings.TrimSpace(opts.Context) != "":
 		c.log.Info("Fetching remote context", "url", opts.Context)
-		extract, err := archive.FetchAndExtract(ctx, c.log, opts.Context, buildDir, opts.FetchAndExtractTimeout)
-		if err != nil {
+		extract, extractErr := archive.FetchAndExtract(ctx, c.log, opts.Context, buildDir, opts.FetchAndExtractTimeout)
+		if extractErr != nil {
 			return "", fmt.Errorf("cannot fetch remote context: %w", err)
 		}
-
 		contentsDir = extract.ContentsDir
+	case strings.TrimSpace(opts.DockerfileContents) != "":
+		c.log.Info("Creating context from DockerfileContents")
+		contentsDir, err = os.MkdirTemp(buildDir, "dockerfile-contents-")
+		if err != nil {
+			return "", fmt.Errorf("cannot create temp directory for dockerfileContents: %w", err)
+		}
+		err = os.WriteFile(path.Join(contentsDir, "Dockerfile"), []byte(opts.DockerfileContents), os.FileMode(0644))
+		if err != nil {
+			return "", fmt.Errorf("cannot write temporary file for dockerfileContents: %w", err)
+		}
+	default:
+		return "", errors.New("no valid docker context provided")
 	}
 	c.log.V(1).Info("Context extracted", "dir", contentsDir)
 
