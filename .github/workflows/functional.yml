@@ -44,6 +44,7 @@ jobs:
         with:
           target: aks
           github_token: ${{ secrets.GITHUB_TOKEN }}
+        secrets: inherit
 
   gke:
     name: GKE image building
@@ -71,6 +72,7 @@ jobs:
         with:
           target: gke
           github_token: ${{ secrets.GITHUB_TOKEN }}
+        secrets: inherit
 
   eks:
     name: EKS image building
@@ -97,3 +99,4 @@ jobs:
         with:
           target: eks
           github_token: ${{ secrets.GITHUB_TOKEN }}
+        secrets: inherit
