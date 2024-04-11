@@ -20,6 +20,7 @@ import (
 	"github.com/moby/buildkit/session/secrets/secretsprovider"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/moby/buildkit/util/progress/progresswriter"
+	"github.com/tonistiigi/fsutil"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -211,13 +212,18 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 		secrets[name] = contents
 	}
 
+	contentsFS, err := fsutil.NewFS(contentsDir)
+	if err != nil {
+		return "", fmt.Errorf("unable to create context dir: %w", err)
+	}
+
 	// build solve options
 	solveOpt := bkclient.SolveOpt{
 		Frontend:      "dockerfile.v0",
 		FrontendAttrs: map[string]string{},
-		LocalDirs: map[string]string{
-			"context":    contentsDir,
-			"dockerfile": contentsDir,
+		LocalMounts: map[string]fsutil.FS{
+			"context":    contentsFS,
+			"dockerfile": contentsFS,
 		},
 		Session: []session.Attachable{
 			authprovider.NewDockerAuthProvider(dockerConfig, nil),
@@ -284,9 +290,14 @@ func (c *Client) Cache(ctx context.Context, image string) error {
 			return fmt.Errorf("failed to create dockerfile: %w", err)
 		}
 
-		solveOpt.LocalDirs = map[string]string{
-			"context":    buildDir,
-			"dockerfile": buildDir,
+		buildFS, err := fsutil.NewFS(buildDir)
+		if err != nil {
+			return fmt.Errorf("failed to create build dir: %w", err)
+		}
+
+		solveOpt.LocalMounts = map[string]fsutil.FS{
+			"context":    buildFS,
+			"dockerfile": buildFS,
 		}
 		solveOpt.Exports = []bkclient.ExportEntry{
 			{
@@ -359,7 +370,6 @@ func (c *Client) ResolveAuth(registryHostname string) (authn.Authenticator, erro
 
 func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (string, error) {
 	lw := &LogWriter{Logger: c.log}
-	ch := make(chan *bkclient.SolveStatus)
 	eg, ctx := errgroup.WithContext(ctx)
 
 	pw, err := progresswriter.NewPrinter(ctx, lw, string(progressui.PlainMode))
@@ -374,7 +384,7 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (string, er
 	var imageName string
 
 	eg.Go(func() error {
-		res, err := c.bk.Solve(ctx, nil, so, ch)
+		res, err := c.bk.Solve(ctx, nil, so, pw.Status())
 		if err != nil {
 			return err
 		}
