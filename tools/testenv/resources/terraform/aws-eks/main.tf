@@ -51,6 +51,14 @@ module "eks" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
 
+  eks_managed_node_group_defaults = {
+    iam_role_additional_policies = [
+      aws_iam_policy.ecr_policy.arn,
+      aws_iam_policy.node_policy.arn,
+      "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+    ]
+  }
+
   eks_managed_node_groups = {
     default = {
       min_size     = 2
@@ -200,21 +208,6 @@ resource "aws_iam_policy" "node_policy" {
 resource "aws_iam_policy" "ecr_policy" {
   name   = "${local.name}-ecr-access-policy"
   policy = data.aws_iam_policy_document.ecr_access_policy_document.json
-}
-
-resource "aws_iam_role_policy_attachment" "ebs_csi_driver" {
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
-  role       = module.eks.eks_managed_node_groups["default"].iam_role_name
-}
-
-resource "aws_iam_role_policy_attachment" "ecr_access" {
-  policy_arn = aws_iam_policy.ecr_policy.arn
-  role       = module.eks.eks_managed_node_groups["default"].iam_role_name
-}
-
-resource "aws_iam_role_policy_attachment" "node_access" {
-  policy_arn = aws_iam_policy.node_policy.arn
-  role       = module.eks.cluster_iam_role_name
 }
 
 resource "terraform_data" "kubeconfig" {
