@@ -52,11 +52,11 @@ module "eks" {
   subnet_ids = module.vpc.private_subnets
 
   eks_managed_node_group_defaults = {
-    iam_role_additional_policies = [
-      aws_iam_policy.ecr_policy.arn,
-      aws_iam_policy.node_policy.arn,
-      "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
-    ]
+    iam_role_additional_policies = {
+      ecr            = aws_iam_policy.ecr_policy.arn,
+      nodes          = aws_iam_policy.node_policy.arn,
+      ebs-csi-driver = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+    }
   }
 
   eks_managed_node_groups = {
