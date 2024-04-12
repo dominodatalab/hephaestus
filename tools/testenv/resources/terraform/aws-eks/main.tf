@@ -71,6 +71,13 @@ module "eks" {
   }
 
   cluster_addons = {
+    vpc-cni = {
+      configuration_values = jsonencode({
+        env = {
+          ANNOTATE_POD_IP = "true"
+        }
+      })
+    }
     aws-ebs-csi-driver = {
       resolve_conflicts = "OVERWRITE"
     }
