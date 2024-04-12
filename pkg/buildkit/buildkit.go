@@ -316,7 +316,7 @@ func (c *Client) Cache(ctx context.Context, image string) error {
 		solveOpt.Exports = []bkclient.ExportEntry{
 			{
 				Type: bkclient.ExporterOCI,
-				Output: func(m map[string]string) (io.WriteCloser, error) {
+				Output: func(_ map[string]string) (io.WriteCloser, error) {
 					return DiscardCloser{io.Discard}, nil
 				},
 			},

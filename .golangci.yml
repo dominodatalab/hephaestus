@@ -1,7 +1,8 @@
 run:
   timeout: 5m
   tests: false
-  skip-files:
+issues:
+  exclude-files:
     - cribbed.go
     - "zz_generated.*"
 linters-settings:
@@ -52,8 +53,8 @@ linters:
     - forbidigo
     - forcetypeassert
     - gci
-    - gochecknoinits
     - gochecknoglobals
+    - gochecknoinits
     - gocognit
     - godot
     - godox
@@ -65,11 +66,12 @@ linters:
     - interfacer
     - ireturn
     - maligned
+    - nestif
     - nlreturn
     - nonamedreturns
     - nosnakecase
     - nosprintfhostport
-    - nestif
+    - perfsprint
     - prealloc
     - scopelint
     - structcheck
