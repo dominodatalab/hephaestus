@@ -5,6 +5,7 @@ import (
 	"fmt"
 	golog "log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 
@@ -41,6 +42,7 @@ type CloudEnvManager struct {
 	installer          removableInstall
 	terraform          *tfexec.Terraform
 	helmfileGlobalImpl *config.GlobalImpl
+	workingDir         string
 }
 
 // NewCloudEnvManager creates a CloudEnvManager with the resources necessary to invoke Terraform.
@@ -81,9 +83,10 @@ func NewCloudEnvManager(ctx context.Context, config CloudConfig, verbose bool) (
 
 	testenvLog.Println("successfully created manager")
 	return &CloudEnvManager{
-		log:       newLogger("cloud-env-manager"),
-		installer: installer,
-		terraform: terraform,
+		log:        newLogger("cloud-env-manager"),
+		installer:  installer,
+		terraform:  terraform,
+		workingDir: workingDir,
 	}, nil
 }
 
@@ -168,6 +171,17 @@ func (m *CloudEnvManager) Destroy(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (m *CloudEnvManager) DumpClusterInfo(ctx context.Context) error {
+	cleanup, err := m.exposeKubeconfig(ctx)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	clusterInfo := exec.Command("kubectl", "cluster-info", "dump", "--output-directory", filepath.Join(m.workingDir, "cluster-info"))
+	return clusterInfo.Run()
 }
 
 func (m *CloudEnvManager) exposeKubeconfig(ctx context.Context) (func(), error) {

@@ -11,7 +11,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/services/preview/containerregistry/runtime/2019-08-15-preview/containerregistry"
-	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/stretchr/testify/assert"
@@ -85,7 +84,7 @@ func (suite *AKSTestSuite) testCloudAuth(ctx context.Context, t *testing.T) {
 	require.NoError(t, err)
 
 	aadToken, err := cred.GetToken(ctx, policy.TokenRequestOptions{
-		Scopes: []string{azure.PublicCloud.TokenAudience},
+		Scopes: []string{"https://management.azure.com/.default"},
 	})
 	require.NoError(t, err)
 

@@ -106,6 +106,7 @@ func (suite *GenericImageBuilderTestSuite) TearDownSuite() {
 	suite.T().Log("Tearing down test cluster")
 
 	ctx := context.Background()
+	assert.NoError(suite.T(), suite.manager.DumpClusterInfo(ctx))
 	assert.NoError(suite.T(), suite.manager.HelmfileDestroy(ctx))
 	require.NoError(suite.T(), suite.manager.Destroy(ctx))
 }
