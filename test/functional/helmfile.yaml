@@ -31,9 +31,9 @@ releases:
     needs:
       - istio-base
     values:
-      meshConfig:
-        defaultConfig:
-          holdApplicationUntilProxyStarts: true
+      - meshConfig:
+          defaultConfig:
+            holdApplicationUntilProxyStarts: true
     hooks:
       - events: [postsync]
         showlogs: true
