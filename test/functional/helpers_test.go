@@ -171,17 +171,6 @@ func (suite *GenericImageBuilderTestSuite) TestImageBuildResourceValidation() {
 				}
 			},
 		},
-		// {
-		// 	"no_auth_credential_sources",
-		// 	"spec.registryAuth[0]: Required value: must specify 1 credential source",
-		// 	func(build *hephv1.ImageBuild) {
-		// 		build.Spec.RegistryAuth = []hephv1.RegistryCredentials{
-		// 			{
-		// 				Server: "docker-registry.default:5000",
-		// 			},
-		// 		}
-		// 	},
-		// },
 		{
 			"multiple_auth_credential_sources",
 			"spec.registryAuth[0]: Forbidden: cannot specify more than 1 credential source",

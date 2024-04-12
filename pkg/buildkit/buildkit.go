@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/containerd/console"
 	"github.com/docker/cli/cli/config"
 	"github.com/go-logr/logr"
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -22,6 +21,8 @@ import (
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/session/secrets/secretsprovider"
 	"github.com/moby/buildkit/util/progress/progressui"
+	"github.com/moby/buildkit/util/progress/progresswriter"
+	"github.com/tonistiigi/fsutil"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -72,7 +73,7 @@ func (b *ClientBuilder) WithLogger(log logr.Logger) *ClientBuilder {
 }
 
 func (b *ClientBuilder) Build(ctx context.Context) (*Client, error) {
-	bk, err := bkclient.New(ctx, b.addr, append(b.bkOpts, bkclient.WithFailFast())...)
+	bk, err := bkclient.New(ctx, b.addr, b.bkOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create buildkit client: %w", err)
 	}
@@ -226,16 +227,21 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 		secrets[name] = contents
 	}
 
+	contentsFS, err := fsutil.NewFS(contentsDir)
+	if err != nil {
+		return "", fmt.Errorf("unable to create context dir: %w", err)
+	}
+
 	// build solve options
 	solveOpt := bkclient.SolveOpt{
 		Frontend:      "dockerfile.v0",
 		FrontendAttrs: map[string]string{},
-		LocalDirs: map[string]string{
-			"context":    contentsDir,
-			"dockerfile": contentsDir,
+		LocalMounts: map[string]fsutil.FS{
+			"context":    contentsFS,
+			"dockerfile": contentsFS,
 		},
 		Session: []session.Attachable{
-			authprovider.NewDockerAuthProvider(dockerConfig),
+			authprovider.NewDockerAuthProvider(dockerConfig, nil),
 			secretsprovider.FromMap(secrets),
 		},
 		CacheExports: []bkclient.CacheOptionsEntry{
@@ -299,9 +305,14 @@ func (c *Client) Cache(ctx context.Context, image string) error {
 			return fmt.Errorf("failed to create dockerfile: %w", err)
 		}
 
-		solveOpt.LocalDirs = map[string]string{
-			"context":    buildDir,
-			"dockerfile": buildDir,
+		buildFS, err := fsutil.NewFS(buildDir)
+		if err != nil {
+			return fmt.Errorf("failed to create build dir: %w", err)
+		}
+
+		solveOpt.LocalMounts = map[string]fsutil.FS{
+			"context":    buildFS,
+			"dockerfile": buildFS,
 		}
 		solveOpt.Exports = []bkclient.ExportEntry{
 			{
@@ -341,7 +352,7 @@ func (c *Client) solveWith(ctx context.Context, modify func(buildDir string, sol
 		Frontend:      "dockerfile.v0",
 		FrontendAttrs: map[string]string{},
 		Session: []session.Attachable{
-			authprovider.NewDockerAuthProvider(dockerConfig),
+			authprovider.NewDockerAuthProvider(dockerConfig, nil),
 		},
 	}
 
@@ -374,26 +385,21 @@ func (c *Client) ResolveAuth(registryHostname string) (authn.Authenticator, erro
 
 func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (string, error) {
 	lw := &LogWriter{Logger: c.log}
-	ch := make(chan *bkclient.SolveStatus)
 	eg, ctx := errgroup.WithContext(ctx)
 
-	eg.Go(func() error {
-		var c console.Console
-		if cn, err := console.ConsoleFromFile(os.Stderr); err != nil {
-			c = cn
-		}
+	pw, err := progresswriter.NewPrinter(ctx, lw, string(progressui.PlainMode))
+	if err != nil {
+		return "", fmt.Errorf("buildkit setup issue: %w", err)
+	}
 
-		// this operation should return cleanly when solve returns (either by itself or when cancelled) so there's no
-		// need to cancel it explicitly. see https://github.com/moby/buildkit/pull/1721 for details.
-		_, err := progressui.DisplaySolveStatus(context.Background(), c, lw, ch)
-
-		return err
-	})
+	defer func() {
+		<-pw.Done()
+	}()
 
 	var imageName string
 
 	eg.Go(func() error {
-		res, err := c.bk.Solve(ctx, nil, so, ch)
+		res, err := c.bk.Solve(ctx, nil, so, pw.Status())
 		if err != nil {
 			return err
 		}
