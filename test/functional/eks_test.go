@@ -12,12 +12,13 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
-	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
-	"github.com/dominodatalab/testenv"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+
+	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
+	"github.com/dominodatalab/testenv"
 )
 
 func TestEKSFunctionality(t *testing.T) {
@@ -58,6 +59,7 @@ func (suite *EKSTestSuite) testCloudAuth(ctx context.Context, t *testing.T) {
 		},
 	)
 	ib := createBuild(t, ctx, suite.hephClient, build)
+	assert.Equalf(t, hephv1.PhaseSucceeded, ib.Status.Phase, "failed build with message %q", ib.Status.Conditions[0].Message)
 
 	conf, err := config.LoadDefaultConfig(ctx, config.WithEC2IMDSRegion())
 	require.NoError(t, err)

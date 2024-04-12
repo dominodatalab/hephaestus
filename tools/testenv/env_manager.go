@@ -31,6 +31,8 @@ type Manager interface {
 	HelmfileDestroy(ctx context.Context) error
 	// KubeconfigBytes can be written to disk or used to initialize a Kubernetes client.
 	KubeconfigBytes(ctx context.Context) ([]byte, error)
+	// DumpClusterInfo outputs all cluster information to disk for debugging.
+	DumpClusterInfo(ctx context.Context) error
 }
 
 // creates a stdlib logger with an identifier

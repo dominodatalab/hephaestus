@@ -8,13 +8,14 @@ import (
 	"os"
 	"testing"
 
-	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
-	"github.com/dominodatalab/testenv"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	auth "golang.org/x/oauth2/google"
+
+	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
+	"github.com/dominodatalab/testenv"
 )
 
 func TestGKEFunctionality(t *testing.T) {
@@ -69,6 +70,7 @@ func (suite *GKETestSuite) testCloudAuth(ctx context.Context, t *testing.T) {
 		},
 	)
 	ib := createBuild(t, ctx, suite.hephClient, build)
+	assert.Equalf(t, hephv1.PhaseSucceeded, ib.Status.Phase, "failed build with message %q", ib.Status.Conditions[0].Message)
 
 	credentials, err := auth.FindDefaultCredentials(ctx, "https://www.googleapis.com/auth/cloud-platform")
 	require.NoError(t, err)

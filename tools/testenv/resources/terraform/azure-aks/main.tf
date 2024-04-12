@@ -2,6 +2,9 @@ provider "azurerm" {
   features {}
 }
 
+provider "azuread" {
+}
+
 resource "random_id" "suffix" {
   byte_length = 8
 }
@@ -33,7 +36,7 @@ resource "azurerm_subnet" "main" {
 
 module "aks" {
   source  = "Azure/aks/azurerm"
-  version = "~> 6.2"
+  version = "~> 8.0"
 
   prefix                          = local.name
   resource_group_name             = azurerm_resource_group.main.name
@@ -68,8 +71,8 @@ resource "azuread_application" "app" {
 }
 
 resource "azuread_service_principal" "app" {
-  application_id = azuread_application.app.application_id
-  owners         = [data.azuread_client_config.current.object_id]
+  client_id = azuread_application.app.client_id
+  owners    = [data.azuread_client_config.current.object_id]
 }
 
 resource "azuread_service_principal_password" "app" {
