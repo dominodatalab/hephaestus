@@ -17,7 +17,7 @@ runs:
       if: github.event_name != 'pull_request'
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
-      run: gh pr checkout ${{ github.event.issue.number }}
+      run: gh pr checkout ${{ github.event.issue.number }} --detach
       shell: bash
 
     - name: Install Go
