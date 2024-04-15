@@ -11,22 +11,29 @@ repositories:
   - name: istio
     url: https://istio-release.storage.googleapis.com/charts
 
+helmDefaults:
+  timeout: 600
+
 releases:
   - name: istio-base
     namespace: istio-system
     chart: istio/base
-    version: 1.15.2
+    version: 1.21.1
     wait: true
     waitForJobs: true
 
   - name: istiod
     namespace: istio-system
     chart: istio/istiod
-    version: 1.15.2
+    version: 1.21.1
     wait: true
     waitForJobs: true
     needs:
       - istio-base
+    values:
+      - meshConfig:
+          defaultConfig:
+            holdApplicationUntilProxyStarts: true
     hooks:
       - events: [postsync]
         showlogs: true
@@ -38,7 +45,7 @@ releases:
   - name: cert-manager
     namespace: cert-manager
     chart: jetstack/cert-manager
-    version: v1.9.1
+    version: v1.14.4
     wait: true
     waitForJobs: true
     values:
@@ -51,7 +58,7 @@ releases:
   - name: docker-registry
     namespace: default
     chart: twuni/docker-registry
-    version: 2.2.2
+    version: 2.2.3
     wait: true
     needs:
       - istio-system/istiod
@@ -64,7 +71,7 @@ releases:
   - name: docker-registry-secure
     namespace: default
     chart: twuni/docker-registry
-    version: 2.2.2
+    version: 2.2.3
     wait: true
     needs:
       - istio-system/istiod
@@ -78,7 +85,7 @@ releases:
   - name: rabbitmq
     namespace: default
     chart: bitnami/rabbitmq
-    version: 11.0.0
+    version: 13.0.3
     wait: true
     needs:
       - istio-system/istiod
@@ -94,7 +101,7 @@ releases:
   - name: redis
     namespace: default
     chart: bitnami/redis
-    version: 17.3.2
+    version: 19.1.0
     wait: true
     needs:
       - istio-system/istiod
@@ -163,7 +170,7 @@ releases:
                       "event": .,
                       "stream": "stdout",
                       "time": message.ts,
-                      "time_nano": to_string(to_unix_timestamp(to_timestamp!(message.ts), unit: "nanoseconds")),
+                      "time_nano": to_string(to_unix_timestamp(parse_timestamp!(message.ts, "%+"), unit: "nanoseconds")),
                       "log": message.msg,
                       "logKey": message.logKey,
                     }

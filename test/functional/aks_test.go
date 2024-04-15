@@ -11,14 +11,14 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/services/preview/containerregistry/runtime/2019-08-15-preview/containerregistry"
-	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/to"
-	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
-	"github.com/dominodatalab/testenv"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+
+	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
+	"github.com/dominodatalab/testenv"
 )
 
 func TestAKSFunctionality(t *testing.T) {
@@ -76,6 +76,7 @@ func (suite *AKSTestSuite) testCloudAuth(ctx context.Context, t *testing.T) {
 		},
 	)
 	ib := createBuild(t, ctx, suite.hephClient, build)
+	assert.Equalf(t, hephv1.PhaseSucceeded, ib.Status.Phase, "failed build with message %q", ib.Status.Conditions[0].Message)
 
 	cred, err := azidentity.NewDefaultAzureCredential(&azidentity.DefaultAzureCredentialOptions{
 		TenantID: tenantID,
@@ -83,7 +84,7 @@ func (suite *AKSTestSuite) testCloudAuth(ctx context.Context, t *testing.T) {
 	require.NoError(t, err)
 
 	aadToken, err := cred.GetToken(ctx, policy.TokenRequestOptions{
-		Scopes: []string{azure.PublicCloud.TokenAudience},
+		Scopes: []string{"https://management.azure.com/.default"},
 	})
 	require.NoError(t, err)
 
