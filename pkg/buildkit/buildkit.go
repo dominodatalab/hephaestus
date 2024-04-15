@@ -21,7 +21,6 @@ import (
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/session/secrets/secretsprovider"
 	"github.com/moby/buildkit/util/progress/progressui"
-	"github.com/moby/buildkit/util/progress/progresswriter"
 	"github.com/tonistiigi/fsutil"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -385,21 +384,25 @@ func (c *Client) ResolveAuth(registryHostname string) (authn.Authenticator, erro
 
 func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (string, error) {
 	lw := &LogWriter{Logger: c.log}
+	ch := make(chan *bkclient.SolveStatus)
 	eg, ctx := errgroup.WithContext(ctx)
 
-	pw, err := progresswriter.NewPrinter(ctx, lw, string(progressui.PlainMode))
+	d, err := progressui.NewDisplay(lw, progressui.PlainMode)
 	if err != nil {
-		return "", fmt.Errorf("buildkit setup issue: %w", err)
+		return "", fmt.Errorf("unable to setup buildkit logging: %w", err)
 	}
 
-	defer func() {
-		<-pw.Done()
-	}()
+	eg.Go(func() error {
+		// this operation should return cleanly when solve returns (either by itself or when cancelled) so there's no
+		// need to cancel it explicitly. see https://github.com/moby/buildkit/pull/1721 for details.
+		_, err = d.UpdateFrom(context.Background(), ch)
+		return err
+	})
 
 	var imageName string
 
 	eg.Go(func() error {
-		res, err := c.bk.Solve(ctx, nil, so, pw.Status())
+		res, err := c.bk.Solve(ctx, nil, so, ch)
 		if err != nil {
 			return err
 		}
