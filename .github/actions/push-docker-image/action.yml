@@ -34,6 +34,8 @@ runs:
     - id: meta
       name: Extract Docker metadata
       uses: docker/metadata-action@v5
+      env:
+        DOCKER_METADATA_PR_HEAD_SHA: "true"
       with:
         images: ${{ inputs.registry }}/${{ inputs.repository }}
         tags: |
