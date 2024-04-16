@@ -108,7 +108,12 @@ func (suite *GenericImageBuilderTestSuite) TearDownSuite() {
 	ctx := context.Background()
 	assert.NoError(suite.T(), suite.manager.DumpClusterInfo(ctx))
 	assert.NoError(suite.T(), suite.manager.HelmfileDestroy(ctx))
-	require.NoError(suite.T(), suite.manager.Destroy(ctx))
+
+	// Let the cloud cluster settle.
+	// In particular, in AWS there is a tendency to leave ENIs dangling.
+	time.Sleep(5 * time.Minute)
+
+	assert.NoError(suite.T(), suite.manager.Destroy(ctx))
 }
 
 func (suite *GenericImageBuilderTestSuite) TestImageBuildResourceValidation() {
