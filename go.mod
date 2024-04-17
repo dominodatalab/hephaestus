@@ -25,7 +25,6 @@ require (
 	github.com/go-logr/zapr v1.3.0
 	github.com/google/go-containerregistry v0.19.1
 	github.com/h2non/filetype v1.1.3
-	github.com/hashicorp/go-retryablehttp v0.7.5
 	github.com/moby/buildkit v0.13.1
 	github.com/newrelic/go-agent/v3 v3.32.0
 	github.com/newrelic/go-agent/v3/integrations/nrzap v1.0.1

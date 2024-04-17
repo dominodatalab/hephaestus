@@ -50,7 +50,7 @@ func createKindCluster() {
 		log.Fatalln(err)
 	}
 
-	if err := crd.Apply(context.Background(), false); err != nil {
+	if err := crd.Apply(context.Background()); err != nil {
 		log.Fatalln(err)
 	}
 }
