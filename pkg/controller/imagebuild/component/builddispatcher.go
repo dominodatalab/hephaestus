@@ -245,7 +245,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 			log.Info("Build cancelled via resource delete")
 			txn.AddAttribute("cancelled", true)
 
-			//nolint:nilerr // we want reconciliation to pass and end her
+			//nolint:nilerr // we want reconciliation to pass and end here
 			return ctrl.Result{}, nil
 		}
 
@@ -260,40 +260,16 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 	obj.Status.BuildTime = time.Since(start).Truncate(time.Millisecond).String()
 	buildSeg.End()
 
-	img, err := retrieveImage(buildCtx, bk, imageName)
+	img, err := retrieveImage(buildCtx, bk, imageName, insecureRegistries)
 	if err != nil {
 		log.Error(err, "Cannot retrieve image from registry", "imageName", imageName)
 		buildLog.Error(err, "Cannot retrieve image from registry", "imageName", imageName)
+	} else {
+		populateBuildStatus(obj, buildLog, img, imageName)
 	}
-	populateBuildStatus(obj, buildLog, img, imageName)
+
 	c.phase.SetSucceeded(coreCtx, obj)
 	return ctrl.Result{}, nil
-}
-
-func populateBuildStatus(obj *hephv1.ImageBuild, log logr.Logger, img v1.Image, imageName string) {
-	imageSize, err := calculateImageSize(img)
-	if err != nil {
-		log.Error(err, "Cannot calculate image size", "imageName", imageName)
-	}
-	labels, err := calculateLabels(img)
-	if err != nil {
-		log.Error(err, "Cannot calculate image labels", "imageName", imageName)
-	}
-	digest, err := img.Digest()
-	if err != nil {
-		log.Error(err, "Cannot retrieve image digest", "imageName", imageName)
-	}
-
-	log.Info(fmt.Sprintf("Final image size: %d", imageSize))
-
-	obj.Status.CompressedImageSizeBytes = strconv.FormatInt(imageSize, 10)
-	obj.Status.Digest = digest.String()
-	obj.Status.Labels = make(map[string]string)
-	for key, value := range labels {
-		if len(value) > 0 {
-			obj.Status.Labels[key] = value
-		}
-	}
 }
 
 func (c *BuildDispatcherComponent) processCancellations(log logr.Logger) {
@@ -312,12 +288,30 @@ func (c *BuildDispatcherComponent) processCancellations(log logr.Logger) {
 	}
 }
 
-func retrieveImage(ctx context.Context, c *buildkit.Client, imageName string) (v1.Image, error) {
+func retrieveImage(
+	ctx context.Context,
+	c *buildkit.Client,
+	imageName string,
+	insecureRegistries []string,
+) (v1.Image, error) {
 	ref, err := name.ParseReference(imageName)
 	if err != nil {
 		return nil, err
 	}
 	registryName := ref.Context().RegistryStr()
+
+	for _, registry := range insecureRegistries {
+		if registry == registryName {
+			ref, err = name.ParseReference(imageName, name.Insecure)
+			if err != nil {
+				return nil, err
+			}
+
+			registryName = ref.Context().RegistryStr()
+			break
+		}
+	}
+
 	auth, err := c.ResolveAuth(registryName)
 	if err != nil {
 		return nil, err
@@ -327,6 +321,35 @@ func retrieveImage(ctx context.Context, c *buildkit.Client, imageName string) (v
 		return nil, err
 	}
 	return img, nil
+}
+
+func populateBuildStatus(obj *hephv1.ImageBuild, log logr.Logger, img v1.Image, imageName string) {
+	imageSize, err := calculateImageSize(img)
+	if err != nil {
+		log.Error(err, "Cannot calculate image size", "imageName", imageName)
+	}
+
+	log.Info(fmt.Sprintf("Final image size: %d", imageSize))
+	obj.Status.CompressedImageSizeBytes = strconv.FormatInt(imageSize, 10)
+
+	obj.Status.Labels = make(map[string]string)
+	imageConfigFile, err := img.ConfigFile()
+	if err != nil {
+		log.Error(err, "Cannot calculate image labels", "imageName", imageName)
+	} else {
+		for key, value := range imageConfigFile.Config.Labels {
+			if len(value) > 0 {
+				obj.Status.Labels[key] = value
+			}
+		}
+	}
+
+	digest, err := img.Digest()
+	if err != nil {
+		log.Error(err, "Cannot retrieve image digest", "imageName", imageName)
+	} else {
+		obj.Status.Digest = digest.String()
+	}
 }
 
 func calculateImageSize(img v1.Image) (int64, error) {
@@ -344,12 +367,4 @@ func calculateImageSize(img v1.Image) (int64, error) {
 		size += compressedSize
 	}
 	return size, nil
-}
-
-func calculateLabels(img v1.Image) (map[string]string, error) {
-	config, err := img.ConfigFile()
-	if err != nil {
-		return nil, err
-	}
-	return config.Config.Labels, nil
 }

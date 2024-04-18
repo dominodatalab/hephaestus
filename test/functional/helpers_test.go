@@ -108,7 +108,12 @@ func (suite *GenericImageBuilderTestSuite) TearDownSuite() {
 	ctx := context.Background()
 	assert.NoError(suite.T(), suite.manager.DumpClusterInfo(ctx))
 	assert.NoError(suite.T(), suite.manager.HelmfileDestroy(ctx))
-	require.NoError(suite.T(), suite.manager.Destroy(ctx))
+
+	// Let the cloud cluster settle.
+	// In particular, in AWS there is a tendency to leave ENIs dangling.
+	time.Sleep(5 * time.Minute)
+
+	assert.NoError(suite.T(), suite.manager.Destroy(ctx))
 }
 
 func (suite *GenericImageBuilderTestSuite) TestImageBuildResourceValidation() {
@@ -171,17 +176,6 @@ func (suite *GenericImageBuilderTestSuite) TestImageBuildResourceValidation() {
 				}
 			},
 		},
-		// {
-		// 	"no_auth_credential_sources",
-		// 	"spec.registryAuth[0]: Required value: must specify 1 credential source",
-		// 	func(build *hephv1.ImageBuild) {
-		// 		build.Spec.RegistryAuth = []hephv1.RegistryCredentials{
-		// 			{
-		// 				Server: "docker-registry.default:5000",
-		// 			},
-		// 		}
-		// 	},
-		// },
 		{
 			"multiple_auth_credential_sources",
 			"spec.registryAuth[0]: Forbidden: cannot specify more than 1 credential source",
