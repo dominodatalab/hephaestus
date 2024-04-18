@@ -392,6 +392,7 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (string, er
 		return "", fmt.Errorf("unable to setup buildkit logging: %w", err)
 	}
 
+	//nolint:contextcheck
 	eg.Go(func() error {
 		// this operation should return cleanly when solve returns (either by itself or when cancelled) so there's no
 		// need to cancel it explicitly. see https://github.com/moby/buildkit/pull/1721 for details.
