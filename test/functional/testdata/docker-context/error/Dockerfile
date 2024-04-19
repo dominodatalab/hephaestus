@@ -1,4 +1,4 @@
-FROM debian:11.9-slim
+FROM debian:12.5-slim
 RUN useradd -u 1001 dude
 USER 1001
 RUN apt-get update
