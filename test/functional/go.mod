@@ -23,9 +23,9 @@ require (
 	github.com/dominodatalab/hephaestus v0.1.26
 	github.com/dominodatalab/testenv v0.0.0-20240415212647-cd0bf57935be
 	github.com/go-playground/validator/v10 v10.19.0
-	github.com/go-redis/redis/v9 v9.0.0-rc.1
 	github.com/google/go-containerregistry v0.19.1
 	github.com/rabbitmq/amqp091-go v1.9.0
+	github.com/redis/go-redis/v9 v9.5.1
 	github.com/stretchr/testify v1.9.0
 	golang.org/x/oauth2 v0.19.0
 	k8s.io/api v0.29.3
