@@ -18,7 +18,7 @@ require (
 	github.com/aws/smithy-go v1.20.2
 	github.com/distribution/reference v0.6.0
 	github.com/docker/cli v26.0.2+incompatible
-	github.com/docker/docker v26.0.0+incompatible
+	github.com/docker/docker v26.0.2+incompatible
 	github.com/dominodatalab/amqp-client v0.1.3
 	github.com/dominodatalab/controller-util v0.1.0
 	github.com/go-logr/logr v1.4.1
