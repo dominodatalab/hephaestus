@@ -7,7 +7,7 @@ releases:
   - name: rabbitmq
     namespace: default
     chart: bitnami/rabbitmq
-    version: 11.1.1
+    version: 11.16.2
     values:
       - auth:
           password: roger-rabbit
