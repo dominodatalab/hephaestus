@@ -6,8 +6,6 @@ replace github.com/dominodatalab/testenv => ../../tools/testenv
 
 replace github.com/dominodatalab/hephaestus => ../../
 
-replace github.com/distribution/reference => github.com/distribution/reference v0.5.0
-
 require (
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.11.1
