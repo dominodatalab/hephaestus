@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/go-redis/redis/v9"
+	"github.com/redis/go-redis/v9"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/rabbitmq/amqp091-go"
