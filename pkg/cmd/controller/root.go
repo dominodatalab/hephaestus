@@ -68,7 +68,7 @@ Apply Rules:
   - When a definition is missing, it will be created
   - If a definition is already present, then it will be updated
   - Updating definitions that have not changed results in a no-op`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			return crd.Apply(context.Background(), istioEnabled)
 		},
 	}
@@ -86,7 +86,7 @@ func newCRDDeleteCommand() *cobra.Command {
 
 Any running builds will be decommissioned when this operation runs. This will
 only attempt to remove definitions that are already present in Kubernetes.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			return crd.Delete(context.Background(), istioEnabled)
 		},
 	}
