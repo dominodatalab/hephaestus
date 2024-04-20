@@ -20,7 +20,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.26.1
 	github.com/aws/aws-sdk-go-v2/config v1.27.11
 	github.com/aws/aws-sdk-go-v2/service/ecr v1.27.4
-	github.com/dominodatalab/hephaestus v0.1.26
+	github.com/dominodatalab/hephaestus v0.11.0
 	github.com/dominodatalab/testenv v0.0.0-20240415212647-cd0bf57935be
 	github.com/go-playground/validator/v10 v10.19.0
 	github.com/google/go-containerregistry v0.19.1
