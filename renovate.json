@@ -1,6 +1,8 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
+    "github>cerebrotech/renovate-config:docker-minimal",
+    "github>cerebrotech/renovate-config:go-minimal",
     ":dependencyDashboard",
     ":semanticPrefixFixDepsChoreOthers",
     "group:monorepos",
