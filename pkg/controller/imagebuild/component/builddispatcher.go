@@ -189,7 +189,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 
 	defer func(pool worker.Pool, endpoint string) {
 		log.Info("Releasing buildkit worker", "endpoint", endpoint)
-		if err := pool.Release(buildCtx, endpoint); err != nil {
+		if err := pool.Release(coreCtx, endpoint); err != nil {
 			log.Error(err, "Failed to release pool endpoint", "endpoint", endpoint)
 		} else {
 			log.Info("Buildkit worker released")
