@@ -25,7 +25,7 @@ releases:
   - name: istiod
     namespace: istio-system
     chart: istio/istiod
-    version: 1.21.1
+    version: 1.21.2
     wait: true
     waitForJobs: true
     needs:
