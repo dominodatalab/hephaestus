@@ -155,7 +155,6 @@ func Verify(ctx context.Context, configDir string, insecureRegistries []string, 
 
 	var errs []error
 	for server, auth := range configJSON.Auths {
-		auth := auth
 		auth.ServerAddress = server
 
 		err := wait.ExponentialBackoffWithContext(ctx, defaultBackoff, func(ctx context.Context) (bool, error) {
@@ -168,7 +167,6 @@ func Verify(ctx context.Context, configDir string, insecureRegistries []string, 
 
 			return true, nil
 		})
-
 		if err != nil {
 			//nolint:lll
 			detailedErr := fmt.Errorf("client credentials are invalid for registry %q.\nMake sure the following sources of credentials are correct: %s.\nUnderlying error: %w", server, strings.Join(helpMessage, ", "), err)

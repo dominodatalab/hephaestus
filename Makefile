@@ -1,10 +1,5 @@
 SHELL:=/bin/bash
 
-ifndef $(GOPATH)
-	GOPATH=$(shell go env GOPATH)
-	export GOPATH
-endif
-
 ##@ Development
 
 .PHONY: build
@@ -42,7 +37,7 @@ crds: tools ## Generate CRDs
 	controller-gen crd paths="./..." output:crd:artifacts:config=deployments/crds
 
 client: tools ## Generate Go client API library
-	client-gen --clientset-name "clientset" --input-base "github.com/dominodatalab/hephaestus/pkg/api" --input "hephaestus/v1" --output-package "github.com/dominodatalab/hephaestus/pkg" --go-header-file "$(shell mktemp)"
+	client-gen --clientset-name "clientset" --input-base "github.com/dominodatalab/hephaestus/pkg/api" --input "hephaestus/v1" --output-pkg "github.com/dominodatalab/hephaestus/pkg" --output-dir ./pkg --go-header-file "$(shell mktemp)"
 
 compiled: api crds client ## Generate all compiled code
 
