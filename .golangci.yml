@@ -47,6 +47,7 @@ linters:
     - containedctx
     - cyclop
     - deadcode
+    - err113
     - exhaustive
     - exhaustivestruct
     - exhaustruct
@@ -58,7 +59,7 @@ linters:
     - gocognit
     - godot
     - godox
-    - goerr113
+    - gosec
     - gofumpt
     - golint
     - gomnd
@@ -66,6 +67,7 @@ linters:
     - interfacer
     - ireturn
     - maligned
+    - mnd
     - nestif
     - nlreturn
     - nonamedreturns

@@ -5,17 +5,17 @@ repos:
         name: build
         entry: make
         args: ["build"]
-        language: system
+        language: golang
         pass_filenames: false
       - id: lint
         name: lint
         entry: make
         args: ["lint"]
-        language: system
+        language: golang
         pass_filenames: false
       - id: test
         name: test
         entry: make
         args: ["test"]
-        language: system
+        language: golang
         pass_filenames: false

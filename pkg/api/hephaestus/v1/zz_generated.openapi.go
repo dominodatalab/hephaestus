@@ -389,7 +389,14 @@ func schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref common.ReferenceCallback) c
 				Properties: map[string]spec.Schema{
 					"context": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Context is a remote URL used to fetch the build context.",
+							Description: "Context is a remote URL used to fetch the build context.  Overrides dockerfileContents if present.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"dockerfileContents": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DockerfileContents specifies the contents of the Dockerfile directly in the CR.  Ignored if context is present.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -532,6 +539,13 @@ func schema_pkg_api_hephaestus_v1_ImageBuildStatus(ref common.ReferenceCallback)
 					"compressedImageSizeBytes": {
 						SchemaProps: spec.SchemaProps{
 							Description: "CompressedImageSizeBytes is the total size of all the compressed layers in the image.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"digest": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Digest is the image digest",
 							Type:        []string{"string"},
 							Format:      "",
 						},
