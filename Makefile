@@ -39,7 +39,7 @@ crds: tools ## Generate CRDs
 client: tools ## Generate Go client API library
 	client-gen --clientset-name "clientset" --input-base "github.com/dominodatalab/hephaestus/pkg/api" --input "hephaestus/v1" --output-pkg "github.com/dominodatalab/hephaestus/pkg" --output-dir ./pkg --go-header-file "$(shell mktemp)"
 
-compiled: api crds client ## Generate all compiled code
+compiled: api crds client openapi ## Generate all compiled code
 
 openapi: ## Generate OpenAPI definitions for API types
 	go install k8s.io/kube-openapi/cmd/openapi-gen@$(shell go list -m k8s.io/kube-openapi | awk '{print $$2}')
