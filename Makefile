@@ -25,6 +25,7 @@ delete: crds ## Delete CRDs from cluster
 check: compiled ## Ensure generated files and dependencies are up-to-date
 	go mod tidy -v
 	cd tools && go mod tidy -v
+	cd test/functional && go mod tidy -v
 	git update-index --refresh
 	git diff-index --exit-code --name-status HEAD
 
