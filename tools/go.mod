@@ -6,7 +6,7 @@ toolchain go1.22.2
 
 require (
 	github.com/golangci/golangci-lint v1.58.0
-	k8s.io/code-generator v0.30.0
+	k8s.io/code-generator v0.30.3
 	sigs.k8s.io/controller-tools v0.15.0
 )
 
@@ -199,7 +199,7 @@ require (
 	honnef.co/go/tools v0.4.7 // indirect
 	k8s.io/api v0.30.0 // indirect
 	k8s.io/apiextensions-apiserver v0.30.0 // indirect
-	k8s.io/apimachinery v0.30.0 // indirect
+	k8s.io/apimachinery v0.30.3 // indirect
 	k8s.io/gengo/v2 v2.0.0-20240404160639-a0386bf69313 // indirect
 	k8s.io/klog/v2 v2.120.1 // indirect
 	k8s.io/utils v0.0.0-20240502163921-fe8a2dddb1d0 // indirect
