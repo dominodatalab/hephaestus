@@ -1,8 +1,6 @@
 module github.com/dominodatalab/hephaestus/tools
 
-go 1.22.0
-
-toolchain go1.22.2
+go 1.22.5
 
 require (
 	github.com/golangci/golangci-lint v1.58.0
