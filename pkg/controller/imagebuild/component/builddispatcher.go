@@ -245,7 +245,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 			log.Info("Build cancelled via resource delete")
 			txn.AddAttribute("cancelled", true)
 
-			//nolint:nilerr // we want reconciliation to pass and end here
+			///nolint:nilerr // we want reconciliation to pass and end here
 			return ctrl.Result{}, nil
 		}
 
