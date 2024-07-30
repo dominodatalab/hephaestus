@@ -46,10 +46,9 @@ linters:
   disable:
     - containedctx
     - cyclop
-    - deadcode
     - err113
+    - execinquery
     - exhaustive
-    - exhaustivestruct
     - exhaustruct
     - forbidigo
     - forcetypeassert
@@ -61,25 +60,17 @@ linters:
     - godox
     - gosec
     - gofumpt
-    - golint
     - gomnd
-    - ifshort
-    - interfacer
     - ireturn
-    - maligned
     - mnd
     - nestif
     - nlreturn
     - nonamedreturns
-    - nosnakecase
     - nosprintfhostport
     - perfsprint
     - prealloc
-    - scopelint
-    - structcheck
     - tagliatelle
     - typecheck
-    - varcheck
     - varnamelen
     - wrapcheck
     - wsl
