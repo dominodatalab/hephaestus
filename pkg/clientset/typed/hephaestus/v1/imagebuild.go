@@ -4,14 +4,13 @@ package v1
 
 import (
 	"context"
-	"time"
 
 	v1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	scheme "github.com/dominodatalab/hephaestus/pkg/clientset/scheme"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // ImageBuildsGetter has a method to return a ImageBuildInterface.
@@ -24,6 +23,7 @@ type ImageBuildsGetter interface {
 type ImageBuildInterface interface {
 	Create(ctx context.Context, imageBuild *v1.ImageBuild, opts metav1.CreateOptions) (*v1.ImageBuild, error)
 	Update(ctx context.Context, imageBuild *v1.ImageBuild, opts metav1.UpdateOptions) (*v1.ImageBuild, error)
+	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
 	UpdateStatus(ctx context.Context, imageBuild *v1.ImageBuild, opts metav1.UpdateOptions) (*v1.ImageBuild, error)
 	Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOpts metav1.ListOptions) error
@@ -36,144 +36,18 @@ type ImageBuildInterface interface {
 
 // imageBuilds implements ImageBuildInterface
 type imageBuilds struct {
-	client rest.Interface
-	ns     string
+	*gentype.ClientWithList[*v1.ImageBuild, *v1.ImageBuildList]
 }
 
 // newImageBuilds returns a ImageBuilds
 func newImageBuilds(c *HephaestusV1Client, namespace string) *imageBuilds {
 	return &imageBuilds{
-		client: c.RESTClient(),
-		ns:     namespace,
+		gentype.NewClientWithList[*v1.ImageBuild, *v1.ImageBuildList](
+			"imagebuilds",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			namespace,
+			func() *v1.ImageBuild { return &v1.ImageBuild{} },
+			func() *v1.ImageBuildList { return &v1.ImageBuildList{} }),
 	}
-}
-
-// Get takes name of the imageBuild, and returns the corresponding imageBuild object, and an error if there is any.
-func (c *imageBuilds) Get(ctx context.Context, name string, options metav1.GetOptions) (result *v1.ImageBuild, err error) {
-	result = &v1.ImageBuild{}
-	err = c.client.Get().
-		Namespace(c.ns).
-		Resource("imagebuilds").
-		Name(name).
-		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// List takes label and field selectors, and returns the list of ImageBuilds that match those selectors.
-func (c *imageBuilds) List(ctx context.Context, opts metav1.ListOptions) (result *v1.ImageBuildList, err error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	result = &v1.ImageBuildList{}
-	err = c.client.Get().
-		Namespace(c.ns).
-		Resource("imagebuilds").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Watch returns a watch.Interface that watches the requested imageBuilds.
-func (c *imageBuilds) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	opts.Watch = true
-	return c.client.Get().
-		Namespace(c.ns).
-		Resource("imagebuilds").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Watch(ctx)
-}
-
-// Create takes the representation of a imageBuild and creates it.  Returns the server's representation of the imageBuild, and an error, if there is any.
-func (c *imageBuilds) Create(ctx context.Context, imageBuild *v1.ImageBuild, opts metav1.CreateOptions) (result *v1.ImageBuild, err error) {
-	result = &v1.ImageBuild{}
-	err = c.client.Post().
-		Namespace(c.ns).
-		Resource("imagebuilds").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(imageBuild).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Update takes the representation of a imageBuild and updates it. Returns the server's representation of the imageBuild, and an error, if there is any.
-func (c *imageBuilds) Update(ctx context.Context, imageBuild *v1.ImageBuild, opts metav1.UpdateOptions) (result *v1.ImageBuild, err error) {
-	result = &v1.ImageBuild{}
-	err = c.client.Put().
-		Namespace(c.ns).
-		Resource("imagebuilds").
-		Name(imageBuild.Name).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(imageBuild).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// UpdateStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *imageBuilds) UpdateStatus(ctx context.Context, imageBuild *v1.ImageBuild, opts metav1.UpdateOptions) (result *v1.ImageBuild, err error) {
-	result = &v1.ImageBuild{}
-	err = c.client.Put().
-		Namespace(c.ns).
-		Resource("imagebuilds").
-		Name(imageBuild.Name).
-		SubResource("status").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(imageBuild).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Delete takes name of the imageBuild and deletes it. Returns an error if one occurs.
-func (c *imageBuilds) Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error {
-	return c.client.Delete().
-		Namespace(c.ns).
-		Resource("imagebuilds").
-		Name(name).
-		Body(&opts).
-		Do(ctx).
-		Error()
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *imageBuilds) DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOpts metav1.ListOptions) error {
-	var timeout time.Duration
-	if listOpts.TimeoutSeconds != nil {
-		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
-	}
-	return c.client.Delete().
-		Namespace(c.ns).
-		Resource("imagebuilds").
-		VersionedParams(&listOpts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Body(&opts).
-		Do(ctx).
-		Error()
-}
-
-// Patch applies the patch and returns the patched imageBuild.
-func (c *imageBuilds) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *v1.ImageBuild, err error) {
-	result = &v1.ImageBuild{}
-	err = c.client.Patch(pt).
-		Namespace(c.ns).
-		Resource("imagebuilds").
-		Name(name).
-		SubResource(subresources...).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(data).
-		Do(ctx).
-		Into(result)
-	return
 }

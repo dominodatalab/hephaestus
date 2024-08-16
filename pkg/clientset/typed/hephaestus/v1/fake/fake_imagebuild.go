@@ -25,22 +25,24 @@ var imagebuildsKind = v1.SchemeGroupVersion.WithKind("ImageBuild")
 
 // Get takes name of the imageBuild, and returns the corresponding imageBuild object, and an error if there is any.
 func (c *FakeImageBuilds) Get(ctx context.Context, name string, options metav1.GetOptions) (result *v1.ImageBuild, err error) {
+	emptyResult := &v1.ImageBuild{}
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(imagebuildsResource, c.ns, name), &v1.ImageBuild{})
+		Invokes(testing.NewGetActionWithOptions(imagebuildsResource, c.ns, name, options), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1.ImageBuild), err
 }
 
 // List takes label and field selectors, and returns the list of ImageBuilds that match those selectors.
 func (c *FakeImageBuilds) List(ctx context.Context, opts metav1.ListOptions) (result *v1.ImageBuildList, err error) {
+	emptyResult := &v1.ImageBuildList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(imagebuildsResource, imagebuildsKind, c.ns, opts), &v1.ImageBuildList{})
+		Invokes(testing.NewListActionWithOptions(imagebuildsResource, imagebuildsKind, c.ns, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -59,40 +61,43 @@ func (c *FakeImageBuilds) List(ctx context.Context, opts metav1.ListOptions) (re
 // Watch returns a watch.Interface that watches the requested imageBuilds.
 func (c *FakeImageBuilds) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewWatchAction(imagebuildsResource, c.ns, opts))
+		InvokesWatch(testing.NewWatchActionWithOptions(imagebuildsResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a imageBuild and creates it.  Returns the server's representation of the imageBuild, and an error, if there is any.
 func (c *FakeImageBuilds) Create(ctx context.Context, imageBuild *v1.ImageBuild, opts metav1.CreateOptions) (result *v1.ImageBuild, err error) {
+	emptyResult := &v1.ImageBuild{}
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(imagebuildsResource, c.ns, imageBuild), &v1.ImageBuild{})
+		Invokes(testing.NewCreateActionWithOptions(imagebuildsResource, c.ns, imageBuild, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1.ImageBuild), err
 }
 
 // Update takes the representation of a imageBuild and updates it. Returns the server's representation of the imageBuild, and an error, if there is any.
 func (c *FakeImageBuilds) Update(ctx context.Context, imageBuild *v1.ImageBuild, opts metav1.UpdateOptions) (result *v1.ImageBuild, err error) {
+	emptyResult := &v1.ImageBuild{}
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(imagebuildsResource, c.ns, imageBuild), &v1.ImageBuild{})
+		Invokes(testing.NewUpdateActionWithOptions(imagebuildsResource, c.ns, imageBuild, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1.ImageBuild), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeImageBuilds) UpdateStatus(ctx context.Context, imageBuild *v1.ImageBuild, opts metav1.UpdateOptions) (*v1.ImageBuild, error) {
+func (c *FakeImageBuilds) UpdateStatus(ctx context.Context, imageBuild *v1.ImageBuild, opts metav1.UpdateOptions) (result *v1.ImageBuild, err error) {
+	emptyResult := &v1.ImageBuild{}
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(imagebuildsResource, "status", c.ns, imageBuild), &v1.ImageBuild{})
+		Invokes(testing.NewUpdateSubresourceActionWithOptions(imagebuildsResource, "status", c.ns, imageBuild, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1.ImageBuild), err
 }
@@ -107,7 +112,7 @@ func (c *FakeImageBuilds) Delete(ctx context.Context, name string, opts metav1.D
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeImageBuilds) DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOpts metav1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(imagebuildsResource, c.ns, listOpts)
+	action := testing.NewDeleteCollectionActionWithOptions(imagebuildsResource, c.ns, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1.ImageBuildList{})
 	return err
@@ -115,11 +120,12 @@ func (c *FakeImageBuilds) DeleteCollection(ctx context.Context, opts metav1.Dele
 
 // Patch applies the patch and returns the patched imageBuild.
 func (c *FakeImageBuilds) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *v1.ImageBuild, err error) {
+	emptyResult := &v1.ImageBuild{}
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(imagebuildsResource, c.ns, name, pt, data, subresources...), &v1.ImageBuild{})
+		Invokes(testing.NewPatchSubresourceActionWithOptions(imagebuildsResource, c.ns, name, pt, data, opts, subresources...), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1.ImageBuild), err
 }
