@@ -31,7 +31,7 @@ jobs:
 
       - id: buildkit_tag
         name: Extract image tag from Helm values
-        uses: mikefarah/yq@v4.43.1
+        uses: mikefarah/yq@v4.44.3
         with:
           cmd: test -n "${{ inputs.buildkitVersion }}" && echo "${{ inputs.buildkitVersion }}" || yq '.buildkit.image.tag' deployments/helm/hephaestus/values.yaml | sed 's/-rootless//'
 

@@ -7,7 +7,7 @@ on:
   pull_request: {}
 
 env:
-  GO_VERSION: "1.22"
+  GO_VERSION: "1.23"
   BUILD_PLATFORMS: linux/amd64,linux/arm64
 
 jobs:
@@ -88,7 +88,7 @@ jobs:
 
       - id: image_tag
         name: Extract image details from Helm values
-        uses: mikefarah/yq@v4.43.1
+        uses: mikefarah/yq@v4.44.3
         with:
           cmd: yq '.buildkit.image.tag' deployments/helm/hephaestus/values.yaml
 
@@ -125,7 +125,7 @@ jobs:
 
       - id: image_tag
         name: Extract image details from Helm values
-        uses: mikefarah/yq@v4.43.1
+        uses: mikefarah/yq@v4.44.3
         with:
           cmd: yq '.buildkit.image.tag' deployments/helm/hephaestus/values.yaml | sed 's/-rootless//'
 
@@ -177,7 +177,7 @@ jobs:
       - name: Install Helm
         uses: azure/setup-helm@v4
         with:
-          version: v3.13.1
+          version: v3.15.4
 
       - id: helm_pkg
         name: Package Helm chart
