@@ -25,6 +25,11 @@ outputs:
 runs:
   using: composite
   steps:
+    - id: git_tag
+      name: Get the Git tag
+      shell: bash
+      run: |
+         echo "VERSION_BUILDARG=$(git describe --tags --always)" >> $GITHUB_ENV
     - name: Login to container registry
       uses: docker/login-action@v3
       with:
@@ -49,6 +54,8 @@ runs:
       with:
         context: .
         platforms: ${{ inputs.platforms }}
+        build-args: |
+          VERSION=${{ env.VERSION_BUILDARG }}
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}

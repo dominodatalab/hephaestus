@@ -1,4 +1,4 @@
-FROM golang:1.19-alpine AS build
+FROM golang:1.23-alpine AS build
 WORKDIR /app
 RUN echo -e 'package main\n\
 import "fmt"\n\

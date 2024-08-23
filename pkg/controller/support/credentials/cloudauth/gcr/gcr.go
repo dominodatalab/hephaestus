@@ -78,7 +78,7 @@ func (g *gcrProvider) authenticate(
 ) (*registry.AuthConfig, error) {
 	match := gcrRegex.FindAllString(server, -1)
 	if len(match) != 1 {
-		err := fmt.Errorf(fmt.Sprintf("invalid GCR URL %s should match %s", server, gcrRegex))
+		err := fmt.Errorf("invalid GCR URL %s should match %s", server, gcrRegex)
 		logger.Info(err.Error())
 
 		return nil, err

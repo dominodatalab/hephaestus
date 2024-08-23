@@ -24,13 +24,6 @@ linters-settings:
   funlen: # NOTE: bring these values down
     lines: 200
     statements: 100
-  gomnd:
-    checks:
-      - argument
-      - case
-      - condition
-      - operation
-      - return
   gosec:
     excludes:
       - G306
@@ -46,11 +39,12 @@ linters:
   disable:
     - containedctx
     - cyclop
-    - deadcode
+    - copyloopvar
     - err113
     - exhaustive
-    - exhaustivestruct
     - exhaustruct
+    - execinquery
+    - exportloopref
     - forbidigo
     - forcetypeassert
     - gci
@@ -61,25 +55,18 @@ linters:
     - godox
     - gosec
     - gofumpt
-    - golint
     - gomnd
-    - ifshort
-    - interfacer
+    - govet
     - ireturn
-    - maligned
     - mnd
     - nestif
     - nlreturn
     - nonamedreturns
-    - nosnakecase
     - nosprintfhostport
     - perfsprint
     - prealloc
-    - scopelint
-    - structcheck
     - tagliatelle
     - typecheck
-    - varcheck
     - varnamelen
     - wrapcheck
     - wsl
