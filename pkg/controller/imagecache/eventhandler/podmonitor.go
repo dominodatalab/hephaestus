@@ -27,8 +27,7 @@ type PodMonitor struct {
 	TimeWindow time.Duration
 }
 
-//nolint:staticcheck
-func (p *PodMonitor) Create(e event.CreateEvent, q workqueue.RateLimitingInterface) {
+func (p *PodMonitor) Create(e event.CreateEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	if len(p.Config.PodLabels) > len(e.Object.GetLabels()) {
 		return
 	}
