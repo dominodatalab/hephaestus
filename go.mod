@@ -1,8 +1,6 @@
 module github.com/dominodatalab/hephaestus
 
-go 1.22.1
-
-toolchain go1.23.0
+go 1.23.0
 
 // NOTE: local development
 // replace github.com/dominodatalab/controller-util => ../controller-util
@@ -19,8 +17,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ecr v1.27.4
 	github.com/aws/smithy-go v1.20.2
 	github.com/distribution/reference v0.6.0
-	github.com/docker/cli v27.0.3+incompatible
-	github.com/docker/docker v27.0.3+incompatible
+	github.com/docker/cli v27.1.2+incompatible
+	github.com/docker/docker v27.1.2+incompatible
 	github.com/dominodatalab/amqp-client v0.1.4
 	github.com/dominodatalab/controller-util v0.1.2
 	github.com/go-logr/logr v1.4.2
