@@ -1,4 +1,7 @@
 FROM golang:1.23-alpine AS build
+
+ARG VERSION=dev
+ENV VERSION=${VERSION}
 WORKDIR /app
 COPY go.mod .
 COPY go.sum .
@@ -7,7 +10,7 @@ COPY cmd ./cmd
 COPY pkg ./pkg
 COPY deployments/crds ./deployments/crds
 ENV CGO_ENABLED=0 GOOS=linux
-RUN go build -o hephaestus-controller ./cmd/controller
+RUN go build -ldflags="-X 'main.Version=${VERSION}'" -o hephaestus-controller ./cmd/controller
 
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /

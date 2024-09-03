@@ -11,6 +11,8 @@ import (
 	"github.com/dominodatalab/hephaestus/pkg/crd"
 )
 
+var Version = "dev"
+
 func NewCommand() *cobra.Command {
 	var cfgFile string
 
@@ -26,9 +28,20 @@ func NewCommand() *cobra.Command {
 		newStartCommand(),
 		newCRDApplyCommand(),
 		newCRDDeleteCommand(),
+		versionCommand(),
 	)
 
 	return cmd
+}
+
+func versionCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "prints version",
+		Run: func(_ *cobra.Command, _ []string) {
+			fmt.Println(Version)
+		},
+	}
 }
 
 func newStartCommand() *cobra.Command {

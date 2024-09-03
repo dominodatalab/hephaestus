@@ -1,13 +1,14 @@
 SHELL:=/bin/bash
+VERSION=$(git describe --tags --always)
 
 ##@ Development
 
 .PHONY: build
 build: ## Build controller binary
-	go build -v -o bin/hephaestus-controller ./cmd/controller/
+	go build -ldflags="-X 'main.Version=${VERSION}'" -o hephaestus-controller ./cmd/controller
 
 docker: ## Build docker image
-	docker build -t ghcr.io/dominodatalab/hephaestus:latest .
+	docker build --build-arg VERSION=${VERSION} -t ghcr.io/dominodatalab/hephaestus:latest .
 
 .PHONY: test
 test: ## Run test suite

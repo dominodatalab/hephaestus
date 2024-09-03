@@ -177,7 +177,7 @@ jobs:
       - name: Install Helm
         uses: azure/setup-helm@v4
         with:
-          version: v3.13.1
+          version: v3.15.4
 
       - id: helm_pkg
         name: Package Helm chart
