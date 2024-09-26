@@ -283,7 +283,7 @@ require (
 	helm.sh/helm/v3 v3.14.0 // indirect
 	k8s.io/cli-runtime v0.29.0 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20240430033511-f0e62f92d13f // indirect
+	k8s.io/kube-openapi v0.0.0-20240903163716-9e1beecbcb38 // indirect
 	k8s.io/utils v0.0.0-20240902221715-702e33fdd3c3 // indirect
 	oras.land/oras-go v1.2.4 // indirect
 	sigs.k8s.io/controller-runtime v0.19.0 // indirect
