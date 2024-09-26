@@ -85,7 +85,7 @@ releases:
   - name: rabbitmq
     namespace: default
     chart: bitnami/rabbitmq
-    version: 14.0.2
+    version: 14.7.0
     wait: true
     needs:
       - istio-system/istiod
