@@ -73,9 +73,10 @@ controller:
   metrics:
     # Enable the export of prometheus metrics
     enabled: true
-    # Allow ingress traffic from prometheus pods with the following labels
+    # Allow ingress traffic from metrics scrappers
     podLabels:
       app.kubernetes.io/name: prometheus
+      telemetry-client: "true"
     # Namespace labels where prometheus is running if different from app's namespace
     namespaceLabels: {}
 
