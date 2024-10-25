@@ -22,13 +22,15 @@ spec:
         - port: {{ .manager.metricsPort }}
           protocol: TCP
       from:
+        {{- range $key, $value := .metrics.podLabels }}
         - podSelector:
             matchLabels:
-              {{- toYaml .metrics.podLabels | trimSuffix "\n" | nindent 14 }}
-          {{- with .metrics.namespaceLabels }}
+              {{ $key }}: {{ $value | quote }}
+          {{- with $.Values.controller.metrics.namespaceLabels }}
           namespaceSelector:
             matchLabels:
               {{- toYaml . | trimSuffix "\n" | nindent 14 }}
           {{- end }}
+        {{- end }}
     {{- end }}
 {{- end }}
