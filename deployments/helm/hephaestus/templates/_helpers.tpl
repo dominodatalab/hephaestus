@@ -52,7 +52,7 @@ Return the controller service account name.
 Returns a unified list of image pull secrets.
 */}}
 {{- define "hephaestus.imagePullSecrets" -}}
-{{- include "common.images.renderPullSecrets" (dict "images" (list .Values.controller.manager.image .Values.controller.vector.image .Values.buildkit.image) "context" $) }}
+{{- include "common.images.renderPullSecrets" (dict "images" (list .Values.controller.manager.image .Values.controller.vector.image .Values.buildkit.image .Values.buildkit.rootlessImage) "context" $) }}
 {{- end }}
 
 {{/*
@@ -189,13 +189,11 @@ Return the buildkit mtls server secret name.
 Return the buildkit image name.
 */}}
 {{- define "hephaestus.buildkit.image" -}}
-{{- $imageRoot := .Values.buildkit.image }}
-{{- $tag := .Values.buildkit.image.tag | default .Chart.AppVersion }}
-{{- if not .Values.buildkit.rootless }}
-{{- $tag = replace "-rootless" "" $tag }}
+{{- if .Values.buildkit.rootless }}
+{{- include "common.images.image" (dict "imageRoot" .Values.buildkit.rootlessImage "global" $) }}
+{{- else }}
+{{- include "common.images.image" (dict "imageRoot" .Values.buildkit.image "global" $) }}
 {{- end }}
-{{- $_ := set $imageRoot "tag" $tag }}
-{{- include "common.images.image" (dict "imageRoot" $imageRoot "global" $) }}
 {{- end }}
 
 {{/*
