@@ -90,7 +90,7 @@ jobs:
         name: Extract image details from Helm values
         uses: mikefarah/yq@v4.43.1
         with:
-          cmd: yq '.buildkit.image.tag' deployments/helm/hephaestus/values.yaml
+          cmd: yq '.buildkit.rootlessImage.tag' deployments/helm/hephaestus/values.yaml
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -127,7 +127,7 @@ jobs:
         name: Extract image details from Helm values
         uses: mikefarah/yq@v4.43.1
         with:
-          cmd: yq '.buildkit.image.tag' deployments/helm/hephaestus/values.yaml | sed 's/-rootless//'
+          cmd: yq '.buildkit.image.tag' deployments/helm/hephaestus/values.yaml
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
