@@ -18,7 +18,7 @@ releases:
   - name: istio-base
     namespace: istio-system
     chart: istio/base
-    version: 1.22.3
+    version: 1.24.2
     wait: true
     waitForJobs: true
 
@@ -45,7 +45,7 @@ releases:
   - name: cert-manager
     namespace: cert-manager
     chart: jetstack/cert-manager
-    version: v1.14.5
+    version: v1.16.2
     wait: true
     waitForJobs: true
     values:
