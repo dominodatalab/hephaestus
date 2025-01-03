@@ -273,7 +273,7 @@ buildkit:
   image:
     registry: ""
     repository: moby/buildkit
-    tag: v0.16.0
+    tag: v0.18.2
     pullPolicy: IfNotPresent
     pullSecrets: []
 
@@ -281,7 +281,7 @@ buildkit:
   rootlessImage:
     registry: ""
     repository: moby/buildkit
-    tag: v0.16.0-rootless
+    tag: v0.18.2-rootless
     pullPolicy: IfNotPresent
     pullSecrets: []
 
