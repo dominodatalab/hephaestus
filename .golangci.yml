@@ -43,7 +43,6 @@ linters:
     - err113
     - exhaustive
     - exhaustruct
-    - execinquery
     - exportloopref
     - forbidigo
     - forcetypeassert
@@ -53,9 +52,9 @@ linters:
     - gocognit
     - godot
     - godox
+    - gomnd
     - gosec
     - gofumpt
-    - gomnd
     - govet
     - ireturn
     - mnd
