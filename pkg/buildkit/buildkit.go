@@ -226,11 +226,11 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 		secrets[name] = contents
 	}
 
-	dockerfile_bytes, err := os.ReadFile(dockerfile)
+	dockerfileBytes, err := os.ReadFile(dockerfile)
 	if err != nil {
 		return "", fmt.Errorf("cannot read Dockerfile: %w", err)
 	}
-	dockerfileContents := string(dockerfile_bytes)
+	dockerfileContents := string(dockerfileBytes)
 	for secretPath := range secrets {
 		c.log.Info("Found secret", "key", secretPath)
 		if strings.Contains(secretPath, "/") {
