@@ -230,20 +230,20 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("cannot read Dockerfile: %w", err)
 	}
-	dockerfile_contents := string(dockerfile_bytes)
-	for secret_path := range secrets {
-		c.log.Info("Found secret", "key", secret_path)
-		if strings.Contains(secret_path, "/") {
-			key := secret_path[strings.LastIndex(secret_path, "/")+1:]
+	dockerfileContents := string(dockerfile_bytes)
+	for secretPath := range secrets {
+		c.log.Info("Found secret", "key", secretPath)
+		if strings.Contains(secretPath, "/") {
+			key := secretPath[strings.LastIndex(secretPath, "/")+1:]
 			needle := fmt.Sprintf("--mount=type=secret,id=%s", key)
-			replace := fmt.Sprintf("--mount=type=secret,id=%s", secret_path)
-			c.log.Info("Replacing secret", "path", secret_path, "needle", needle, "replace", replace)
-			dockerfile_contents = strings.ReplaceAll(dockerfile_contents, needle, replace)
+			replace := fmt.Sprintf("--mount=type=secret,id=%s", secretPath)
+			c.log.Info("Replacing secret", "path", secretPath, "needle", needle, "replace", replace)
+			dockerfileContents = strings.ReplaceAll(dockerfileContents, needle, replace)
 		}
 	}
 
 	c.log.Info("Rewriting dockerfile :crossed_fingers:")
-	if err := os.WriteFile(dockerfile, []byte(dockerfile_contents), 0644); err != nil {
+	if err := os.WriteFile(dockerfile, []byte(dockerfileContents), 0644); err != nil {
 		return "", fmt.Errorf("failed to write Dockerfile: %w", err)
 	}
 
