@@ -226,6 +226,10 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 		secrets[name] = contents
 	}
 
+	for k := range secrets {
+		c.log.Info("Found secret", "key", k)
+	}
+
 	contentsFS, err := fsutil.NewFS(contentsDir)
 	if err != nil {
 		return "", fmt.Errorf("unable to create context dir: %w", err)
