@@ -226,8 +226,25 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 		secrets[name] = contents
 	}
 
-	for k := range secrets {
-		c.log.Info("Found secret", "key", k)
+	dockerfile_bytes, err := os.ReadFile(dockerfile)
+	if err != nil {
+		return "", fmt.Errorf("cannot read Dockerfile: %w", err)
+	}
+	dockerfile_contents := string(dockerfile_bytes)
+	for secret_path := range secrets {
+		c.log.Info("Found secret", "key", secret_path)
+		if strings.Contains(secret_path, "/") {
+			key := secret_path[strings.LastIndex(secret_path, "/")+1:]
+			needle := fmt.Sprintf("--mount=type=secret,id=%s", key)
+			replace := fmt.Sprintf("--mount=type=secret,id=%s", secret_path)
+			c.log.Info("Replacing secret", "path", secret_path, "needle", needle, "replace", replace)
+			dockerfile_contents = strings.ReplaceAll(dockerfile_contents, needle, replace)
+		}
+	}
+
+	c.log.Info("Rewriting dockerfile :crossed_fingers:")
+	if err := os.WriteFile(dockerfile, []byte(dockerfile_contents), 0644); err != nil {
+		return "", fmt.Errorf("failed to write Dockerfile: %w", err)
 	}
 
 	contentsFS, err := fsutil.NewFS(contentsDir)
