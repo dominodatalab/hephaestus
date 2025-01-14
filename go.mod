@@ -30,7 +30,7 @@ require (
 	github.com/newrelic/go-agent/v3/integrations/nrzap v1.0.1
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.10.0
-	github.com/tonistiigi/fsutil v0.0.0-20241212180509-bec5f0e12553
+	github.com/tonistiigi/fsutil v0.0.0-20250113203817-b14e27f4135a
 	go.uber.org/multierr v1.11.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8
