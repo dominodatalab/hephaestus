@@ -3328,6 +3328,9 @@
     ".SecretReference": {
       "type": "object",
       "properties": {
+        "mountPath": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },
