@@ -17,13 +17,13 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ecr v1.38.5
 	github.com/aws/smithy-go v1.22.1
 	github.com/distribution/reference v0.6.0
-	github.com/docker/cli v27.4.1+incompatible
-	github.com/docker/docker v27.4.1+incompatible
+	github.com/docker/cli v27.5.0+incompatible
+	github.com/docker/docker v27.5.0+incompatible
 	github.com/dominodatalab/amqp-client v0.1.4
 	github.com/dominodatalab/controller-util v0.1.2
 	github.com/go-logr/logr v1.4.2
 	github.com/go-logr/zapr v1.3.0
-	github.com/google/go-containerregistry v0.20.2
+	github.com/google/go-containerregistry v0.20.3
 	github.com/h2non/filetype v1.1.3
 	github.com/moby/buildkit v0.18.2
 	github.com/newrelic/go-agent/v3 v3.35.1
@@ -176,7 +176,7 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20250106144421-5f5ef82da422 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250106144421-5f5ef82da422 // indirect
 	google.golang.org/grpc v1.69.2 // indirect
-	google.golang.org/protobuf v1.36.2 // indirect
+	google.golang.org/protobuf v1.36.3 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gotest.tools/v3 v3.5.1 // indirect
