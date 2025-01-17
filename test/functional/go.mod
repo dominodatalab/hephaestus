@@ -18,7 +18,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ecr v1.38.5
 	github.com/dominodatalab/hephaestus v0.0.0-00010101000000-000000000000
 	github.com/dominodatalab/testenv v0.0.0-20240415212647-cd0bf57935be
-	github.com/go-playground/validator/v10 v10.19.0
+	github.com/go-playground/validator/v10 v10.24.0
 	github.com/google/go-containerregistry v0.20.3
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/redis/go-redis/v9 v9.7.0
@@ -129,7 +129,7 @@ require (
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/fujiwara/tfstate-lookup v1.1.5 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
-	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
+	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
 	github.com/getsops/gopgagent v0.0.0-20170926210634-4d7ea76ff71a // indirect
 	github.com/getsops/sops/v3 v3.8.0 // indirect
 	github.com/go-errors/errors v1.4.2 // indirect
