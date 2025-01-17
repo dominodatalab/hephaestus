@@ -13,11 +13,11 @@ type FakeHephaestusV1 struct {
 }
 
 func (c *FakeHephaestusV1) ImageBuilds(namespace string) v1.ImageBuildInterface {
-	return &FakeImageBuilds{c, namespace}
+	return newFakeImageBuilds(c, namespace)
 }
 
 func (c *FakeHephaestusV1) ImageCaches(namespace string) v1.ImageCacheInterface {
-	return &FakeImageCaches{c, namespace}
+	return newFakeImageCaches(c, namespace)
 }
 
 // RESTClient returns a RESTClient that is used to communicate
