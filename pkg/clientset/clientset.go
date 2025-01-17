@@ -3,8 +3,8 @@
 package clientset
 
 import (
-	"fmt"
-	"net/http"
+	fmt "fmt"
+	http "net/http"
 
 	hephaestusv1 "github.com/dominodatalab/hephaestus/pkg/clientset/typed/hephaestus/v1"
 	discovery "k8s.io/client-go/discovery"
