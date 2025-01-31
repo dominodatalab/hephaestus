@@ -45,7 +45,7 @@ resource "google_compute_subnetwork" "kubernetes" {
 
 module "gke" {
   source  = "terraform-google-modules/kubernetes-engine/google"
-  version = "~> 30.2"
+  version = "~> 35.0"
 
   name               = local.name
   region             = var.region
@@ -70,7 +70,7 @@ module "gke" {
 
 module "gke_auth" {
   source  = "terraform-google-modules/kubernetes-engine/google//modules/auth"
-  version = "~> 30.2"
+  version = "~> 35.0"
 
   location     = module.gke.location
   project_id   = var.project_id
