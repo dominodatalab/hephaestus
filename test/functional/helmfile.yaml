@@ -101,7 +101,7 @@ releases:
   - name: redis
     namespace: default
     chart: bitnami/redis
-    version: 19.6.4
+    version: 20.6.3
     wait: true
     needs:
       - istio-system/istiod
