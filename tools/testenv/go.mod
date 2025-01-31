@@ -7,7 +7,7 @@ require (
 	github.com/hashicorp/go-version v1.7.0
 	github.com/hashicorp/hc-install v0.9.1
 	github.com/hashicorp/hcl/v2 v2.23.0
-	github.com/hashicorp/terraform-exec v0.20.0
+	github.com/hashicorp/terraform-exec v0.22.0
 	// helmfile >= v0.162.0 requires go1.22
 	github.com/helmfile/helmfile v0.161.0
 	github.com/zclconf/go-cty v1.16.2
@@ -154,7 +154,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/hashicorp/jsonapi v0.0.0-20210826224640-ee7dae0fb22d // indirect
-	github.com/hashicorp/terraform-json v0.19.0 // indirect
+	github.com/hashicorp/terraform-json v0.24.0 // indirect
 	github.com/hashicorp/vault/api v1.10.0 // indirect
 	github.com/helmfile/chartify v0.17.0 // indirect
 	github.com/helmfile/vals v0.33.0 // indirect
