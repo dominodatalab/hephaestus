@@ -47,7 +47,8 @@ newRelic:
 
 # Configuration for buildkit and controller that adds the ability to pull/push images
 # from/to insecure (self-signed TLS) and http registries.
-registries: {}
+registries:
+  {}
   # myserver:
   #   insecure: true
   #   http: true
@@ -201,7 +202,7 @@ controller:
     containerSecurityContext:
       allowPrivilegeEscalation: false
       capabilities:
-          drop:
+        drop:
           - ALL
 
     # Extra environment variables provided to the manager container
@@ -268,6 +269,9 @@ buildkit:
   # Add a ConfigMap containing custom CAs if you need to push images to one or
   # more registries that use self-signed certificates
   customCABundle: ""
+
+  # Name of snapshotter (overlayfs, native, etc.)
+  snapshotter: auto
 
   # Buildkit image
   image:
