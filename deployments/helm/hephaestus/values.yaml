@@ -357,6 +357,9 @@ buildkit:
   # Buildkit pods priorityClassName
   priorityClassName: ""
 
+  # Buildkit container args
+  args: []
+
   # Affinities for buildkit pod assignment
   affinity: |-
     podAntiAffinity:
