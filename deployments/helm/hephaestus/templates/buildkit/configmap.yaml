@@ -18,8 +18,6 @@ data:
       {{- end }}
 
     [worker.oci]
-      snapshotter = {{ .snapshotter | trimAll "\"" | quote }}
-
       {{- if .rootless }}
       noProcessSandbox = true
       {{- end }}

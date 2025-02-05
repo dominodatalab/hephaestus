@@ -270,9 +270,6 @@ buildkit:
   # more registries that use self-signed certificates
   customCABundle: ""
 
-  # Name of snapshotter (overlayfs, native, etc.)
-  snapshotter: auto
-
   # Buildkit image
   image:
     registry: ""
@@ -357,7 +354,7 @@ buildkit:
   # Buildkit pods priorityClassName
   priorityClassName: ""
 
-  # Buildkit container args
+  # Buildkit container extra args, i.e ["--oci-worker-snapshotter=fuse-overlayfs"]
   args: []
 
   # Affinities for buildkit pod assignment
