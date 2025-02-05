@@ -201,7 +201,7 @@ controller:
     containerSecurityContext:
       allowPrivilegeEscalation: false
       capabilities:
-          drop:
+        drop:
           - ALL
 
     # Extra environment variables provided to the manager container
@@ -352,6 +352,9 @@ buildkit:
 
   # Buildkit pods priorityClassName
   priorityClassName: ""
+
+  # Buildkit container extra args, i.e ["--oci-worker-snapshotter=fuse-overlayfs"]
+  args: []
 
   # Affinities for buildkit pod assignment
   affinity: |-

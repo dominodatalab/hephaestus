@@ -64,6 +64,9 @@ spec:
             {{- if .Values.buildkit.debug }}
             - --debug
             {{- end }}
+            {{- with .Values.buildkit.args }}
+              {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- with .Values.podEnv }}
           env:
             {{- toYaml . | nindent 12 }}
