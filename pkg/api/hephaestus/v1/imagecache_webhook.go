@@ -11,6 +11,13 @@ import (
 
 var imagecachelog = logf.Log.WithName("webhook").WithName("imagecache")
 
+var _ webhook.Defaulter = &ImageCache{}
+
+func (in *ImageCache) Default() {
+	log := imagecachelog.WithName("defaulter").WithValues("imagecache", client.ObjectKeyFromObject(in))
+	log.Info("Applying default values")
+}
+
 var _ webhook.Validator = &ImageCache{}
 
 func (in *ImageCache) ValidateCreate() (admission.Warnings, error) {
