@@ -18,7 +18,7 @@ releases:
   - name: istio-base
     namespace: istio-system
     chart: istio/base
-    version: 1.24.2
+    version: 1.24.3
     wait: true
     waitForJobs: true
 
