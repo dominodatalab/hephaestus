@@ -41,8 +41,10 @@ linters:
     - cyclop
     - copyloopvar
     - err113
+    - execinquery
     - exhaustive
     - exhaustruct
+    - exportloopref
     - forbidigo
     - forcetypeassert
     - gci
@@ -51,6 +53,7 @@ linters:
     - gocognit
     - godot
     - godox
+    - gomnd
     - gosec
     - gofumpt
     - govet
