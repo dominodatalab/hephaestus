@@ -1,10 +1,11 @@
 package v1
 
 import (
+	"context"
 	"net/url"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/runtime"
+	runtime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -14,24 +15,25 @@ import (
 
 var imagebuildlog = logf.Log.WithName("webhook").WithName("imagebuild")
 
-var _ webhook.Defaulter = &ImageBuild{}
+var _ webhook.CustomDefaulter = &ImageBuild{}
 
-func (in *ImageBuild) Default() {
+func (in *ImageBuild) Default(context.Context, runtime.Object) error {
 	log := imagebuildlog.WithName("defaulter").WithValues("imagebuild", client.ObjectKeyFromObject(in))
 	log.V(1).Info("Applying default values")
+	return nil
 }
 
-var _ webhook.Validator = &ImageBuild{}
+var _ webhook.CustomValidator = &ImageBuild{}
 
-func (in *ImageBuild) ValidateCreate() (admission.Warnings, error) {
+func (in *ImageBuild) ValidateCreate(context.Context, runtime.Object) (admission.Warnings, error) {
 	return in.validateImageBuild("create")
 }
 
-func (in *ImageBuild) ValidateUpdate(runtime.Object) (admission.Warnings, error) {
+func (in *ImageBuild) ValidateUpdate(context.Context, runtime.Object, runtime.Object) (admission.Warnings, error) {
 	return in.validateImageBuild("update")
 }
 
-func (in *ImageBuild) ValidateDelete() (admission.Warnings, error) {
+func (in *ImageBuild) ValidateDelete(context.Context, runtime.Object) (admission.Warnings, error) {
 	return admission.Warnings{}, nil
 }
 
