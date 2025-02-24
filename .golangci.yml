@@ -4,7 +4,7 @@ run:
 issues:
   exclude-files:
     - cribbed.go
-    - "zz_generated.*"
+    - zz_generated.*
 linters-settings:
   depguard:
     rules:
@@ -15,9 +15,9 @@ linters-settings:
         #   - $gostd
         #   - github.com/OpenPeeDeeP
         deny:
-          - pkg: "github.com/sirupsen/logrus"
+          - pkg: github.com/sirupsen/logrus
             desc: not allowed
-          - pkg: "github.com/pkg/errors"
+          - pkg: github.com/pkg/errors
             desc: Should be replaced by standard lib errors package
   errorlint:
     comparison: false
@@ -41,6 +41,7 @@ linters:
     - cyclop
     - copyloopvar
     - err113
+    - execinquery
     - exhaustive
     - exhaustruct
     - exportloopref
@@ -65,6 +66,7 @@ linters:
     - perfsprint
     - prealloc
     - tagliatelle
+    - tenv
     - typecheck
     - varnamelen
     - wrapcheck
