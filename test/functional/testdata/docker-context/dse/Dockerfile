@@ -1,2 +1,2 @@
-FROM quay.io/domino/standard-environment:ubuntu18-py3.8-r4.1-domino5.0
+FROM ubuntu22-py3.10-r4.4-domino6.0-standard.patched
 RUN echo "Y U NO SMALLER"

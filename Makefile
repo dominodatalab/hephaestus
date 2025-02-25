@@ -1,6 +1,9 @@
 SHELL:=/bin/bash
 VERSION=$(git describe --tags --always)
 
+CONTROLLER_TOOLS_VERSION ?= v0.17.2
+CONTROLLER_GEN ?= $(TOOLS_DIR)/controller-gen
+
 ##@ Development
 
 .PHONY: build
@@ -32,10 +35,21 @@ check: compiled ## Ensure generated files and dependencies are up-to-date
 
 ##@ Generators
 
+CRD_OPTIONS ?= crd:ignoreUnexportedFields=true,crdVersions=v1
+
+HELM_DIR ?= $(shell pwd)/helm
+HELM_CRD_DIR ?= $(HELM_DIR)/platform-operator/templates/crds
+
+$(HELM_DIR) $(HELM_CRD_DIR):
+	@mkdir -p $@
+
 api: tools ## Generate API objects
 	controller-gen object paths="./pkg/api/hephaestus/..."
 
 crds: tools ## Generate CRDs
+	controller-gen | $(HELM_CRD_DIR) ## Generate CustomResourceDefinition objects.
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) paths="./..." output:crd:artifacts:config="deployments/crds"
+
 	controller-gen crd paths="./..." output:crd:artifacts:config=deployments/crds
 
 client: tools ## Generate Go client API library

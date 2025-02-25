@@ -177,9 +177,10 @@ controller:
       enabled: false
       # Remote AMQP server configuration
       amqp:
-        url: "amqp://user:password@rabbitmq.default:5672"
+        # AMQP URL
+        url: amqp://user:password@rabbitmq.default:5672
         exchange: ""
-        queue: "hephaestus.imagebuilds.status"
+        queue: hephaestus.imagebuilds.status
       # Remote Kafka cluster configuration
       kafka: {}
 
@@ -224,7 +225,7 @@ controller:
     image:
       registry: ""
       repository: timberio/vector
-      tag: 0.37.1-distroless-static
+      tag: 0.45.0-distroless-static
       pullPolicy: IfNotPresent
       pullSecrets: []
 
@@ -273,7 +274,7 @@ buildkit:
   image:
     registry: ""
     repository: moby/buildkit
-    tag: v0.18.2
+    tag: v0.20.0
     pullPolicy: IfNotPresent
     pullSecrets: []
 
@@ -281,7 +282,7 @@ buildkit:
   rootlessImage:
     registry: ""
     repository: moby/buildkit
-    tag: v0.18.2-rootless
+    tag: v0.20.0-rootless
     pullPolicy: IfNotPresent
     pullSecrets: []
 

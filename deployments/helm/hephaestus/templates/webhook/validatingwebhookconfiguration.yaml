@@ -1,14 +1,14 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  name: {{ include "common.names.fullname" . }}-{{ .Release.Namespace }}
+  name: "{{ include "common.names.fullname" . }}-{{ .Release.Namespace }}"
   labels:
-    {{- include "hephaestus.controller.labels.standard" . | nindent 4 }}
+    {{ include "hephaestus.controller.labels.standard" . | nindent 4 }}
   annotations:
-    {{- include "hephaestus.webhook.annotations" . | nindent 4 }}
+    {{ include "hephaestus.webhook.annotations" . | nindent 4 }}
 webhooks:
   - name: validate-imagebuild.hephaestus.dominodatalab.com
-    admissionReviewVersions: ["v1"]
+    admissionReviewVersions: [v1]
     failurePolicy: Fail
     sideEffects: None
     clientConfig:
@@ -17,12 +17,12 @@ webhooks:
         namespace: {{ .Release.Namespace }}
         path: /validate-hephaestus-dominodatalab-com-v1-imagebuild
     rules:
-      - apiGroups: ["hephaestus.dominodatalab.com"]
-        apiVersions: ["v1"]
-        operations: ["CREATE", "UPDATE"]
-        resources: ["imagebuilds"]
+      - apiGroups: [ hephaestus.dominodatalab.com ]
+        apiVersions: [ v1 ]
+        operations: [ CREATE, UPDATE ]
+        resources: [ imagebuilds ]
   - name: validate-imagecache.hephaestus.dominodatalab.com
-    admissionReviewVersions: ["v1"]
+    admissionReviewVersions: [ v1 ]
     failurePolicy: Fail
     sideEffects: None
     clientConfig:
@@ -31,7 +31,7 @@ webhooks:
         namespace: {{ .Release.Namespace }}
         path: /validate-hephaestus-dominodatalab-com-v1-imagecache
     rules:
-      - apiGroups: ["hephaestus.dominodatalab.com"]
-        apiVersions: ["v1"]
-        operations: ["CREATE", "UPDATE"]
-        resources: ["imagecaches"]
+      - apiGroups: [hephaestus.dominodatalab.com]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [imagecaches]
