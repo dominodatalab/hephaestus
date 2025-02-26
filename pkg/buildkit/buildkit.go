@@ -240,7 +240,9 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 			"dockerfile": contentsFS,
 		},
 		Session: []session.Attachable{
-			authprovider.NewDockerAuthProvider(dockerConfig, nil),
+			authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{
+				ConfigFile: dockerConfig,
+			}),
 			secretsprovider.FromMap(secrets),
 		},
 		CacheExports: []bkclient.CacheOptionsEntry{
@@ -351,7 +353,9 @@ func (c *Client) solveWith(ctx context.Context, modify func(buildDir string, sol
 		Frontend:      "dockerfile.v0",
 		FrontendAttrs: map[string]string{},
 		Session: []session.Attachable{
-			authprovider.NewDockerAuthProvider(dockerConfig, nil),
+			authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{
+				ConfigFile: dockerConfig,
+			}),
 		},
 	}
 
