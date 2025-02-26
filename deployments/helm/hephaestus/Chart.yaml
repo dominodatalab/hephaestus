@@ -2,7 +2,7 @@ apiVersion: v2
 type: application
 name: hephaestus
 version: 0.0.0
-appVersion: "latest"
+appVersion: latest
 kubeVersion: ">= 1.19.0-0"
 description: Kubernetes operator that builds OCI images using buildkit.
 home: https://github.com/dominodatalab/hephaestus
@@ -10,8 +10,8 @@ sources:
   - https://github.com/dominodatalab/hephaestus
   - https://github.com/moby/buildkit
 maintainers:
-  - name: Sonny Garcia
-    email: sonny.garcia@dominodatalab.com
+  - name: Domino Data Lab
+    email: open-source@dominodatalab.com
 dependencies:
   - name: common
     version: 2.27.0
