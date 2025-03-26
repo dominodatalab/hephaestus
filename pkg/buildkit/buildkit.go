@@ -165,6 +165,10 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 	if err != nil {
 		c.log.Error(err, "Error loading config file")
 	}
+	authProviderConfig := authprovider.DockerAuthProviderConfig{
+		ConfigFile: dockerConfig,
+		TLSConfigs: nil,
+	}
 
 	// process build context
 	var contentsDir string
@@ -240,7 +244,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 			"dockerfile": contentsFS,
 		},
 		Session: []session.Attachable{
-			authprovider.NewDockerAuthProvider(dockerConfig, nil),
+			authprovider.NewDockerAuthProvider(authProviderConfig),
 			secretsprovider.FromMap(secrets),
 		},
 		CacheExports: []bkclient.CacheOptionsEntry{
@@ -347,11 +351,15 @@ func (c *Client) solveWith(ctx context.Context, modify func(buildDir string, sol
 	if err != nil {
 		c.log.Error(err, "Error loading config file")
 	}
+	authProviderConfig := authprovider.DockerAuthProviderConfig{
+		ConfigFile: dockerConfig,
+		TLSConfigs: nil,
+	}
 	solveOpt := bkclient.SolveOpt{
 		Frontend:      "dockerfile.v0",
 		FrontendAttrs: map[string]string{},
 		Session: []session.Attachable{
-			authprovider.NewDockerAuthProvider(dockerConfig, nil),
+			authprovider.NewDockerAuthProvider(authProviderConfig),
 		},
 	}
 
