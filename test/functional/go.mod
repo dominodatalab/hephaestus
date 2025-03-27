@@ -15,7 +15,7 @@ require (
 	github.com/Azure/go-autorest/autorest/to v0.4.1
 	github.com/aws/aws-sdk-go-v2 v1.36.3
 	github.com/aws/aws-sdk-go-v2/config v1.29.11
-	github.com/aws/aws-sdk-go-v2/service/ecr v1.40.1
+	github.com/aws/aws-sdk-go-v2/service/ecr v1.43.0
 	github.com/dominodatalab/hephaestus v0.0.0-00010101000000-000000000000
 	github.com/dominodatalab/testenv v0.0.0-20240415212647-cd0bf57935be
 	github.com/go-playground/validator/v10 v10.24.0
@@ -56,7 +56,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
-	github.com/Azure/go-autorest/autorest v0.11.29 // indirect
+	github.com/Azure/go-autorest/autorest v0.11.30 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.9.24 // indirect
 	github.com/Azure/go-autorest/autorest/azure/cli v0.4.7 // indirect
 	github.com/Azure/go-autorest/autorest/date v0.3.1 // indirect
@@ -130,7 +130,7 @@ require (
 	github.com/envoyproxy/go-control-plane/envoy v1.32.4 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.2.1 // indirect
 	github.com/evanphx/json-patch v5.9.11+incompatible // indirect
-	github.com/evanphx/json-patch/v5 v5.9.0 // indirect
+	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/exponent-io/jsonpath v0.0.0-20210407135951-1de76d718b3f // indirect
 	github.com/extism/go-sdk v1.7.1 // indirect
 	github.com/fatih/color v1.18.0 // indirect
@@ -276,7 +276,7 @@ require (
 	github.com/ulikunitz/xz v0.5.12 // indirect
 	github.com/urfave/cli v1.22.16 // indirect
 	github.com/variantdev/dag v1.1.0 // indirect
-	github.com/vbatts/tar-split v0.11.6 // indirect
+	github.com/vbatts/tar-split v0.12.1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xlab/treeprint v1.2.0 // indirect
@@ -312,7 +312,7 @@ require (
 	golang.org/x/text v0.23.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
 	golang.org/x/tools v0.31.0 // indirect
-	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
+	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
 	google.golang.org/api v0.228.0 // indirect
 	google.golang.org/genproto v0.0.0-20250324211829-b45e905df463 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250324211829-b45e905df463 // indirect
@@ -334,7 +334,7 @@ require (
 	k8s.io/kubectl v0.32.3 // indirect
 	k8s.io/utils v0.0.0-20250321185631-1f6e0b77f77e // indirect
 	oras.land/oras-go v1.2.6 // indirect
-	sigs.k8s.io/controller-runtime v0.19.4 // indirect
+	sigs.k8s.io/controller-runtime v0.20.4 // indirect
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
 	sigs.k8s.io/kustomize/api v0.19.0 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.19.0 // indirect
