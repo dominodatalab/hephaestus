@@ -254,9 +254,11 @@ buildkit:
   # Run buildkit in rootless mode
   rootless: true
 
-  # UID for rootless user in rootless mode
+  # UID/GID for rootless user in rootless mode
   # NOTE: You MUST have a custom image if using anything other than 1000
-  rootlessUser: 1001
+  # see https://github.com/moby/buildkit/docs/rootless.md#change-uidgid
+  rootlessUser: 100000
+  rootlessGroup: 65536
 
   # Amount of storage GC keeps locally (bytes). This value should be less than the
   # total amount of available persistent storage (e.g. 75% of 20Gi)

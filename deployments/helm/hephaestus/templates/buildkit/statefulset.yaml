@@ -39,7 +39,7 @@ spec:
       securityContext:
         runAsNonRoot: {{ .Values.buildkit.rootless }}
         runAsUser: {{ ternary .Values.buildkit.rootlessUser 0 .Values.buildkit.rootless }}
-        fsGroup: {{ ternary .Values.buildkit.rootlessUser 0 .Values.buildkit.rootless }}
+        fsGroup: {{ ternary .Values.buildkit.rootlessGroup 0 .Values.buildkit.rootless }}
         fsGroupChangePolicy: "OnRootMismatch"
         seLinuxOptions:
           type: spc_t
@@ -50,15 +50,15 @@ spec:
             # NOTE: To change UID/GID, you need to rebuild the image
             # see https://github.com/moby/buildkit/docs/rootless.md#change-uidgid
             runAsUser: {{ .Values.buildkit.rootlessUser }}
-            runAsGroup: {{ .Values.buildkit.rootlessUser }}
+            runAsGroup: {{ .Values.buildkit.rootlessGroup }}
             seccompProfile:
               type: Unconfined
             appArmorProfile:
               type: Unconfined
             {{- else }}
             allowPrivilegeEscalation: true
-            privileged: true
             {{- end }}
+            privileged: true
           image: {{ include "hephaestus.buildkit.image" . }}
           imagePullPolicy: {{ .Values.buildkit.image.pullPolicy }}
           args:
@@ -67,14 +67,8 @@ spec:
             {{- if .Values.buildkit.debug }}
             - --debug
             {{- end }}
-            {{- if .Values.buildkit.rootless }}
             {{- with .Values.buildkit.args }}
               {{- toYaml . | nindent 12 }}
-            {{- end }}
-            {{- else }}
-            {{- with .Values.buildkit.args }}
-              {{- toYaml . | nindent 12 }}
-            {{- end }}
             {{- end }}
           {{- with .Values.podEnv }}
           env:
