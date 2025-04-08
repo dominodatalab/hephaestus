@@ -48,9 +48,12 @@ spec:
           securityContext:
             {{- if .Values.buildkit.rootless }}
             # NOTE: To change UID/GID, you need to rebuild the image
+            # see https://github.com/moby/buildkit/docs/rootless.md#change-uidgid
             runAsUser: {{ .Values.buildkit.rootlessUser }}
             runAsGroup: {{ .Values.buildkit.rootlessUser }}
             seccompProfile:
+              type: Unconfined
+            appArmorProfile:
               type: Unconfined
             {{- else }}
             allowPrivilegeEscalation: true
@@ -64,8 +67,14 @@ spec:
             {{- if .Values.buildkit.debug }}
             - --debug
             {{- end }}
+            {{- if .Values.buildkit.rootless }}
             {{- with .Values.buildkit.args }}
               {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- else }}
+            {{- with .Values.buildkit.args }}
+              {{- toYaml . | nindent 12 }}
+            {{- end }}
             {{- end }}
           {{- with .Values.podEnv }}
           env:

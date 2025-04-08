@@ -256,7 +256,7 @@ buildkit:
 
   # UID for rootless user in rootless mode
   # NOTE: You MUST have a custom image if using anything other than 1000
-  rootlessUser: 1000
+  rootlessUser: 1001
 
   # Amount of storage GC keeps locally (bytes). This value should be less than the
   # total amount of available persistent storage (e.g. 75% of 20Gi)
@@ -273,7 +273,7 @@ buildkit:
   image:
     registry: ""
     repository: moby/buildkit
-    tag: v0.18.2
+    tag: v0.20.2
     pullPolicy: IfNotPresent
     pullSecrets: []
 
@@ -281,7 +281,7 @@ buildkit:
   rootlessImage:
     registry: ""
     repository: moby/buildkit
-    tag: v0.18.2-rootless
+    tag: v0.20.2-rootless
     pullPolicy: IfNotPresent
     pullSecrets: []
 
@@ -354,6 +354,7 @@ buildkit:
   priorityClassName: ""
 
   # Buildkit container extra args, i.e ["--oci-worker-snapshotter=fuse-overlayfs"]
+  # or --oci-worker-no-process-sandbox
   args: []
 
   # Affinities for buildkit pod assignment
