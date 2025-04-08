@@ -25,7 +25,7 @@ require (
 	github.com/go-logr/zapr v1.3.0
 	github.com/google/go-containerregistry v0.20.3
 	github.com/h2non/filetype v1.1.3
-	github.com/moby/buildkit v0.18.2
+	github.com/moby/buildkit v0.20.2
 	github.com/newrelic/go-agent/v3 v3.36.0
 	github.com/newrelic/go-agent/v3/integrations/nrzap v1.0.1
 	github.com/spf13/cobra v1.8.1
@@ -81,7 +81,7 @@ require (
 	github.com/containerd/continuity v0.4.5 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
-	github.com/containerd/platforms v0.2.1 // indirect
+	github.com/containerd/platforms v1.0.0-rc.1 // indirect
 	github.com/containerd/stargz-snapshotter/estargz v0.16.3 // indirect
 	github.com/containerd/ttrpc v1.2.7 // indirect
 	github.com/containerd/typeurl/v2 v2.2.3 // indirect
@@ -174,7 +174,7 @@ require (
 	google.golang.org/genproto v0.0.0-20250106144421-5f5ef82da422 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250106144421-5f5ef82da422 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250106144421-5f5ef82da422 // indirect
-	google.golang.org/grpc v1.69.2 // indirect
+	google.golang.org/grpc v1.69.4 // indirect
 	google.golang.org/protobuf v1.36.3 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
