@@ -33,7 +33,7 @@ require (
 	github.com/tonistiigi/fsutil v0.0.0-20250227023350-13604323a291
 	go.uber.org/multierr v1.11.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/exp v0.0.0-20250128182459-e0ece0dbea4c
+	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0
 	golang.org/x/oauth2 v0.25.0
 	golang.org/x/sync v0.13.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
