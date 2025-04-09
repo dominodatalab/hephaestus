@@ -45,7 +45,7 @@ type acrProvider struct {
 func Register(ctx context.Context, logger logr.Logger, registry *cloudauth.Registry) error {
 	tenantID, tenantIDDefined := os.LookupEnv(auth.TenantID)
 	_, clientIDDefined := os.LookupEnv(auth.ClientID)
-	if !(tenantIDDefined && clientIDDefined) {
+	if !tenantIDDefined || !clientIDDefined {
 		logger.Info(fmt.Sprintf(
 			"ACR authentication provider not registered, %s or %s is absent", auth.TenantID, auth.ClientID,
 		))
