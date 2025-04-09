@@ -1,6 +1,6 @@
 module github.com/dominodatalab/hephaestus/test/functional
 
-go 1.23.6
+go 1.23.8
 
 replace github.com/dominodatalab/testenv => ../../tools/testenv
 
@@ -27,6 +27,11 @@ require (
 	k8s.io/api v0.32.2
 	k8s.io/apimachinery v0.32.2
 	k8s.io/client-go v0.32.2
+)
+
+replace (
+	github.com/golang-jwt/jwt/v5 => github.com/golang-jwt/jwt/v5 v5.2.2
+	golang.org/x/net => golang.org/x/net v0.36.0
 )
 
 require (
@@ -109,9 +114,8 @@ require (
 	github.com/cncf/xds/go v0.0.0-20250121191232-2f005788dc42 // indirect
 	github.com/containerd/containerd v1.7.25 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
-	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
-	github.com/containerd/platforms v0.2.1 // indirect
+	github.com/containerd/platforms v1.0.0-rc.1 // indirect
 	github.com/containerd/stargz-snapshotter/estargz v0.16.3 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
 	github.com/cyberark/conjur-api-go v0.12.12 // indirect

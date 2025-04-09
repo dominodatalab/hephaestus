@@ -1,6 +1,6 @@
 module github.com/dominodatalab/testenv
 
-go 1.23.6
+go 1.23.8
 
 require (
 	github.com/hashicorp/go-multierror v1.1.1
@@ -308,4 +308,9 @@ require (
 	sigs.k8s.io/kustomize/kyaml v0.19.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.5.0 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
+)
+
+replace (
+	github.com/golang-jwt/jwt/v5 => github.com/golang-jwt/jwt/v5 v5.2.2
+	golang.org/x/net => golang.org/x/net v0.36.0
 )

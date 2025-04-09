@@ -1,6 +1,6 @@
 module github.com/dominodatalab/hephaestus
 
-go 1.23.6
+go 1.23.8
 
 // NOTE: local development
 // replace github.com/dominodatalab/controller-util => ../controller-util
@@ -46,6 +46,11 @@ require (
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
 	sigs.k8s.io/controller-runtime v0.19.4
 	sigs.k8s.io/yaml v1.4.0
+)
+
+replace (
+	github.com/golang-jwt/jwt/v5 => github.com/golang-jwt/jwt/v5 v5.2.2
+	golang.org/x/net => golang.org/x/net v0.36.0
 )
 
 require (
