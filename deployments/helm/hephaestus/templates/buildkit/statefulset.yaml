@@ -51,8 +51,10 @@ spec:
             # see https://github.com/moby/buildkit/docs/rootless.md#change-uidgid
             runAsUser: {{ .Values.buildkit.rootlessUser }}
             runAsGroup: {{ .Values.buildkit.rootlessGroup }}
+            # Needs Kubernetes >= 1.19
             seccompProfile:
               type: Unconfined
+            # Needs Kubernetes >= 1.30
             appArmorProfile:
               type: Unconfined
             {{- else }}
@@ -66,6 +68,9 @@ spec:
             - /etc/buildkit/buildkitd.toml
             {{- if .Values.buildkit.debug }}
             - --debug
+            {{- end }}
+            {{- if .Values.buildkit.rootless }}
+            - --oci-worker-no-process-sandbox
             {{- end }}
             {{- with .Values.buildkit.args }}
               {{- toYaml . | nindent 12 }}
@@ -124,6 +129,10 @@ spec:
             {{- if .Values.buildkit.persistence.enabled }}
             - name: cache
               {{- if .Values.buildkit.rootless }}
+              # Dockerfile has `VOLUME /home/user/.local/share/buildkit` by default too,
+              # but the default VOLUME does not work with rootless on Google's Container-Optimized OS
+              # as it is mounted with `nosuid,nodev`.
+              # https://github.com/moby/buildkit/issues/879#issuecomment-1240347038
               mountPath: /home/user/.local/share/buildkit
               {{- else }}
               mountPath: /var/lib/buildkit
