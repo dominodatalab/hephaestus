@@ -1,61 +1,23 @@
+version: "2"
 run:
-  timeout: 5m
   tests: false
-issues:
-  exclude-files:
-    - cribbed.go
-    - zz_generated.*
-linters-settings:
-  depguard:
-    rules:
-      main:
-        files:
-          - "!**/*_a _file.go"
-        # allow:
-        #   - $gostd
-        #   - github.com/OpenPeeDeeP
-        deny:
-          - pkg: github.com/sirupsen/logrus
-            desc: not allowed
-          - pkg: github.com/pkg/errors
-            desc: Should be replaced by standard lib errors package
-  errorlint:
-    comparison: false
-  funlen: # NOTE: bring these values down
-    lines: 200
-    statements: 100
-  gosec:
-    excludes:
-      - G306
-  lll:
-    line-length: 120
-  nakedret:
-    max-func-lines: 35
-  tagalign:
-    align: false
-    sort: true
 linters:
-  enable-all: true
+  default: all
   disable:
     - containedctx
-    - cyclop
     - copyloopvar
+    - cyclop
     - err113
-    - execinquery
     - exhaustive
     - exhaustruct
-    - exportloopref
     - forbidigo
     - forcetypeassert
-    - gci
     - gochecknoglobals
     - gochecknoinits
     - gocognit
     - godot
     - godox
-    - gomnd
     - gosec
-    - gofumpt
     - govet
     - ireturn
     - mnd
@@ -66,8 +28,57 @@ linters:
     - perfsprint
     - prealloc
     - tagliatelle
-    - tenv
-    - typecheck
     - varnamelen
     - wrapcheck
     - wsl
+  settings:
+    depguard:
+      rules:
+        main:
+          files:
+            - '!**/*_a _file.go'
+          deny:
+            - pkg: github.com/sirupsen/logrus
+              desc: not allowed
+            - pkg: github.com/pkg/errors
+              desc: Should be replaced by standard lib errors package
+    errorlint:
+      comparison: false
+    funlen:
+      lines: 200
+      statements: 100
+    gosec:
+      excludes:
+        - G306
+    lll:
+      line-length: 120
+    nakedret:
+      max-func-lines: 35
+    tagalign:
+      align: false
+      sort: true
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - cribbed.go
+      - zz_generated.*
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - cribbed.go
+      - zz_generated.*
+      - third_party$
+      - builtin$
+      - examples$

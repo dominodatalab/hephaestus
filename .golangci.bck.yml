@@ -1,0 +1,73 @@
+run:
+  timeout: 5m
+  tests: false
+issues:
+  exclude-files:
+    - cribbed.go
+    - zz_generated.*
+linters-settings:
+  depguard:
+    rules:
+      main:
+        files:
+          - "!**/*_a _file.go"
+        # allow:
+        #   - $gostd
+        #   - github.com/OpenPeeDeeP
+        deny:
+          - pkg: github.com/sirupsen/logrus
+            desc: not allowed
+          - pkg: github.com/pkg/errors
+            desc: Should be replaced by standard lib errors package
+  errorlint:
+    comparison: false
+  funlen: # NOTE: bring these values down
+    lines: 200
+    statements: 100
+  gosec:
+    excludes:
+      - G306
+  lll:
+    line-length: 120
+  nakedret:
+    max-func-lines: 35
+  tagalign:
+    align: false
+    sort: true
+linters:
+  enable-all: true
+  disable:
+    - containedctx
+    - cyclop
+    - copyloopvar
+    - err113
+    - execinquery
+    - exhaustive
+    - exhaustruct
+    - exportloopref
+    - forbidigo
+    - forcetypeassert
+    - gci
+    - gochecknoglobals
+    - gochecknoinits
+    - gocognit
+    - godot
+    - godox
+    - gomnd
+    - gosec
+    - gofumpt
+    - govet
+    - ireturn
+    - mnd
+    - nestif
+    - nlreturn
+    - nonamedreturns
+    - nosprintfhostport
+    - perfsprint
+    - prealloc
+    - tagliatelle
+    - tenv
+    - typecheck
+    - varnamelen
+    - wrapcheck
+    - wsl
