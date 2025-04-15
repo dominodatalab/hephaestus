@@ -334,6 +334,25 @@ func (c *Client) Prune() error {
 	return nil
 }
 
+func (c *Client) ResolveAuth(registryHostname string) (authn.Authenticator, error) {
+	cf, err := config.Load(c.dockerConfigDir)
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := cf.GetAuthConfig(registryHostname)
+	if err != nil {
+		return nil, err
+	}
+
+	return authn.FromConfig(authn.AuthConfig{
+		Username:      cfg.Username,
+		Password:      cfg.Password,
+		Auth:          cfg.Auth,
+		IdentityToken: cfg.IdentityToken,
+		RegistryToken: cfg.RegistryToken,
+	}), nil
+}
+
 func (c *Client) solveWith(ctx context.Context, modify func(buildDir string, solveOpt *bkclient.SolveOpt) error) error {
 	buildDir, err := os.MkdirTemp("", "hephaestus-build-")
 	if err != nil {
@@ -365,25 +384,6 @@ func (c *Client) solveWith(ctx context.Context, modify func(buildDir string, sol
 
 	_, err = c.runSolve(ctx, solveOpt)
 	return err
-}
-
-func (c *Client) ResolveAuth(registryHostname string) (authn.Authenticator, error) {
-	cf, err := config.Load(c.dockerConfigDir)
-	if err != nil {
-		return nil, err
-	}
-	cfg, err := cf.GetAuthConfig(registryHostname)
-	if err != nil {
-		return nil, err
-	}
-
-	return authn.FromConfig(authn.AuthConfig{
-		Username:      cfg.Username,
-		Password:      cfg.Password,
-		Auth:          cfg.Auth,
-		IdentityToken: cfg.IdentityToken,
-		RegistryToken: cfg.RegistryToken,
-	}), nil
 }
 
 func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (string, error) {
