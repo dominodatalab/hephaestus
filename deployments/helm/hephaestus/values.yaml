@@ -335,6 +335,16 @@ buildkit:
     # If not set and create is true, a name is generated using the fullname template
     name: ""
 
+  # Non-rootless container's securityContext
+  containerSecurityContext:
+    allowPrivilegeEscalation: true
+    privileged: true
+
+  # Rootless container security context (sans user/group)
+  rootlessContainerSecurityContext:
+    seccompProfile:
+      type: Unconfined
+
   # Number of buildkit pods to run
   replicaCount: 0
 
