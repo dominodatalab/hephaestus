@@ -50,17 +50,11 @@ spec:
             # NOTE: To change UID/GID, you need to rebuild the image
             # see https://github.com/moby/buildkit/docs/rootless.md#change-uidgid
             runAsUser: {{ .Values.buildkit.rootlessUser }}
-            runAsGroup: {{ .Values.buildkit.rootlessGroup }}
-            # Needs Kubernetes >= 1.19
-            seccompProfile:
-              type: Unconfined
-            # Needs Kubernetes >= 1.30
-            appArmorProfile:
-              type: Unconfined
+            runAsGroup: {{ .Values.buildkit.rootlessUser }}
+            {{- toYaml .Values.buildkit.rootlessContainerSecurityContext | nindent 12}}
             {{- else }}
-            allowPrivilegeEscalation: true
+            {{- toYaml .Values.buildkit.containerSecurityContext | nindent 12}}
             {{- end }}
-            privileged: true
           image: {{ include "hephaestus.buildkit.image" . }}
           imagePullPolicy: {{ .Values.buildkit.image.pullPolicy }}
           args:
