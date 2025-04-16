@@ -148,7 +148,7 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 		// Get the webhook mux
 		mux := opts.WebhookServer.WebhookMux()
 		if mux == nil {
-			_, err := w.Write([]byte("Webhook server is running, but mux is nil"))
+			_, err := fmt.Fprintf(w, "Webhook server is running, but mux is nil")
 			if err != nil {
 				log.Error(err, "Failed to write response.")
 				return
@@ -158,7 +158,7 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 
 		// We can use a set of common paths to test
 		w.Header().Set("Content-Type", "text/plain")
-		_, err := w.Write([]byte("Webhook server is running\n\nRegistered paths:\n"))
+		_, err := fmt.Fprintf(w, "Webhook server is running\n\nRegistered paths:\n")
 		if err != nil {
 			log.Error(err, "Failed to write response.")
 			return
@@ -195,7 +195,7 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 			if pattern != path || handler == nil {
 				status = "✗ Not registered"
 			}
-			_, err := w.Write([]byte(fmt.Sprintf("%s: %s\n", path, status)))
+			_, err := fmt.Fprintf(w, "%s: %s\n", path, status)
 			if err != nil {
 				log.Error(err, "Failed to write response for path", "path", path)
 				return
@@ -209,7 +209,7 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 		// Get the webhook mux
 		mux := opts.WebhookServer.WebhookMux()
 		if mux == nil {
-			_, err := w.Write([]byte("Webhook server is running, but mux is nil"))
+			_, err := fmt.Fprintf(w, "Webhook server is running, but mux is nil")
 			if err != nil {
 				log.Error(err, "Failed to write response.")
 				return
@@ -218,7 +218,7 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 		}
 
 		w.Header().Set("Content-Type", "text/plain")
-		_, err := w.Write([]byte("Webhook server is live."))
+		_, err := fmt.Fprintf(w, "Webhook server is alive.")
 		if err != nil {
 			log.Error(err, "Failed to write response")
 			return
