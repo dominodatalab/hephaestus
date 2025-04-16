@@ -1,6 +1,6 @@
 module github.com/dominodatalab/hephaestus/test/functional
 
-go 1.23.6
+go 1.24.2
 
 replace github.com/dominodatalab/testenv => ../../tools/testenv
 
