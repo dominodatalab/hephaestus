@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -23,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 	"github.com/dominodatalab/hephaestus/pkg/buildkit/worker"
@@ -142,71 +142,34 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 		log.Info("Watching all namespaces")
 	}
 	opts.WebhookServer = webhook.NewServer(webhookOpts)
-	opts.WebhookServer.Register("/debugz", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		log.Info("Debug endpoint called")
-
-		// Get the webhook mux
-		mux := opts.WebhookServer.WebhookMux()
-		if mux == nil {
-			_, err := fmt.Fprintf(w, "Webhook server is running, but mux is nil")
-			if err != nil {
-				log.Error(err, "Failed to write response.")
-				return
-			}
-			return
+	ctx, _ := context.WithCancel(context.Background())
+	go func() {
+		log.Info("Starting webhook server in background")
+		if err := opts.WebhookServer.Start(ctx); err != nil && err != http.ErrServerClosed {
+			log.Error(err, "Webhook server failed unexpectedly",
+				"port", cfg.WebhookPort)
+		} else {
+			log.Info("Webhook server shut down gracefully")
 		}
+	}()
 
-		// We can use a set of common paths to test
-		w.Header().Set("Content-Type", "text/plain")
-		_, err := fmt.Fprintf(w, "Webhook server is running\n\nRegistered paths:\n")
-		if err != nil {
-			log.Error(err, "Failed to write response.")
-			return
-		}
-
-		// Common webhook paths to test
-		testPaths := []string{
-			"/",
-			"/mutate-hephaestus-dominodatalab-com-v1-imagebuild",
-			"/validate-hephaestus-dominodatalab-com-v1-imagebuild",
-			"/mutate-imagebuild.hephaestus.dominodatalab.com",
-			"/validate-imagebuild.hephaestus.dominodatalab.com",
-			"/convert",
-			"/healthz",
-			"/readyz",
-		}
-
-		gvks := []struct{ group, version, kind string }{
-			{"hephaestus.dominodatalab.com", "v1", "imagebuild"},
-			{"hephaestus.dominodatalab.com", "v1", "imagecache"},
-		}
-
-		for _, gvk := range gvks {
-			testPaths = append(testPaths,
-				fmt.Sprintf("/mutate-%s-%s-%s", strings.ReplaceAll(gvk.group, ".", "-"), gvk.version, gvk.kind),
-				fmt.Sprintf("/validate-%s-%s-%s", strings.ReplaceAll(gvk.group, ".", "-"), gvk.version, gvk.kind),
-			)
-		}
-
-		// Test each path
-		for _, path := range testPaths {
-			handler, pattern := mux.Handler(&http.Request{URL: &url.URL{Path: path}})
-			status := "✓ Registered"
-			if pattern != path || handler == nil {
-				status = "✗ Not registered"
-			}
-			_, err := fmt.Fprintf(w, "%s: %s\n", path, status)
-			if err != nil {
-				log.Error(err, "Failed to write response for path", "path", path)
-				return
-			}
-		}
-	}))
-
+	opts.WebhookServer.Register("/mutate-hephaestus-dominodatalab-com-v1-imagebuild", admission.WithCustomDefaulter(
+		opts.Scheme,
+		&hephv1.ImageBuild{},
+		&hephv1.ImageBuild{},
+	))
+	opts.WebhookServer.Register("/validate-hephaestus-dominodatalab-com-v1-imagebuild", admission.WithCustomValidator(
+		opts.Scheme,
+		&hephv1.ImageBuild{},
+		&hephv1.ImageBuild{},
+	))
+	opts.WebhookServer.Register("/validate-hephaestus-dominodatalab-com-v1-imagecache", admission.WithCustomValidator(
+		opts.Scheme,
+		&hephv1.ImageCache{},
+		&hephv1.ImageCache{},
+	))
 	opts.WebhookServer.Register("/livez", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		log.Info("Webhook livez endpoint called")
-
-		// Get the webhook mux
 		mux := opts.WebhookServer.WebhookMux()
 		if mux == nil {
 			_, err := fmt.Fprintf(w, "Webhook server is running, but mux is nil")
@@ -222,6 +185,67 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 		if err != nil {
 			log.Error(err, "Failed to write response")
 			return
+		}
+	}))
+	opts.WebhookServer.Register("/eastereggz", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		log.V(1).Info("Webhook livez endpoint called")
+		mux := opts.WebhookServer.WebhookMux()
+		if mux == nil {
+			_, err := fmt.Fprintf(w, "Webhook server is running, but mux is nil")
+			if err != nil {
+				log.Error(err, "Failed to write response.")
+				return
+			}
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("X-Clacks-Overhead", "GNU Terry Pratchett")
+		//nolint:lll
+		_, err := fmt.Fprintf(w, "VGhhbmtzIHRvIERhbiwgRXplLCBKb2FxdWluLCBKZW5ueSwgTWljaGFlbCwgTWlndWVsLCBSYXltb25kLCBTdGV2ZW4sIFNvbm55LiBBZGQgeW91ciBuYW1lIHdoZW4geW91IGZpbmQgdGhpcyBlYXN0ZXIgZWdnLgo= ;)")
+		if err != nil {
+			log.Error(err, "Failed to write response")
+			return
+		}
+	}))
+	opts.WebhookServer.Register("/debugz", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		log.Info("Debug endpoint called")
+		mux := opts.WebhookServer.WebhookMux()
+		if mux == nil {
+			_, err := fmt.Fprintf(w, "Webhook server is running, but mux is nil")
+			if err != nil {
+				log.Error(err, "Failed to write response.")
+				return
+			}
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/plain")
+		_, err := fmt.Fprintf(w, "Webhook server is running\n\nRegistered paths:\n")
+		if err != nil {
+			log.Error(err, "Failed to write response.")
+			return
+		}
+
+		testPaths := []string{
+			"/",
+			"/mutate-hephaestus-dominodatalab-com-v1-imagebuild",
+			"/validate-hephaestus-dominodatalab-com-v1-imagebuild",
+			"/validate-hephaestus-dominodatalab-com-v1-imagecache",
+			"/livez",
+			"/debugz",
+		}
+		for _, path := range testPaths {
+			handler, pattern := mux.Handler(&http.Request{URL: &url.URL{Path: path}})
+			status := "✓ Registered"
+			if pattern != path || handler == nil {
+				status = "✗ Not registered"
+			}
+			_, err := fmt.Fprintf(w, "%s: %s\n", path, status)
+			if err != nil {
+				log.Error(err, "Failed to write response for path", "path", path)
+				return
+			}
 		}
 	}))
 
