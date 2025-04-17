@@ -1,0 +1,65 @@
+# hadolint global ignore=DL3008
+FROM golang:1.24-alpine AS build
+ARG VERSION="dev"
+WORKDIR /app
+COPY go.mod .
+COPY go.sum .
+RUN go mod download
+COPY cmd ./cmd
+COPY pkg ./pkg
+COPY deployments/crds ./deployments/crds
+ENV CGO_ENABLED=0 GOOS=linux
+RUN go build -ldflags="-X 'main.Version=${VERSION}'" -o hephaestus-controller ./cmd/controller
+
+
+FROM ubuntu:bionic
+ARG USERNAME=lala
+ARG USER_UID=1001
+ARG USER_GID=$USER_UID
+RUN apt-get update \
+  && apt-get install --no-install-recommends --yes \
+    locales \
+    grep \
+    bind9-host \
+    curl \
+    dnsutils \
+    httpie \
+    iputils-ping \
+    jq \
+    netcat-openbsd \
+    mysql-client \
+    net-tools \
+    postgresql-client \
+    redis-tools \
+    swaks \
+    telnet \
+    vim \
+    nano \
+    wget \
+    influxdb-client \
+    python3-setuptools \
+    python3-pip \
+    openssh-client \
+    p7zip-full \
+    xz-utils \
+    gnupg2 \
+    kafkacat \
+    tcpdump \
+    ngrep \
+    nmap \
+    bash \
+    coreutils \
+  && rm -rf /var/lib/apt/lists/* \
+  && groupadd --gid $USER_GID $USERNAME \
+  && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME
+ENV TINI_VERSION=v0.19.0
+
+ADD https://github.com/krallin/tini/releases/download/$TINI_VERSION/tini /usr/bin/tini
+RUN chmod +x /usr/bin/tini
+WORKDIR /
+COPY . /src
+COPY --from=build /app/hephaestus-controller /usr/bin/
+RUN chown -R 1001:1001 /src /opt && chown -R 1001:1001 /usr/bin/hephaestus-controller
+USER lala
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["hephaestus-controller"]

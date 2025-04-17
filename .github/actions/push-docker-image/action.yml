@@ -49,7 +49,7 @@ runs:
           type=semver,pattern={{version}}
           type=semver,pattern={{major}}.{{minor}}
           type=sha
-    - name: Build and push Docker image
+    - name: Build and push Docker production image
       uses: docker/build-push-action@v6
       with:
         context: .
@@ -58,6 +58,18 @@ runs:
           VERSION=${{ env.VERSION_BUILDARG }}
         push: true
         tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha, scope=${{ github.job }}
+        cache-to: type=gha, scope=${{ github.job }}
+    - name: Build and push Docker debug image
+      uses: docker/build-push-action@v6
+      with:
+        file: ./Dockerfile.debug
+        platforms: ${{ inputs.platforms }}
+        build-args: |
+          VERSION=${{ env.VERSION_BUILDARG }}-debug
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}-debug
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha, scope=${{ github.job }}
         cache-to: type=gha, scope=${{ github.job }}
