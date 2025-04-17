@@ -50,15 +50,21 @@ spec:
             # NOTE: To change UID/GID, you need to rebuild the image
             runAsUser: {{ .Values.buildkit.rootlessUser }}
             runAsGroup: {{ .Values.buildkit.rootlessUser }}
-            {{- toYaml .Values.buildkit.rootlessContainerSecurityContext | nindent 12}}
+            {{- toYaml .Values.buildkit.rootlessContainerSecurityContext | nindent 12 }}
             {{- else }}
-            {{- toYaml .Values.buildkit.containerSecurityContext | nindent 12}}
+            {{- toYaml .Values.buildkit.containerSecurityContext | nindent 12 }}
             {{- end }}
           image: {{ include "hephaestus.buildkit.image" . }}
           imagePullPolicy: {{ .Values.buildkit.image.pullPolicy }}
           args:
             - --config
             - /etc/buildkit/buildkitd.toml
+            {{- if .Values.buildkit.rootless }}
+            - --addr
+            - tcp://0.0.0.0:{{- default 1234 .Values.buildkit.service.port }}
+            - --addr
+            - unix:///run/user/{{ .Values.buildkit.rootlessUser }}/buildkit/buildkitd.sock
+            {{- end -}}
             {{- if .Values.buildkit.debug }}
             - --debug
             {{- end }}
@@ -102,6 +108,14 @@ spec:
           resources:
             {{- toYaml .Values.buildkit.resources | nindent 12 }}
           volumeMounts:
+            {{- if .Values.buildkit.rootless }}
+            - mountPath: /etc/subuid
+              name: config-vol
+              subPath: subuid
+            - mountPath: /etc/subgid
+              name: config-vol
+              subPath: subgid
+            {{- end }}
             - name: config-vol
               readOnly: true
               mountPath: /etc/buildkit/buildkitd.toml

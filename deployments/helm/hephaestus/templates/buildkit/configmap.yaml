@@ -37,4 +37,10 @@ data:
       insecure = {{ . }}
       {{- end }}
     {{- end }}
+  {{- if .rootless }}
+  subgid: |
+    user:100000:65536
+  subuid: |
+    user:100000:65536
+  {{- end -}}
   {{- end }}
