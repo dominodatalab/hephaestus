@@ -60,6 +60,12 @@ spec:
           args:
             - --config
             - /etc/buildkit/buildkitd.toml
+            {{- if .Values.buildkit.rootless }}
+            - --addr
+            - tcp://0.0.0.0:1234
+            - --addr
+            - unix:///run/user/{{ .Values.buildkit.rootlessUser }}/buildkit/buildkitd.sock
+            {{- end -}}
             {{- if .Values.buildkit.debug }}
             - --debug
             {{- end }}
