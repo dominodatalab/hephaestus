@@ -50,10 +50,9 @@ spec:
             # NOTE: To change UID/GID, you need to rebuild the image
             runAsUser: {{ .Values.buildkit.rootlessUser }}
             runAsGroup: {{ .Values.buildkit.rootlessUser }}
-            runAsNonRoot: true
-            {{- toYaml .Values.buildkit.rootlessContainerSecurityContext | nindent 12}}
+            {{- toYaml .Values.buildkit.rootlessContainerSecurityContext | nindent 12 }}
             {{- else }}
-            {{- toYaml .Values.buildkit.containerSecurityContext | nindent 12}}
+            {{- toYaml .Values.buildkit.containerSecurityContext | nindent 12 }}
             {{- end }}
           image: {{ include "hephaestus.buildkit.image" . }}
           imagePullPolicy: {{ .Values.buildkit.image.pullPolicy }}
@@ -62,7 +61,7 @@ spec:
             - /etc/buildkit/buildkitd.toml
             {{- if .Values.buildkit.rootless }}
             - --addr
-            - tcp://0.0.0.0:1234
+            - tcp://0.0.0.0:{{- default 1234 .Values.buildkit.service.port }}
             - --addr
             - unix:///run/user/{{ .Values.buildkit.rootlessUser }}/buildkit/buildkitd.sock
             {{- end -}}
