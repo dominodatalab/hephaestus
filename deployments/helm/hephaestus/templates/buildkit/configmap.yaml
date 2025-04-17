@@ -6,6 +6,12 @@ metadata:
     {{- include "hephaestus.buildkit.labels.standard" . | nindent 4 }}
 data:
   {{- with .Values.buildkit }}
+  {{- if .rootless }} # Guarantee rootless subuid/subgid mappings
+  subgid: |
+    user:100000:65536
+  subuid: |
+    user:100000:65536
+  {{- end -}}
   buildkitd.toml: |
     [grpc]
       address = [ "tcp://0.0.0.0:{{ .service.port }}", "{{ .rootless | ternary (printf "unix:///run/user/%v/buildkit/buildkitd.sock" .rootlessUser) "unix:///run/buildkit/buildkitd.sock" }}" ]

@@ -50,6 +50,7 @@ spec:
             # NOTE: To change UID/GID, you need to rebuild the image
             runAsUser: {{ .Values.buildkit.rootlessUser }}
             runAsGroup: {{ .Values.buildkit.rootlessUser }}
+            runAsNonRoot: true
             {{- toYaml .Values.buildkit.rootlessContainerSecurityContext | nindent 12}}
             {{- else }}
             {{- toYaml .Values.buildkit.containerSecurityContext | nindent 12}}
@@ -102,6 +103,14 @@ spec:
           resources:
             {{- toYaml .Values.buildkit.resources | nindent 12 }}
           volumeMounts:
+            {{- if .Values.buildkit.rootless }}
+            - mountPath: /etc/subuid
+              name: config-vol
+              subPath: subuid
+            - mountPath: /etc/subgid
+              name: config-vol
+              subPath: subgid
+            {{- end }}
             - name: config-vol
               readOnly: true
               mountPath: /etc/buildkit/buildkitd.toml

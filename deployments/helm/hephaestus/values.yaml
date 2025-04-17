@@ -342,6 +342,7 @@ buildkit:
 
   # Rootless container security context (sans user/group)
   rootlessContainerSecurityContext:
+    privileged: true
     seccompProfile:
       type: Unconfined
 
