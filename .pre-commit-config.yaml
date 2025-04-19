@@ -1,16 +1,16 @@
 repos:
   - repo: local
     hooks:
+      - id: lint
+        name: lint
+        entry: golangci-lint
+        args: ["run", "./..."]
+        language: golang
+        pass_filenames:  false
       - id: build
         name: build
         entry: make
         args: ["build"]
-        language: golang
-        pass_filenames: false
-      - id: lint
-        name: lint
-        entry: make
-        args: ["lint"]
         language: golang
         pass_filenames: false
       - id: test

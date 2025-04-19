@@ -1,5 +1,5 @@
 SHELL:=/bin/bash
-VERSION=$(git describe --tags --always)
+VERSION:=$(git describe --tags --always)
 
 ##@ Development
 
@@ -9,6 +9,9 @@ build: ## Build controller binary
 
 docker: ## Build docker image
 	docker build --build-arg VERSION=${VERSION} -t ghcr.io/dominodatalab/hephaestus:latest .
+
+docker-debug:
+	docker build --build-arg VERSION=${VERSION} -f Dockerfile.debug -t ghcr.io/dominodatalab/hephaestus:latest-debug .
 
 .PHONY: test
 test: ## Run test suite

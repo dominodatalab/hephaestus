@@ -165,6 +165,10 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 	if err != nil {
 		c.log.Error(err, "Error loading config file")
 	}
+	authProviderConfig := authprovider.DockerAuthProviderConfig{
+		ConfigFile: dockerConfig,
+		TLSConfigs: nil,
+	}
 
 	// process build context
 	var contentsDir string
@@ -240,7 +244,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 			"dockerfile": contentsFS,
 		},
 		Session: []session.Attachable{
-			authprovider.NewDockerAuthProvider(dockerConfig, nil),
+			authprovider.NewDockerAuthProvider(authProviderConfig),
 			secretsprovider.FromMap(secrets),
 		},
 		CacheExports: []bkclient.CacheOptionsEntry{
@@ -332,37 +336,6 @@ func (c *Client) Prune() error {
 	return nil
 }
 
-func (c *Client) solveWith(ctx context.Context, modify func(buildDir string, solveOpt *bkclient.SolveOpt) error) error {
-	buildDir, err := os.MkdirTemp("", "hephaestus-build-")
-	if err != nil {
-		return fmt.Errorf("failed to create build dir: %w", err)
-	}
-	defer func(path string) {
-		if err := os.RemoveAll(path); err != nil {
-			c.log.Error(err, "Failed to delete build context")
-		}
-	}(buildDir)
-
-	dockerConfig, err := config.Load(c.dockerConfigDir)
-	if err != nil {
-		c.log.Error(err, "Error loading config file")
-	}
-	solveOpt := bkclient.SolveOpt{
-		Frontend:      "dockerfile.v0",
-		FrontendAttrs: map[string]string{},
-		Session: []session.Attachable{
-			authprovider.NewDockerAuthProvider(dockerConfig, nil),
-		},
-	}
-
-	if err = modify(buildDir, &solveOpt); err != nil {
-		return err
-	}
-
-	_, err = c.runSolve(ctx, solveOpt)
-	return err
-}
-
 func (c *Client) ResolveAuth(registryHostname string) (authn.Authenticator, error) {
 	cf, err := config.Load(c.dockerConfigDir)
 	if err != nil {
@@ -380,6 +353,41 @@ func (c *Client) ResolveAuth(registryHostname string) (authn.Authenticator, erro
 		IdentityToken: cfg.IdentityToken,
 		RegistryToken: cfg.RegistryToken,
 	}), nil
+}
+
+func (c *Client) solveWith(ctx context.Context, modify func(buildDir string, solveOpt *bkclient.SolveOpt) error) error {
+	buildDir, err := os.MkdirTemp("", "hephaestus-build-")
+	if err != nil {
+		return fmt.Errorf("failed to create build dir: %w", err)
+	}
+	defer func(path string) {
+		if err := os.RemoveAll(path); err != nil {
+			c.log.Error(err, "Failed to delete build context")
+		}
+	}(buildDir)
+
+	dockerConfig, err := config.Load(c.dockerConfigDir)
+	if err != nil {
+		c.log.Error(err, "Error loading config file")
+	}
+	authProviderConfig := authprovider.DockerAuthProviderConfig{
+		ConfigFile: dockerConfig,
+		TLSConfigs: nil,
+	}
+	solveOpt := bkclient.SolveOpt{
+		Frontend:      "dockerfile.v0",
+		FrontendAttrs: map[string]string{},
+		Session: []session.Attachable{
+			authprovider.NewDockerAuthProvider(authProviderConfig),
+		},
+	}
+
+	if err = modify(buildDir, &solveOpt); err != nil {
+		return err
+	}
+
+	_, err = c.runSolve(ctx, solveOpt)
+	return err
 }
 
 func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (string, error) {
