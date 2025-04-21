@@ -52,14 +52,12 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/* \
   && groupadd --gid $USER_GID $USERNAME \
   && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME
-ENV TINI_VERSION=v0.19.0
 
-ADD https://github.com/krallin/tini/releases/download/$TINI_VERSION/tini /usr/bin/tini
-RUN chmod +x /usr/bin/tini
+
 WORKDIR /
 COPY . /src
 COPY --from=build /app/hephaestus-controller /usr/bin/
 RUN chown -R 1001:1001 /src /opt && chown -R 1001:1001 /usr/bin/hephaestus-controller
 USER lala
-ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["hephaestus-controller"]
+
+ENTRYPOINT ["/usr/bin/hephaestus-controller"]
