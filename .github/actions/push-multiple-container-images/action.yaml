@@ -71,7 +71,7 @@ runs:
         tags: |
           type=ref,event=branch, suffix=${{ inputs.suffix }}
           type=ref,event=pr,suffix=${{ inputs.suffix }}
-          type=semver,pattern={{version}}{{major}}.{{minor}},suffix=${{ inputs.suffix }}
+          type=semver,pattern={{version}},suffix=${{ inputs.suffix }}
           type=semver,pattern={{major}}.{{minor}}, suffix=${{ inputs.suffix }}
           type=sha
     - name: Build and push Docker image
