@@ -32,6 +32,10 @@ inputs:
     description: 'Path to the Dockerfile'
     required: false
     default: 'Dockerfile'
+  suffix:
+    description: 'add -debug suffix or not'
+    required: false
+    default: ''
 outputs:
   version:
     description: 'Docker image version'
@@ -65,10 +69,10 @@ runs:
           name=${{ inputs.registry_quay }}/domino/${{ inputs.repository_quay }}
           name=${{ inputs.registry_gh }}/dominodatalab/hephaestus
         tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
+          type=ref,event=branch, suffix=${{ inputs.suffix }}
+          type=ref,event=pr,suffix=${{ inputs.suffix }}
+          type=semver,pattern={{version}}{{major}}.{{minor}},suffix=${{ inputs.suffix }}
+          type=semver,pattern={{major}}.{{minor}}, suffix=${{ inputs.suffix }}
           type=sha
     - name: Build and push Docker image
       uses: docker/build-push-action@v6
@@ -82,9 +86,8 @@ runs:
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: |
-          type=gha,scope=${{ github.job }}
-          ghcr.io/dominodatalab/dominodatalab/hephaestus:buildcache 
-          type=registry,ref=${{ inputs.registry_gh }}/dominodatalab/hephaestus:buildcache
+          type=gha, scope=${{ inputs.dockerfile }}
+          ghcr.io/dominodatalab/dominodatalab/hephaestus${{ inputs.suffix }}:buildcache
         cache-to: |-
-          type=gha,scope=${{ github.job }},mode=max
-          type=registry,ref=${{ inputs.registry_gh }}/dominodatalab/hephaestus:buildcache,mode=max
+          type=gha, scope=${{ inputs.dockerfile }},mode=max
+          ghcr.io/dominodatalab/dominodatalab/hephaestus${{ inputs.suffix }}:buildcache
