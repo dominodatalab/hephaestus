@@ -18,6 +18,9 @@ data:
       {{- end }}
 
     [worker.oci]
+      # Use cgroup v2 compatible settings
+      cgroup_parent = ""
+      cgroupns = "host"
       {{- if .rootless }}
       noProcessSandbox = true
       {{- end }}
