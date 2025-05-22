@@ -138,7 +138,14 @@ spec:
               mountPath: /var/lib/buildkit
               {{- end }}
             {{- end }}
+            - name: cgroup
+              mountPath: /sys/fs/cgroup
+              mountPropagation: HostToContainer
       volumes:
+        - name: cgroup
+          hostPath:
+            path: /sys/fs/cgroup
+            type: Directory
         - name: config-vol
           configMap:
             name: {{ include "hephaestus.buildkit.fullname" . }}
