@@ -11,5 +11,12 @@
 
   "postUpdateOptions": [
     "gomodTidy"
+  ],
+  "packageRules": [
+      {
+          "description": "Disable helm dependency updates",
+          "matchManagers": ["helm"],
+          "enabled": false
+      }
   ]
 }
