@@ -18,7 +18,7 @@ test: ## Run test suite
 	go test -v -timeout=5m -race ./...
 
 lint: tools ## Run linter suite
-	golangci-lint run ./...
+	golangci-lint run
 
 apply: crds ## Apply CRDs to cluster
 	kubectl apply -f deployments/crds
@@ -27,6 +27,8 @@ delete: crds ## Delete CRDs from cluster
 	kubectl delete -f deployments/crds
 
 check: compiled ## Ensure generated files and dependencies are up-to-date
+	goimports -w .
+	go fmt ./...
 	go mod tidy -v
 	cd tools && go mod tidy -v
 	cd test/functional && go mod tidy -v

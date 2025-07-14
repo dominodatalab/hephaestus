@@ -24,10 +24,8 @@ jobs:
           key: ${{ runner.os }}-go-tools-${{ hashFiles('tools/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-tools-
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v7
-        with:
-          version: v2.0
+      - name: Lint
+        run: make lint
       - name: Sanity check
         run: make check
       - name: Build
