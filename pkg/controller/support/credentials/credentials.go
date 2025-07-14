@@ -9,8 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/containerd/errdefs"
+
 	typesregistry "github.com/docker/docker/api/types/registry"
-	"github.com/docker/docker/errdefs"
 	"github.com/docker/docker/registry"
 	"github.com/go-logr/logr"
 	"go.uber.org/multierr"
