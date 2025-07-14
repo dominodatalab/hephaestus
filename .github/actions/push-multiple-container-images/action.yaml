@@ -85,9 +85,9 @@ runs:
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-        cache-from: |
-          type=gha, scope=${{ inputs.dockerfile }}
-          ghcr.io/dominodatalab/dominodatalab/hephaestus${{ inputs.suffix }}:buildcache
-        cache-to: |-
-          type=gha, scope=${{ inputs.dockerfile }},mode=max
-          ghcr.io/dominodatalab/dominodatalab/hephaestus${{ inputs.suffix }}:buildcache
+        # cache-from: |
+        #   type=gha, scope=${{ inputs.dockerfile }}
+        #   ghcr.io/dominodatalab/dominodatalab/hephaestus${{ inputs.suffix }}:buildcache
+        # cache-to: |-
+        #   type=gha, scope=${{ inputs.dockerfile }},mode=max
+        #   ghcr.io/dominodatalab/dominodatalab/hephaestus${{ inputs.suffix }}:buildcache
