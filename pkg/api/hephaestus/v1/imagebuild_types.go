@@ -113,7 +113,8 @@ func (in *ImageBuild) SetPhase(p Phase) {
 type ImageBuildList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ImageBuild `json:"items"`
+
+	Items []ImageBuild `json:"items"`
 }
 
 func init() {

@@ -51,7 +51,8 @@ func (in *ImageCache) SetPhase(p Phase) {
 type ImageCacheList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ImageCache `json:"items"`
+
+	Items []ImageCache `json:"items"`
 }
 
 func init() {
