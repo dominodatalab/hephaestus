@@ -69,6 +69,10 @@ spec:
               value: {{ .clientSecret | quote }}
             {{- end }}
             {{- end }}
+            {{- if .Values.controller.manager.cloudRegistryAuth.gcp.mountedCredentials.secretName }}
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /google-creds/key.json
+            {{- end }}
             {{- with $.Values.podEnv }}
               {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -112,6 +116,12 @@ spec:
             {{- if .Values.controller.vector.enabled }}
             - name: log-vol
               mountPath: {{ include "hephaestus.logfileDir" . | quote }}
+            {{- end }}
+            {{- if .Values.controller.manager.cloudRegistryAuth.gcp.mountedCredentials.secretName }}
+            - name: google-creds
+              mountPath: /google-creds/key.json
+              subPath: key.json
+              readOnly: true
             {{- end }}
             {{- with .Values.controller.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
@@ -177,6 +187,15 @@ spec:
         {{- if .Values.controller.vector.enabled }}
         - name: log-vol
           emptyDir: {}
+        {{- end }}
+        {{- with .Values.controller.manager.cloudRegistryAuth.gcp.mountedCredentials.secretName }}
+        - name: google-creds
+          secret:
+            defaultMode: 420
+            secretName: {{ . | quote }}
+            items:
+              - key: {{ .Values.controller.manager.cloudRegistryAuth.gcp.mountedCredentials.keyName }}
+                path: key.json
         {{- end }}
         {{- with .Values.controller.extraVolumes }}
         {{- toYaml . | nindent 8 }}

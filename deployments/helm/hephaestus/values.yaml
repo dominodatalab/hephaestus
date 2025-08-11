@@ -170,6 +170,10 @@ controller:
       gcp:
         enabled: false
         serviceAccount: ""
+        # For accessing from non-GKE installs
+        mountedCredentials:
+          secretName: ""
+          keyName: ""
 
     # Build status messaging configuration
     messaging:
