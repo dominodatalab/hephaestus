@@ -1,8 +1,8 @@
 apiVersion: v2
 type: application
 name: hephaestus
-version: 0.0.0
-appVersion: "latest"
+version: 0.11.19
+appVersion: "0.11.19"
 kubeVersion: ">= 1.19.0-0"
 description: Kubernetes operator that builds OCI images using buildkit.
 home: https://github.com/dominodatalab/hephaestus
