@@ -54,7 +54,7 @@ spec:
             - start
             - --config=/etc/hephaestus/config.yaml
           {{- with .Values.controller.manager }}
-          {{- if or .extraEnvVars .cloudRegistryAuth.azure.enabled $.Values.podEnv }}
+          {{- if or .extraEnvVars .cloudRegistryAuth.azure.enabled .cloudRegistryAuth.gcp.mountedCredentials.secretName $.Values.podEnv }}
           env:
             {{- with .extraEnvVars }}
             {{- include "common.tplvalues.render" (dict "value" . "context" $) | nindent 12 }}
@@ -68,6 +68,10 @@ spec:
             - name: AZURE_CLIENT_SECRET
               value: {{ .clientSecret | quote }}
             {{- end }}
+            {{- end }}
+            {{- if .cloudRegistryAuth.gcp.mountedCredentials.secretName }}
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /google-creds/key.json
             {{- end }}
             {{- with $.Values.podEnv }}
               {{- toYaml . | nindent 12 }}
@@ -112,6 +116,12 @@ spec:
             {{- if .Values.controller.vector.enabled }}
             - name: log-vol
               mountPath: {{ include "hephaestus.logfileDir" . | quote }}
+            {{- end }}
+            {{- if .Values.controller.manager.cloudRegistryAuth.gcp.mountedCredentials.secretName }}
+            - name: google-creds
+              mountPath: /google-creds/key.json
+              subPath: key.json
+              readOnly: true
             {{- end }}
             {{- with .Values.controller.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
@@ -177,6 +187,15 @@ spec:
         {{- if .Values.controller.vector.enabled }}
         - name: log-vol
           emptyDir: {}
+        {{- end }}
+        {{- with .Values.controller.manager.cloudRegistryAuth.gcp.mountedCredentials.secretName }}
+        - name: google-creds
+          secret:
+            defaultMode: 420
+            secretName: {{ . | quote }}
+            items:
+              - key: {{ $.Values.controller.manager.cloudRegistryAuth.gcp.mountedCredentials.keyName | quote }}
+                path: key.json
         {{- end }}
         {{- with .Values.controller.extraVolumes }}
         {{- toYaml . | nindent 8 }}
