@@ -28,6 +28,10 @@ var defaultTestingErr = errors.New("default error message")
 func TestAuthenticate(t *testing.T) {
 	defaultCtx := context.Background()
 
+	// Canceled context for testing failed do request
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+
 	// logger for comparing expected vs actual logging.
 	observerCore, observedLogs := observer.New(zap.DebugLevel)
 	log := zapr.NewLogger(zap.New(observerCore))
@@ -39,9 +43,16 @@ func TestAuthenticate(t *testing.T) {
 
 	t.Cleanup(ts.Close)
 
+	// test server IP and port information for error logging
+	tsAddress := ts.Listener.Addr()
+
 	// expected errors
 	invalidUrlErr := errors.New(fmt.Sprintf("invalid GCR URL test-ts should match %s", gcrRegex))
 	gcrTokenAccessErr := errors.New("unable to access GCR token from oauth: default error message")
+	gcrRegistryErr := errors.New("GCR registry \"https://hi-docker.pkg.dev\" is unusable: default error message")
+	ctxCanceledErr := errors.New(fmt.Sprintf("request to access GCR registry token failed with Error: Get \"http://oauth2accesstoken:***@%s?client_id=hephaestus&service=serviceName\": context canceled", tsAddress.String()))
+	non200StatusErr := errors.New("failed to obtain token, received unexpected response code: 400\nresponse: \"nope\"")
+	noResTokenErr := errors.New("no GCR token in bearer response:\n{\"token\":\"\",\"access_token\":\"\",\"refresh_token\":\"\"}")
 
 	for _, tt := range []struct {
 		name               string
@@ -72,6 +83,61 @@ func TestAuthenticate(t *testing.T) {
 			loginChallenger:    defaultChallengeLoginServer,
 			expectedLogMessage: gcrTokenAccessErr.Error(),
 			expectedError:      gcrTokenAccessErr,
+		},
+		{
+			name:       "failed_challenge_ts_error",
+			serverName: "hi-docker.pkg.dev",
+			ctx:        defaultCtx,
+			loginChallenger: cloudauthtest.FakeChallengeLoginServer(
+				"serviceName",
+				"realmName",
+				defaultTestingErr,
+			),
+			expectedLogMessage: gcrRegistryErr.Error(),
+			expectedError:      gcrRegistryErr,
+		},
+		{
+			name:       "failed_do_request",
+			serverName: "gcr.io",
+			ctx:        canceledCtx,
+			loginChallenger: cloudauthtest.FakeChallengeLoginServer(
+				"serviceName",
+				ts.URL,
+				nil,
+			),
+			expectedLogMessage: ctxCanceledErr.Error(),
+			expectedError:      ctxCanceledErr,
+		},
+		{
+			name:       "non_200_response_code",
+			serverName: "gcr.io",
+			ctx:        defaultCtx,
+			roundTripper: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusBadRequest,
+					Body:       io.NopCloser(strings.NewReader(`nope`)),
+				}, nil
+			}),
+			loginChallenger: cloudauthtest.FakeChallengeLoginServer(
+				"serviceName",
+				ts.URL,
+				nil,
+			),
+			expectedLogMessage: non200StatusErr.Error(),
+			expectedError:      non200StatusErr,
+		},
+		{
+			name:       "failed_no_token_in_response",
+			serverName: "gcr.io",
+			ctx:        defaultCtx,
+			loginChallenger: cloudauthtest.FakeChallengeLoginServer(
+				"serviceName",
+				ts.URL,
+				nil,
+			),
+			roundTripper:       createRoundTripperFunc(t, tokenResponse{}, http.StatusOK),
+			expectedLogMessage: noResTokenErr.Error(),
+			expectedError:      noResTokenErr,
 		},
 		// success
 		{
