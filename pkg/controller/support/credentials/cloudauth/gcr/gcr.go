@@ -162,7 +162,7 @@ func (g *gcrProvider) authenticate(
 	logger.Info(fmt.Sprintf("Successfully authenticated with GCR %q", server))
 	// buildkit only supports username/password
 	return &registry.AuthConfig{
-		Username:      "oauth2accesstoken",
-		Password:      token.AccessToken,
+		Username: "oauth2accesstoken",
+		Password: token.AccessToken,
 	}, nil
 }
