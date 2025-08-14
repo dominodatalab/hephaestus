@@ -94,5 +94,6 @@ func (g *gcrProvider) authenticate(
 	return &registry.AuthConfig{
 		Username:      "oauth2accesstoken",
 		Password:      token.AccessToken,
+		RegistryToken: "",
 	}, nil
 }

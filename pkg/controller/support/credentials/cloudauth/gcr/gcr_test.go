@@ -82,6 +82,7 @@ func TestAuthenticate(t *testing.T) {
 			authConfig: &registry.AuthConfig{
 				Username:      "oauth2accesstoken",
 				Password:      "hey",
+				RegistryToken: "",
 			},
 			loginChallenger: cloudauthtest.FakeChallengeLoginServer(
 				"serviceName",
@@ -98,6 +99,7 @@ func TestAuthenticate(t *testing.T) {
 			authConfig: &registry.AuthConfig{
 				Username:      "oauth2accesstoken",
 				Password:      "hey",
+				RegistryToken: "",
 			},
 			loginChallenger: cloudauthtest.FakeChallengeLoginServer(
 				"serviceName",
@@ -116,6 +118,7 @@ func TestAuthenticate(t *testing.T) {
 			authConfig: &registry.AuthConfig{
 				Username:      "oauth2accesstoken",
 				Password:      "hey",
+				RegistryToken: "",
 			},
 			loginChallenger: cloudauthtest.FakeChallengeLoginServer(
 				"serviceName",
