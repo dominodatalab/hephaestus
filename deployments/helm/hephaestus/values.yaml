@@ -300,19 +300,19 @@ buildkit:
 
   # Buildkitd liveness probe
   livenessProbe:
+    failureThreshold: 3
     initialDelaySeconds: 5
     periodSeconds: 30
-    timeoutSeconds: 10
-    failureThreshold: 3
     successThreshold: 1
+    timeoutSeconds: 30
 
   # Buildkitd readiness probe
   readinessProbe:
-    initialDelaySeconds: 5
-    periodSeconds: 30
-    timeoutSeconds: 10
     failureThreshold: 3
+    initialDelaySeconds: 5
+    periodSeconds: 10
     successThreshold: 1
+    timeoutSeconds: 5
 
   # Resource requests and limits
   resources:
