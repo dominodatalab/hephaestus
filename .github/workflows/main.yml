@@ -6,7 +6,7 @@ on:
   pull_request: {}
 env:
   GO_VERSION: "1.24"
-  BUILD_PLATFORMS: linux/amd64,linux/arm64
+  BUILD_PLATFORMS: linux/amd64
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -53,7 +53,7 @@ jobs:
             password_quay: "blank"
             repository_quay: "hephaestus"
             suffix: "-debug"
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64
           - dockerfile: ./Dockerfile
             registry_gh: ghcr.io
             username_gh: dominodatalab
@@ -64,7 +64,7 @@ jobs:
             password_quay: "blank"  # we have to resort to tricks like this because GitHub doesnt allow secrets in matrix sections
             repository_quay: "hephaestus"
             suffix: ""
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64
 
     steps:
       - name: Checkout code
