@@ -80,11 +80,9 @@ spec:
               protocol: TCP
               containerPort: {{ .Values.buildkit.service.port }}
           livenessProbe:
-            exec:
-              command:
-                - buildctl
-                - debug
-                - workers
+            exec: null
+            tcpSocket:
+              port: {{- default 1234 .Values.buildkit.service.port }}
             {{- with .Values.buildkit.livenessProbe }}
             initialDelaySeconds: {{ .initialDelaySeconds }}
             periodSeconds: {{ .periodSeconds }}
@@ -93,11 +91,9 @@ spec:
             successThreshold: {{ .successThreshold }}
             {{- end }}
           readinessProbe:
-            exec:
-              command:
-                - buildctl
-                - debug
-                - workers
+            exec: null
+            tcpSocket:
+              port: {{- default 1234 .Values.buildkit.service.port }}
             {{- with .Values.buildkit.readinessProbe }}
             initialDelaySeconds: {{ .initialDelaySeconds }}
             periodSeconds: {{ .periodSeconds }}
