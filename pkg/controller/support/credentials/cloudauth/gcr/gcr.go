@@ -92,7 +92,6 @@ func (g *gcrProvider) authenticate(
 		return nil, err
 	}
 
-	// We have everything we need to login, but obtain bearer token as sanity check
 	loginServerURL := "https://" + match[0]
 	directive, err := defaultChallengeLoginServer(ctx, loginServerURL)
 	if err != nil {
@@ -162,7 +161,8 @@ func (g *gcrProvider) authenticate(
 	logger.Info(fmt.Sprintf("Successfully authenticated with GCR %q", server))
 	// buildkit only supports username/password
 	return &registry.AuthConfig{
-		Username: "oauth2accesstoken",
-		Password: token.AccessToken,
+		Username:      "oauth2accesstoken",
+		Password:      token.AccessToken,
+		RegistryToken: response.Token,
 	}, nil
 }

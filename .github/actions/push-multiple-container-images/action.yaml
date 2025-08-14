@@ -69,11 +69,11 @@ runs:
           name=${{ inputs.registry_quay }}/domino/${{ inputs.repository_quay }}
           name=${{ inputs.registry_gh }}/dominodatalab/hephaestus
         tags: |
-          type=ref,event=branch,suffix=${{ inputs.suffix }}
+          type=ref,event=branch, suffix=${{ inputs.suffix }}
           type=ref,event=pr,suffix=${{ inputs.suffix }}
           type=semver,pattern={{version}},suffix=${{ inputs.suffix }}
-          type=semver,pattern={{major}}.{{minor}},suffix=${{ inputs.suffix }}
-          type=sha,suffix=${{ inputs.suffix }}
+          type=semver,pattern={{major}}.{{minor}}, suffix=${{ inputs.suffix }}
+          type=sha
     - name: Build and push Docker image
       uses: docker/build-push-action@v6
       with:
