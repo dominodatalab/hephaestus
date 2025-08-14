@@ -82,7 +82,7 @@ spec:
           livenessProbe:
             exec: null
             tcpSocket:
-              port: 1234
+              port: {{- default 1234 .Values.buildkit.service.port }}
             {{- with .Values.buildkit.livenessProbe }}
             initialDelaySeconds: {{ .initialDelaySeconds }}
             periodSeconds: {{ .periodSeconds }}
@@ -93,7 +93,7 @@ spec:
           readinessProbe:
             exec: null
             tcpSocket:
-              port: 1234
+              port: {{- default 1234 .Values.buildkit.service.port }}
             {{- with .Values.buildkit.readinessProbe }}
             initialDelaySeconds: {{ .initialDelaySeconds }}
             periodSeconds: {{ .periodSeconds }}
