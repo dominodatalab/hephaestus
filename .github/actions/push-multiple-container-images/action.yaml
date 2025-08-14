@@ -67,7 +67,7 @@ runs:
       with:
         images: |
           name=${{ inputs.registry_quay }}/domino/${{ inputs.repository_quay }}
-          name=${{ inputs.registry_gh }}/dominodatalab/hephaestus
+          # name=${{ inputs.registry_gh }}/dominodatalab/hephaestus
         tags: |
           type=ref,event=branch,suffix=${{ inputs.suffix }}
           type=ref,event=pr,suffix=${{ inputs.suffix }}
