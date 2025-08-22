@@ -181,7 +181,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 		c.log.Info("Fetching remote context", "url", opts.Context)
 		extract, extractErr := archive.FetchAndExtract(ctx, c.log, opts.Context, buildDir, opts.FetchAndExtractTimeout)
 		if extractErr != nil {
-			return "", fmt.Errorf("cannot fetch remote context: %w", err)
+			return "", fmt.Errorf("cannot fetch remote context: %w", extractErr)
 		}
 		contentsDir = extract.ContentsDir
 	case strings.TrimSpace(opts.DockerfileContents) != "":

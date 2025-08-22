@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"compress/gzip"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -71,11 +72,20 @@ func FetchAndExtract(ctx context.Context, log logr.Logger, url, wd string, timeo
 
 	archive := filepath.Join(wd, "archive")
 
-	err := wait.ExponentialBackoffWithContext(ctx, defaultBackoff, func(ctx context.Context) (bool, error) {
-		return downloadFile(ctx, log, http.DefaultClient, url, archive)
-	})
-	if err != nil {
-		return nil, err
+	// Check if the URL is a data URL
+	if strings.HasPrefix(url, "data:") {
+		err := downloadDataURL(ctx, log, url, archive)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Handle HTTP URLs with retry logic
+		err := wait.ExponentialBackoffWithContext(ctx, defaultBackoff, func(ctx context.Context) (bool, error) {
+			return downloadFile(ctx, log, http.DefaultClient, url, archive)
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	ct, err := getFileContentType(archive)
@@ -98,6 +108,57 @@ func FetchAndExtract(ctx context.Context, log logr.Logger, url, wd string, timeo
 		Archive:     archive,
 		ContentsDir: dest,
 	}, nil
+}
+
+func downloadDataURL(_ context.Context, log logr.Logger, dataURL, fp string) error {
+	// Parse the data URL
+	parsedURL, err := url.Parse(dataURL)
+	if err != nil {
+		return fmt.Errorf("failed to parse data URL: %w", err)
+	}
+
+	if parsedURL.Scheme != "data" {
+		return fmt.Errorf("not a data URL: %s", dataURL)
+	}
+
+	// Parse data URL format: data:[mediatype][;base64],<content>
+	parts := strings.SplitN(parsedURL.Opaque, ",", 2)
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid data URL format")
+	}
+
+	mediaType := parts[0]
+	data := parts[1]
+
+	log.Info("Processing data URL", "mediaType", mediaType, "dataLength", len(data))
+
+	// Decode base64 data if specified
+	var decodedData []byte
+	if strings.Contains(mediaType, "base64") {
+		decodedData, err = base64.StdEncoding.DecodeString(data)
+		if err != nil {
+			return fmt.Errorf("failed to decode base64 data: %w", err)
+		}
+		log.Info("Decoded base64 data", "decodedLength", len(decodedData))
+	} else {
+		// For non-base64 data, use the raw data
+		decodedData = []byte(data)
+	}
+
+	// Write the data to the archive file
+	out, err := os.Create(fp)
+	if err != nil {
+		return fmt.Errorf("failed to create archive file: %w", err)
+	}
+	defer out.Close()
+
+	_, err = out.Write(decodedData)
+	if err != nil {
+		return fmt.Errorf("failed to write archive file: %w", err)
+	}
+
+	log.Info("Successfully wrote data URL content to archive file", "file", fp, "size", len(decodedData))
+	return nil
 }
 
 func retryable(err *url.Error) bool {
