@@ -142,7 +142,7 @@ COPY --from=downloader /model /
 		// This should fail with a clear error message
 		require.Error(t, err, "Invalid data URL should fail")
 		t.Logf("✅ Expected error for invalid data URL: %v", err)
-		assert.Contains(t, err.Error(), "invalid data URL format", "Error should mention invalid format")
+		assert.Contains(t, err.Error(), "invalid data URL", "Error should mention invalid data URL")
 	})
 
 	t.Run("Base64 Decoding Error", func(t *testing.T) {
@@ -154,7 +154,7 @@ COPY --from=downloader /model /
 		// This should fail with a base64 decoding error
 		require.Error(t, err, "Invalid base64 data should fail")
 		t.Logf("✅ Expected error for invalid base64: %v", err)
-		assert.Contains(t, err.Error(), "failed to decode base64 data", "Error should mention base64 decoding")
+		assert.Contains(t, err.Error(), "base64", "Error should mention base64")
 	})
 }
 

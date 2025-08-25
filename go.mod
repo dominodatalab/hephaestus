@@ -29,6 +29,7 @@ require (
 	github.com/go-logr/zapr v1.3.0
 	github.com/google/go-containerregistry v0.20.3
 	github.com/h2non/filetype v1.1.3
+	github.com/lestrrat-go/dataurl v0.0.0-20220721131304-b60017625013
 	github.com/moby/buildkit v0.23.2
 	github.com/newrelic/go-agent/v3 v3.36.0
 	github.com/newrelic/go-agent/v3/integrations/nrzap v1.0.1
@@ -126,6 +127,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
+	github.com/lestrrat-go/option v1.0.0 // indirect
 	github.com/mailru/easyjson v0.9.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/moby/locker v1.0.1 // indirect

@@ -66,12 +66,12 @@ cannot fetch remote context: stat : no such file or directory
 
 **Changes**:
 - Modified `FetchAndExtract` to detect data URLs using `strings.HasPrefix(url, "data:")`
-- Added `downloadDataURL` function to parse data URLs, decode base64 content, and write to archive file
+- Added `downloadDataURL` function using an RFC 2397 compliant library for parsing
 - Maintained backward compatibility with existing HTTP/HTTPS URL support
 
 **Key Features**:
-- Supports `data:application/x-tar;base64,<content>` format
-- Handles base64 decoding and tar extraction
+- Full support for all data URL formats
+- Library handles base64 decoding and media type parsing
 - Provides detailed logging and error handling
 
 ### 3. Comprehensive Test Coverage
@@ -85,10 +85,21 @@ cannot fetch remote context: stat : no such file or directory
 
 **Test Coverage**:
 - Data URL detection logic
-- Base64 decoding and tar extraction
+- RFC 2397 compliant parsing via dataurl library
 - Error handling for invalid inputs
 - Backward compatibility with HTTP/HTTPS URLs
 - Content verification (Dockerfile extraction and validation)
+
+### 4. RFC 2397 Compliance
+
+**Library Choice**: `github.com/lestrrat-go/dataurl`
+
+**Supported Formats**:
+- `data:,<content>` (no media type)
+- `data:;base64,<content>` (with base64)
+- `data:text/plain,<content>` (with media type)
+- `data:application/x-tar;base64,<content>` (with media type and base64)
+- `data:text/plain;charset=utf-8;base64,<content>` (with media type, parameters and base64)
 
 ## Usage
 
@@ -106,13 +117,13 @@ Our data URLs are extremely small (~1 KB) and well within all practical limits. 
 
 1. **Kubernetes API Transport**: Data URLs are passed via Kubernetes API calls (gRPC/HTTP2), not HTTP requests
 2. **No HTTP Limits**: We avoid nginx, Node.js, or web server URL length restrictions
-3. **K8s API Capacity**: Kubernetes API can handle strings in the MB+ range
+3. **K8s API Limits**: etcd enforces a gRPC message size limit of 1.5 MB for API server requests and responses
 4. **CRD Field Storage**: The data URL is stored as a field in the ImageBuild CRD spec
 
 ## Testing
 
 All tests pass and demonstrate:
-- Data URL processing works correctly
+- RFC 2397 compliant data URL processing via dataurl library
 - Error handling is robust
 - Backward compatibility maintained
 - Content integrity preserved
