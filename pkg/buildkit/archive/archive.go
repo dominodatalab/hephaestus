@@ -18,6 +18,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/h2non/filetype"
+	"github.com/lestrrat-go/dataurl"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -71,11 +72,20 @@ func FetchAndExtract(ctx context.Context, log logr.Logger, url, wd string, timeo
 
 	archive := filepath.Join(wd, "archive")
 
-	err := wait.ExponentialBackoffWithContext(ctx, defaultBackoff, func(ctx context.Context) (bool, error) {
-		return downloadFile(ctx, log, http.DefaultClient, url, archive)
-	})
-	if err != nil {
-		return nil, err
+	// Check if the URL is a data URL
+	if strings.HasPrefix(url, "data:") {
+		err := downloadDataURL(ctx, log, url, archive)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Handle HTTP URLs with retry logic
+		err := wait.ExponentialBackoffWithContext(ctx, defaultBackoff, func(ctx context.Context) (bool, error) {
+			return downloadFile(ctx, log, http.DefaultClient, url, archive)
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	ct, err := getFileContentType(archive)
@@ -98,6 +108,31 @@ func FetchAndExtract(ctx context.Context, log logr.Logger, url, wd string, timeo
 		Archive:     archive,
 		ContentsDir: dest,
 	}, nil
+}
+
+func downloadDataURL(_ context.Context, log logr.Logger, dataURL, fp string) error {
+	// Parse using RFC 2397 compliant library
+	parsed, err := dataurl.Parse([]byte(dataURL))
+	if err != nil {
+		return fmt.Errorf("failed to parse data URL: %w", err)
+	}
+
+	log.Info("Processing data URL", "mediaType", parsed.MediaType.Type, "dataLength", len(parsed.Data))
+
+	// Write the data to the archive file
+	out, err := os.Create(fp)
+	if err != nil {
+		return fmt.Errorf("failed to create archive file: %w", err)
+	}
+	defer out.Close()
+
+	_, err = out.Write(parsed.Data)
+	if err != nil {
+		return fmt.Errorf("failed to write archive file: %w", err)
+	}
+
+	log.Info("Successfully wrote data URL content to archive file", "file", fp, "size", len(parsed.Data))
+	return nil
 }
 
 func retryable(err *url.Error) bool {
