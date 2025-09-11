@@ -1,6 +1,6 @@
 module github.com/dominodatalab/hephaestus
 
-go 1.24
+go 1.24.0
 
 toolchain go1.24.4
 
@@ -38,9 +38,9 @@ require (
 	github.com/tonistiigi/fsutil v0.0.0-20250605211040-586307ad452f
 	go.uber.org/multierr v1.11.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0
+	golang.org/x/exp v0.0.0-20250911091902-df9299821621
 	golang.org/x/oauth2 v0.28.0
-	golang.org/x/sync v0.14.0
+	golang.org/x/sync v0.17.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.32.3
