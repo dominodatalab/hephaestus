@@ -36,6 +36,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	// Apply all transformations to the loaded swagger object.
 	modifyRoutes(swagger)
 	modifyDefinitions(swagger)
 	modifyProperties(swagger, version)
@@ -48,8 +49,8 @@ func main() {
 	fmt.Println(string(bs))
 }
 
-// processRawJSON reads a file containing the aggregated OpenAPI v2 JSON served by Kubernetes, transforms the raw bytes,
-// and returns a swagger object for further processing.
+// processRawJSON reads a file, applies initial string cleanups,
+// and unmarshals it into a swagger object.
 func processRawJSON(path string) (*spec.Swagger, error) {
 	bs, err := os.ReadFile(path)
 	if err != nil {
@@ -72,7 +73,7 @@ func processRawJSON(path string) (*spec.Swagger, error) {
 	return swagger, nil
 }
 
-// modifyRoutes gathers project routes, modifies their operations, and sets them on the swagger object.
+// modifyRoutes filters to only include project-specific routes and modifies their operations.
 func modifyRoutes(swagger *spec.Swagger) {
 	paths := map[string]spec.PathItem{}
 
@@ -110,43 +111,40 @@ func modifyRoutes(swagger *spec.Swagger) {
 	swagger.Paths.Paths = paths
 }
 
-// modifyOperation affects generated function names and the generated services where they will reside.
+// modifyOperation affects generated function names by cleaning the operationId.
 func modifyOperation(op *spec.Operation, tags []string) {
 	op.Tags = tags
 	op.ID = strings.ReplaceAll(op.ID, "HephaestusDominodatalabComV1", "")
 }
 
-// modifyDefinitions renders OpenAPI definitions for project types and sets them on the swagger object.
 func modifyDefinitions(swagger *spec.Swagger) {
+	// Ensure the definitions map exists.
+	if swagger.Definitions == nil {
+		swagger.Definitions = spec.Definitions{}
+	}
+
+	// Get your project-specific OpenAPI definitions.
 	oAPIDefs := heph.GetOpenAPIDefinitions(func(path string) spec.Ref {
 		return spec.MustCreateRef("#/definitions/" + common.EscapeJsonPointer(swaggerRef(path)))
 	})
 
-	defs := spec.Definitions{}
+	// Add your definitions to the existing map, preserving the Kubernetes ones.
 	for name, val := range oAPIDefs {
-		defs[swaggerRef(name)] = val.Schema
+		swagger.Definitions[swaggerRef(name)] = val.Schema
 	}
-
-	swagger.Definitions = defs
 }
 
 // swaggerRef strips the canonical prefix from definition names.
-//
-// project types become ".<Type>" and meta types become "v1.<Type>"
 func swaggerRef(name string) string {
 	name = strings.ReplaceAll(name, "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1", "")
 	name = strings.ReplaceAll(name, "k8s.io/apimachinery/pkg/apis/meta/", "")
-
 	return name
 }
 
 // modifyProperties changes swagger properties other than paths and definitions.
 func modifyProperties(swagger *spec.Swagger, version string) {
 	swagger.Host = "localhost"
-	swagger.Schemes = []string{
-		"http",
-		"https",
-	}
+	swagger.Schemes = []string{"http", "https"}
 	swagger.Info = &spec.Info{
 		InfoProps: spec.InfoProps{
 			Title:          "Hephaestus Kubernetes SDK",
@@ -164,4 +162,6 @@ func modifyProperties(swagger *spec.Swagger, version string) {
 			Version: version,
 		},
 	}
+	swagger.Security = nil
+	swagger.SecurityDefinitions = nil
 }

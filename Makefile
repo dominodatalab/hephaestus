@@ -18,6 +18,7 @@ test: ## Run test suite
 	go test -v -timeout=5m -race ./...
 
 lint: tools ## Run linter suite
+	golangci-lint version
 	golangci-lint run
 
 apply: crds ## Apply CRDs to cluster
