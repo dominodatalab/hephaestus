@@ -43,6 +43,36 @@ spec:
       serviceAccountName: {{ include "hephaestus.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.controller.podSecurityContext | nindent 8 }}
+      {{- if .Values.waitForNetworking }}
+      initContainers:
+        - name: wait-for-networking
+          securityContext:
+            {{- toYaml .Values.controller.manager.containerSecurityContext | nindent 12 }}
+          image: {{ .Values.curl_image }}
+          imagePullPolicy: {{ .Values.controller.manager.image.pullPolicy }}
+          command: [ 'sh', '-c' ]
+          args:
+            - |
+              while true; do
+                echo "Checking K8s API is reachable"
+                if curl -sk --fail --connect-timeout 1 https://kubernetes.default.svc.cluster.local:443/healthz; then
+                  echo "K8s API check successful"
+                else
+                  echo "error: K8s API check failed"
+                fi
+              done
+          {{- with .Values.controller.manager }}
+          {{- if or .extraEnvVars $.Values.podEnv }}
+          env:
+            {{- with .extraEnvVars }}
+            {{- include "common.tplvalues.render" (dict "value" . "context" $) | nindent 12 }}
+            {{- end }}
+            {{- with $.Values.podEnv }}
+              {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          {{- end }}
+      {{- end }}
       containers:
         - name: manager
           securityContext:
