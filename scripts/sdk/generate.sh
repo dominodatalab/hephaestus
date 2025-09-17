@@ -22,8 +22,7 @@ JAVA_DIR="$SDKS_DIR/java"
 KUBERNETES_SWAGGER_FILE=/tmp/dist.swagger.json
 SWAGGER_FILE=api/openapi-spec/swagger.json
 
-OPENAPI_GENERATOR_CLI_VERSION=v5.2.1
-
+OPENAPI_GENERATOR_CLI_VERSION=v7.15.0
 info() {
 	echo -e "\033[0;32m[sdk-generate]\033[0m INFO: $*"
 }
@@ -76,19 +75,23 @@ generate_kubernetes_swagger
 info "Generating Swagger JSON"
 go run "$SCRIPT_DIR"/main.go -json $KUBERNETES_SWAGGER_FILE -version "$VERSION" >$SWAGGER_FILE
 
+
 info "Generating Java client library"
 mkdir -p "$GEN_DIR"
+##--invoker-package io.kubernetes.client.openapi 
+##	--invoker-package com.dominodatalab.hephaestus.v1.client \
 docker run -q --user "$(id -u):$(id -g)" --rm -v "$PROJECT_DIR:/wd" --workdir /wd \
 	openapitools/openapi-generator-cli:$OPENAPI_GENERATOR_CLI_VERSION generate \
 	--input-spec /wd/$SWAGGER_FILE \
 	--generator-name java \
 	--output /wd/sdks/gen \
+	--library okhttp-gson \
 	--api-package com.dominodatalab.hephaestus.v1.apis \
 	--model-package com.dominodatalab.hephaestus.v1.models \
-	--invoker-package io.kubernetes.client.openapi \
+    --invoker-package io.kubernetes.client.openapi \
 	--group-id com.dominodatalab.hephaestus \
 	--artifact-id hephaestus-client-java \
-	--additional-properties dateLibrary=java8 \
+	--additional-properties dateLibrary=java8,testFramework=junit5  \
 	--import-mappings v1.Condition=io.kubernetes.client.openapi.models.V1Condition \
 	--import-mappings v1.ObjectMeta=io.kubernetes.client.openapi.models.V1ObjectMeta \
 	--import-mappings v1.ListMeta=io.kubernetes.client.openapi.models.V1ListMeta \
@@ -97,6 +100,7 @@ docker run -q --user "$(id -u):$(id -g)" --rm -v "$PROJECT_DIR:/wd" --workdir /w
 	--import-mappings v1.Status=io.kubernetes.client.openapi.models.V1Status \
 	--import-mappings v1.Time=java.time.OffsetDateTime \
 	--http-user-agent "Hephaestus Java Client/$VERSION" \
+    --skip-validate-spec \
 	--generate-alias-as-model
 
 info "Copying generated Java files to $JAVA_DIR"

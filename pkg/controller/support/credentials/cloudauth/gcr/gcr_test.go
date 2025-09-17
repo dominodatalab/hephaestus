@@ -146,8 +146,8 @@ func TestAuthenticate(t *testing.T) {
 			ctx:          defaultCtx,
 			roundTripper: createRoundTripperFunc(t, tokenResponse{AccessToken: "test-access-token"}, http.StatusOK),
 			authConfig: &registry.AuthConfig{
-				Username:      "oauth2accesstoken",
-				Password:      "hey",
+				Username: "oauth2accesstoken",
+				Password: "hey",
 			},
 			loginChallenger: cloudauthtest.FakeChallengeLoginServer(
 				"serviceName",
@@ -162,8 +162,8 @@ func TestAuthenticate(t *testing.T) {
 			ctx:          defaultCtx,
 			roundTripper: createRoundTripperFunc(t, tokenResponse{Token: "regular-token"}, http.StatusOK),
 			authConfig: &registry.AuthConfig{
-				Username:      "oauth2accesstoken",
-				Password:      "hey",
+				Username: "oauth2accesstoken",
+				Password: "hey",
 			},
 			loginChallenger: cloudauthtest.FakeChallengeLoginServer(
 				"serviceName",
@@ -180,8 +180,8 @@ func TestAuthenticate(t *testing.T) {
 				Token: "regular-token", RefreshToken: "ignore-this-refresh-token",
 			}, http.StatusOK),
 			authConfig: &registry.AuthConfig{
-				Username:      "oauth2accesstoken",
-				Password:      "hey",
+				Username: "oauth2accesstoken",
+				Password: "hey",
 			},
 			loginChallenger: cloudauthtest.FakeChallengeLoginServer(
 				"serviceName",
