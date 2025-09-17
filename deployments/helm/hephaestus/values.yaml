@@ -404,7 +404,7 @@ buildkit:
             topologyKey: "kubernetes.io/hostname"
 
 # waitForNetworking starts an initContainer that requires a curl_image
-# Set this to true in istio ambient mode to cause Hephaestus Mangaer to start up
+# Set this to true in istio ambient mode to cause Hephaestus Manager to start up
 # with networking. We're not sure why this works. See: https://dominodatalab.atlassian.net/browse/DOM-70981
 waitForNetworking: false
 curl_image: curlimages/curl:latest
