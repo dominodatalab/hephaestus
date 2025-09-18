@@ -90,14 +90,6 @@ spec:
               containerPort: {{ .webhookPort }}
               protocol: TCP
             {{- end }}
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: health
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: health
           resources:
             {{- toYaml .Values.controller.manager.resources | nindent 12 }}
           volumeMounts:
@@ -147,14 +139,6 @@ spec:
           env:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8686
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8686
           resources:
             {{- toYaml .Values.controller.vector.resources | nindent 12 }}
           volumeMounts:
