@@ -45,7 +45,8 @@ func main() {
 }
 
 func createKindCluster() {
-	cmd := exec.Command("kind", "create", "cluster", "--config", "scripts/sdk/kind.yaml")
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, "kind", "create", "cluster", "--config", "scripts/sdk/kind.yaml")
 	if err := cmd.Run(); err != nil {
 		log.Fatalln(err)
 	}
@@ -56,7 +57,8 @@ func createKindCluster() {
 }
 
 func deleteKindCluster() {
-	cmd := exec.Command("kind", "delete", "cluster")
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, "kind", "delete", "cluster")
 	if err := cmd.Run(); err != nil {
 		log.Fatalln(err)
 	}
@@ -202,7 +204,9 @@ func pathRef(path string) string {
 // }
 
 func generate() {
-	cmd := exec.Command(
+	ctx := context.Background()
+	cmd := exec.CommandContext(
+		ctx,
 		"openapi-generator",
 		"generate",
 		// "--skip-validate-spec",

@@ -292,6 +292,9 @@ buildkit:
   # Peristent build cache settings
   persistence:
     enabled: true
+    pvcRetentionPolicy:
+      whenDeleted: "Delete"
+      whenScaled: "Retain"
     storageClass: ""
     accessModes:
       - ReadWriteOnce

@@ -8,6 +8,11 @@ spec:
   serviceName: {{ include "hephaestus.buildkit.fullname" . }}
   podManagementPolicy: Parallel
   replicas: {{ .Values.buildkit.replicaCount }}
+  {{- if semverCompare ">=1.32.0" .Capabilities.KubeVersion.Version }}
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: {{ .Values.buildkit.persistence.pvcRetentionPolicy.whenDeleted  }}
+    whenScaled: {{ .Values.buildkit.persistence.pvcRetentionPolicy.whenScaled }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "hephaestus.buildkit.labels.matchLabels" . | nindent 6 }}
