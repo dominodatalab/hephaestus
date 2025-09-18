@@ -60,8 +60,6 @@ runs:
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha, scope=${{ env.VERSION_BUILDARG }}
-        cache-to: type=gha, scope=${{ env.VERSION_BUILDARG }}
     - name: Build and push Docker debug image
       uses: docker/build-push-action@v6
       with:
@@ -72,5 +70,3 @@ runs:
         push: true
         tags: ${{ steps.meta.outputs.tags }}-debug
         labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha, scope=${{ github.job }}
-        cache-to: type=gha, scope=${{ env.VERSION_BUILDARG }}-debug
