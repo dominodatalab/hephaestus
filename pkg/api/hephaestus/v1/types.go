@@ -27,10 +27,10 @@ const (
 )
 
 const (
-	// Kubernetes metadata set by clients required to allow reading secrets by Hephaestus.
+	// AccessLabel is kubernetes metadata set by clients required to allow reading secrets by Hephaestus.
 	// Safeguards against accidental secret exposure / exfiltration.
 	AccessLabel = "hephaestus-accessible"
-	// Kubernetes metadata set by clients, to manage secret lifetime.
+	// OwnedLabel is kubernetes metadata set by clients, to manage secret lifetime.
 	// When set, the given secret gets deleted at the same time as the ImageBuild that uses it.
 	OwnedLabel = "hephaestus-owned"
 )
