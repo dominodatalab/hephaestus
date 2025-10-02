@@ -37,9 +37,6 @@ jobs:
     needs: build
     outputs:
       version: ${{ steps.docker_push.outputs.version }}
-    env:
-      QUAY_USERNAME: ${{ secrets.QUAY_USERNAME || 'blank' }}
-      QUAY_PASSWORD: ${{ secrets.QUAY_PASSWORD || 'blank' }}
     strategy:
       fail-fast: false
       matrix:
@@ -77,15 +74,17 @@ jobs:
       - id: docker_push
         uses: ./.github/actions/push-multiple-container-images
         with:
-          dockerfile: ${{ matrix.dockerfile }}
-          password_quay: ${{ env.QUAY_PASSWORD }}
-          platforms: ${{ matrix.platforms }}
           registry_gh: ${{ matrix.registry_gh }}
-          registry_quay: ${{ matrix.registry_quay }}
-          repository_quay: ${{ matrix.repository_quay }}
-          suffix: ${{ matrix.suffix }}
           username_gh: ${{ matrix.username_gh }}
-          username_quay: ${{ env.QUAY_USERNAME }}
+          password_gh: ${{ secrets.GITHUB_TOKEN }}
+          repository_gh: ${{ matrix.repository_gh }}
+          registry_quay: ${{ matrix.registry_quay }}
+          username_quay: ${{ secrets.QUAY_USERNAME }}
+          password_quay: ${{ secrets.QUAY_PASSWORD }}
+          repository_quay: ${{ matrix.repository_quay }}
+          platforms: ${{ matrix.platforms }}
+          suffix: ${{ matrix.suffix }}
+          dockerfile: ${{ matrix.dockerfile }}
   helm:
     runs-on: ubuntu-latest
     needs: docker
