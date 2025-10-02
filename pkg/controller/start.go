@@ -142,7 +142,6 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 		log.Info("Watching all namespaces")
 	}
 	opts.WebhookServer = webhook.NewServer(webhookOpts)
-	ctx, _ := context.WithCancel(context.Background())
 
 	opts.WebhookServer.Register("/mutate-hephaestus-dominodatalab-com-v1-imagebuild", admission.WithCustomDefaulter(
 		opts.Scheme,
@@ -242,16 +241,7 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 		}
 	}))
 
-	go func() {
-		log.Info("Starting webhook server in background")
-		if err := opts.WebhookServer.Start(ctx); err != nil && err != http.ErrServerClosed {
-			log.Error(err, "Webhook server failed unexpectedly",
-				"port", cfg.WebhookPort)
-		} else {
-			log.Info("Webhook server shut down gracefully")
-		}
-	}()
-
+	// Webhook server will be started automatically by controller-runtime manager
 	log.Info("Creating new controller manager")
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), opts)
 	if err != nil {
