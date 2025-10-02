@@ -12,13 +12,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5.0.0
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
       - name: Cache Go tools
-        uses: actions/cache@v4
+        uses: actions/cache@v4.3.0
         with:
           path: ~/go/bin
           key: ${{ runner.os }}-go-tools-${{ hashFiles('tools/go.sum') }}
@@ -66,11 +66,11 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5.0.0
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v3.6.0
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v3.11.1
       - id: docker_push
         uses: ./.github/actions/push-multiple-container-images
         with:
@@ -90,11 +90,11 @@ jobs:
     needs: docker
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5.0.0
       - name: Install Helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@v4.3.1
         with:
-          version: v3.15.4
+          version: v3.19.0
       - id: helm_pkg
         name: Package Helm chart
         shell: bash
@@ -131,16 +131,16 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     env:
-      MAVEN_DOCKER_IMAGE: maven:3-eclipse-temurin-17
+      MAVEN_DOCKER_IMAGE: maven:3-eclipse-temurin-24-noble
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5.0.0
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v3.11.1
       - name: Generate SDKS
         run: |
           export BRANCH_NAME=$(echo ${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}} | sed -r 's|/+|-|g')
@@ -153,7 +153,7 @@ jobs:
             --volume "$(pwd)"/sdks/java:/wd \
             "${MAVEN_DOCKER_IMAGE}" mvn --settings settings.xml package
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: hephaestus-client-java.jar
           path: sdks/java/target/*.jar
@@ -171,7 +171,7 @@ jobs:
             "${MAVEN_DOCKER_IMAGE}" mvn --settings settings.xml \
             --activate-profiles github -DskipTests deploy
       - name: Publish Jar to Artifactory
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v3.0.2
         with:
           retry_on: error
           max_attempts: 10
@@ -182,9 +182,9 @@ jobs:
               --workdir /wd \
               --volume "${HOME}"/.m2:/root/.m2 \
               --volume $(pwd)/sdks/java:/wd \
-              --env ARTIFACTORY_USERNAME=${{ secrets.ARTIFACTORY_USERNAME }} \
-              --env ARTIFACTORY_PASSWORD=${{ secrets.ARTIFACTORY_PASSWORD }} \
-              --env GITHUB_USERNAME=${{ github.actor }} \
-              --env GITHUB_PASSWORD=${{ secrets.GITHUB_TOKEN }} \
+              --env "ARTIFACTORY_USERNAME=${{ secrets.ARTIFACTORY_USERNAME }}" \
+              --env "ARTIFACTORY_PASSWORD=${{ secrets.ARTIFACTORY_PASSWORD }}" \
+              --env "GITHUB_USERNAME=${{ github.actor }}" \
+              --env "GITHUB_PASSWORD=${{ secrets.GITHUB_TOKEN }}" \
               "${MAVEN_DOCKER_IMAGE}" mvn --settings settings.xml \
               --activate-profiles artifactory -DskipTests deploy

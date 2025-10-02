@@ -1,67 +1,67 @@
-name: 'Docker Build and Push to Multiple Registries'
-description: 'Builds and pushes Docker images to both GitHub Container Registry and Quay.io'
+name: Docker Build and Push to Multiple Registries
+description: Builds and pushes Docker images to both GitHub Container Registry and Quay.io
 inputs:
   registry_gh:
-    description: 'GitHub Container Registry URL'
+    description: GitHub Container Registry URL
     required: true
   username_gh:
-    description: 'GitHub username or organization'
+    description: GitHub username or organization
     required: true
   password_gh:
-    description: 'GitHub token or password'
+    description: GitHub token or password
     required: true
   repository_gh:
-    description: 'GitHub repository name'
+    description: GitHub repository name
     required: true
   registry_quay:
-    description: 'Quay.io Registry URL'
+    description: Quay.io Registry URL
     required: true
   username_quay:
-    description: 'Quay.io username or organization'
+    description: Quay.io username or organization
     required: true
   password_quay:
-    description: 'Quay.io token or password'
+    description: Quay.io token or password
     required: true
   repository_quay:
-    description: 'Quay.io repository name'
+    description: Quay.io repository name
     required: true
   platforms:
-    description: 'Build platforms (e.g., linux/amd64,linux/arm64)'
+    description: Build platforms (e.g., linux/amd64,linux/arm64)
     required: true
   dockerfile:
-    description: 'Path to the Dockerfile'
+    description: Path to the Dockerfile
     required: false
-    default: 'Dockerfile'
+    default: Dockerfile
   suffix:
-    description: 'add -debug suffix or not'
+    description: add '-debug' suffix or not
     required: false
     default: ''
 outputs:
   version:
-    description: 'Docker image version'
+    description: Docker image version
     value: ${{ steps.meta.outputs.version }}
 runs:
-  using: "composite"
+  using: composite
   steps:
     - name: Get the Git tag
       shell: bash
       run: |
         echo "VERSION_BUILDARG=$(git describe --tags --always)" >> $GITHUB_ENV
     - name: Log in to the GHCR registry
-      uses: docker/login-action@v3
+      uses: docker/login-action@v3.6.0
       with:
         registry: ${{ inputs.registry_gh }}
         username: ${{ inputs.username_gh }}
         password: ${{ inputs.password_gh }}
     - name: Login to Quay.io registry
-      uses: docker/login-action@v3
+      uses: docker/login-action@v3.6.0
       with:
         registry: ${{ inputs.registry_quay }}
         username: ${{ inputs.username_quay }}
         password: ${{ inputs.password_quay }}
     - name: Extract Docker metadata
       id: meta
-      uses: docker/metadata-action@v5
+      uses: docker/metadata-action@v5.8.0
       env:
         DOCKER_METADATA_PR_HEAD_SHA: "true"
       with:
@@ -75,7 +75,7 @@ runs:
           type=semver,pattern={{major}}.{{minor}},suffix=${{ inputs.suffix }}
           type=sha,suffix=${{ inputs.suffix }}
     - name: Build and push Docker image
-      uses: docker/build-push-action@v6
+      uses: docker/build-push-action@v6.18.0
       with:
         context: .
         platforms: ${{ inputs.platforms }}
