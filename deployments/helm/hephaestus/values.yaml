@@ -26,6 +26,14 @@ podEnv: {}
 
 clusterDomain: cluster.local
 
+# Certificate configuration
+certificate:
+  # CA certificate duration (210 days = 5040h)
+  # This duration helps prevent cert-manager race conditions where leaf certs
+  # can be issued with ca.crt fields pointing to expired CAs.
+  # See: https://github.com/cert-manager/cert-manager/issues/5851
+  caDuration: 5040h
+
 # Istio configuration
 istio:
   # Enable support for environments with Istio installed

@@ -18,6 +18,7 @@ spec:
   isCA: true
   commonName: {{ include "hephaestus.certmanager.selfSignedCA" . }}
   secretName: {{ include "hephaestus.certmanager.rootTLS" . }}
+  duration: {{ .Values.certificate.caDuration }}
   privateKey:
     algorithm: ECDSA
     size: 256
