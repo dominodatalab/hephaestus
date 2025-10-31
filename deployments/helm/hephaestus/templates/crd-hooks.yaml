@@ -83,6 +83,7 @@ spec:
     spec:
       {{- include "hephaestus.imagePullSecrets" . | nindent 6 }}
       serviceAccountName: {{ $serviceAccountName }}
+      enableServiceLinks: {{ .Values.controller.enableServiceLinks }}
       securityContext:
         {{- toYaml .Values.controller.podSecurityContext | nindent 8 }}
       restartPolicy: Never
@@ -139,6 +140,7 @@ spec:
     spec:
       {{- include "hephaestus.imagePullSecrets" . | nindent 6 }}
       serviceAccountName: {{ $serviceAccountName }}
+      enableServiceLinks: {{ .Values.controller.enableServiceLinks }}
       securityContext:
         {{- toYaml .Values.controller.podSecurityContext | nindent 8 }}
       restartPolicy: Never

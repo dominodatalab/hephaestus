@@ -41,6 +41,7 @@ spec:
     spec:
       {{- include "hephaestus.imagePullSecrets" . | nindent 6 }}
       serviceAccountName: {{ include "hephaestus.serviceAccountName" . }}
+      enableServiceLinks: {{ .Values.controller.enableServiceLinks }}
       securityContext:
         {{- toYaml .Values.controller.podSecurityContext | nindent 8 }}
       {{- if .Values.waitForNetworking }}
