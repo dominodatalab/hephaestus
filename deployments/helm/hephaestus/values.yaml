@@ -119,6 +119,9 @@ controller:
   # Additional volume mounts added to both the manager and vector containers
   extraVolumeMounts: []
 
+  # Enable service links injection into pod environment variables
+  enableServiceLinks: false
+
   # Manager configuration
   manager:
     # Manager image (default image tag is the chart appVersion)
@@ -296,6 +299,9 @@ buildkit:
     tag: v0.24.0-rootless
     pullPolicy: IfNotPresent
     pullSecrets: []
+
+  # Enable service links injection into pod environment variables
+  enableServiceLinks: false
 
   # Peristent build cache settings
   persistence:
