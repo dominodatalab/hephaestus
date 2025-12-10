@@ -5,7 +5,7 @@ go 1.25.1
 require (
 	github.com/golangci/golangci-lint/v2 v2.4.0
 	golang.org/x/tools v0.37.0
-	k8s.io/code-generator v0.34.0
+	k8s.io/code-generator v0.34.3
 	sigs.k8s.io/controller-tools v0.19.0
 )
 
@@ -231,7 +231,7 @@ require (
 	honnef.co/go/tools v0.6.1 // indirect
 	k8s.io/api v0.34.0 // indirect
 	k8s.io/apiextensions-apiserver v0.34.0 // indirect
-	k8s.io/apimachinery v0.34.0 // indirect
+	k8s.io/apimachinery v0.34.3 // indirect
 	k8s.io/gengo/v2 v2.0.0-20250604051438-85fd79dbfd9f // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b // indirect
