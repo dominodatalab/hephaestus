@@ -17,7 +17,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0"
     },
-    "version": "0.11.33"
+    "version": "0.0.0-SNAPSHOT"
   },
   "host": "localhost",
   "paths": {
