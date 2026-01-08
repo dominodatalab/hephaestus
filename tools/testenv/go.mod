@@ -1,6 +1,6 @@
 module github.com/dominodatalab/testenv
 
-go 1.24.2
+go 1.25.5
 
 require (
 	github.com/hashicorp/go-multierror v1.1.1
