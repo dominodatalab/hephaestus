@@ -1,6 +1,6 @@
 module github.com/dominodatalab/hephaestus
 
-go 1.25.1
+go 1.25.5
 
 // NOTE: local development
 // replace github.com/dominodatalab/controller-util => ../controller-util
