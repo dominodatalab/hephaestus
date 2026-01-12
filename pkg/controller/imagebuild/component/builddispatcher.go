@@ -198,10 +198,19 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 
 	log.Info("Building new buildkit client", "addr", addr)
 	clientInitSeg := txn.StartSegment("worker-client-init")
+
+	// Create refreshing auth provider for cloud registries (ACR/ECR/GCR)
+	authProvider := buildkit.NewRefreshingAuthProvider(
+		credentials.CloudAuthRegistry,
+		configDir,
+		buildLog,
+	)
+
 	bldr := buildkit.
 		NewClientBuilder(addr).
 		WithLogger(coreCtx.Log.WithName("buildkit").WithValues("addr", addr, "logKey", obj.Spec.LogKey)).
-		WithDockerConfigDir(configDir)
+		WithDockerConfigDir(configDir).
+		WithAuthProvider(authProvider)
 	if mtls := c.cfg.MTLS; mtls != nil {
 		bldr.WithMTLSAuth(mtls.CACertPath, mtls.CertPath, mtls.KeyPath)
 	}

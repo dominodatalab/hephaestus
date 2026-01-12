@@ -39,6 +39,7 @@ var clientCheckBackoff = wait.Backoff{ // retries after 500ms 1s 2s 4s 8s 16s 32
 type ClientBuilder struct {
 	addr            string
 	dockerConfigDir string
+	authProvider    session.Attachable
 	log             logr.Logger
 	bkOpts          []bkclient.ClientOpt
 }
@@ -71,6 +72,11 @@ func (b *ClientBuilder) WithLogger(log logr.Logger) *ClientBuilder {
 	return b
 }
 
+func (b *ClientBuilder) WithAuthProvider(provider session.Attachable) *ClientBuilder {
+	b.authProvider = provider
+	return b
+}
+
 func (b *ClientBuilder) Build(ctx context.Context) (*Client, error) {
 	bk, err := bkclient.New(ctx, b.addr, b.bkOpts...)
 	if err != nil {
@@ -99,6 +105,7 @@ func (b *ClientBuilder) Build(ctx context.Context) (*Client, error) {
 		bk:              bk,
 		log:             b.log,
 		dockerConfigDir: b.dockerConfigDir,
+		authProvider:    b.authProvider,
 	}, nil
 }
 
@@ -125,6 +132,23 @@ type Client struct {
 	bk              *bkclient.Client
 	log             logr.Logger
 	dockerConfigDir string
+	authProvider    session.Attachable
+}
+
+// getAuthProvider returns the custom auth provider if set, otherwise falls back to DockerAuthProvider.
+func (c *Client) getAuthProvider() session.Attachable {
+	if c.authProvider != nil {
+		return c.authProvider
+	}
+	// Fallback to default DockerAuthProvider
+	dockerConfig, err := config.Load(c.dockerConfigDir)
+	if err != nil {
+		c.log.Error(err, "Error loading config file")
+	}
+	return authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{
+		ConfigFile: dockerConfig,
+		TLSConfigs: nil,
+	})
 }
 
 func validateCompression(compression string, name string) map[string]string {
@@ -160,15 +184,6 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 			c.log.Error(err, "Failed to delete build context")
 		}
 	}(buildDir)
-
-	dockerConfig, err := config.Load(c.dockerConfigDir)
-	if err != nil {
-		c.log.Error(err, "Error loading config file")
-	}
-	authProviderConfig := authprovider.DockerAuthProviderConfig{
-		ConfigFile: dockerConfig,
-		TLSConfigs: nil,
-	}
 
 	// process build context
 	var contentsDir string
@@ -244,7 +259,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 			"dockerfile": contentsFS,
 		},
 		Session: []session.Attachable{
-			authprovider.NewDockerAuthProvider(authProviderConfig),
+			c.getAuthProvider(),
 			secretsprovider.FromMap(secrets),
 		},
 		CacheExports: []bkclient.CacheOptionsEntry{
@@ -366,19 +381,11 @@ func (c *Client) solveWith(ctx context.Context, modify func(buildDir string, sol
 		}
 	}(buildDir)
 
-	dockerConfig, err := config.Load(c.dockerConfigDir)
-	if err != nil {
-		c.log.Error(err, "Error loading config file")
-	}
-	authProviderConfig := authprovider.DockerAuthProviderConfig{
-		ConfigFile: dockerConfig,
-		TLSConfigs: nil,
-	}
 	solveOpt := bkclient.SolveOpt{
 		Frontend:      "dockerfile.v0",
 		FrontendAttrs: map[string]string{},
 		Session: []session.Attachable{
-			authprovider.NewDockerAuthProvider(authProviderConfig),
+			c.getAuthProvider(),
 		},
 	}
 
