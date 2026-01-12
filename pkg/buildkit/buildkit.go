@@ -135,22 +135,6 @@ type Client struct {
 	authProvider    session.Attachable
 }
 
-// getAuthProvider returns the custom auth provider if set, otherwise falls back to DockerAuthProvider.
-func (c *Client) getAuthProvider() session.Attachable {
-	if c.authProvider != nil {
-		return c.authProvider
-	}
-	// Fallback to default DockerAuthProvider
-	dockerConfig, err := config.Load(c.dockerConfigDir)
-	if err != nil {
-		c.log.Error(err, "Error loading config file")
-	}
-	return authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{
-		ConfigFile: dockerConfig,
-		TLSConfigs: nil,
-	})
-}
-
 func validateCompression(compression string, name string) map[string]string {
 	attrs := make(map[string]string)
 	attrs["name"] = name
@@ -368,6 +352,22 @@ func (c *Client) ResolveAuth(registryHostname string) (authn.Authenticator, erro
 		IdentityToken: cfg.IdentityToken,
 		RegistryToken: cfg.RegistryToken,
 	}), nil
+}
+
+// getAuthProvider returns the custom auth provider if set, otherwise falls back to DockerAuthProvider.
+func (c *Client) getAuthProvider() session.Attachable {
+	if c.authProvider != nil {
+		return c.authProvider
+	}
+	// Fallback to default DockerAuthProvider
+	dockerConfig, err := config.Load(c.dockerConfigDir)
+	if err != nil {
+		c.log.Error(err, "Error loading config file")
+	}
+	return authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{
+		ConfigFile: dockerConfig,
+		TLSConfigs: nil,
+	})
 }
 
 func (c *Client) solveWith(ctx context.Context, modify func(buildDir string, solveOpt *bkclient.SolveOpt) error) error {
