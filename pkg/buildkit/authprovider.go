@@ -89,7 +89,8 @@ func (p *RefreshingAuthProvider) Credentials(
 
 	// If cloud auth succeeded, return fresh credentials
 	if err == nil && authConfig != nil {
-		p.logger.Info("Returning fresh credentials from cloud provider", "host", host)
+		p.logger.Info("Returning fresh cloud credentials", "host", host, "username", authConfig.Username)
+		p.logger.V(1).Info("Cloud credentials retrieved successfully", "host", host, "hasPassword", authConfig.Password != "")
 		return &auth.CredentialsResponse{
 			Username: authConfig.Username,
 			Secret:   authConfig.Password,
