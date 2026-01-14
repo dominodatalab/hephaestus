@@ -2,7 +2,10 @@ package buildkit
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"regexp"
 	"testing"
 
@@ -69,20 +72,29 @@ func TestRefreshingAuthProvider_Credentials_Fallback(t *testing.T) {
 	// Setup empty cloud registry (no loaders registered)
 	cloudRegistry := &cloudauth.Registry{}
 
-	// Create provider with static config directly in-memory
-	staticConfig := configfile.New("config.json")
-	staticConfig.AuthConfigs = map[string]types.AuthConfig{
+	// Create a temporary docker config directory for testing
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "config.json")
+
+	// Create docker config with static credentials
+	dockerConfig := configfile.New(configFile)
+	dockerConfig.AuthConfigs = map[string]types.AuthConfig{
 		"docker.io": {
 			Username: "static-user",
 			Password: "static-pass",
 		},
 	}
 
-	provider := &RefreshingAuthProvider{
-		cloudAuth:    cloudRegistry,
-		staticConfig: staticConfig,
-		logger:       logr.Discard(),
-	}
+	// Save config to file
+	data, err := json.Marshal(map[string]interface{}{
+		"auths": dockerConfig.AuthConfigs,
+	})
+	require.NoError(t, err)
+	err = os.WriteFile(configFile, data, 0600)
+	require.NoError(t, err)
+
+	// Create provider using the constructor (which loads the config)
+	provider := asRefreshingAuthProvider(t, NewRefreshingAuthProvider(cloudRegistry, tmpDir, logr.Discard()))
 
 	// Test
 	resp, err := provider.Credentials(context.Background(), &auth.CredentialsRequest{

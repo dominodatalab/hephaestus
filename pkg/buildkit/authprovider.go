@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/docker/cli/cli/config"
-	"github.com/docker/cli/cli/config/configfile"
 	"github.com/docker/docker/api/types/registry"
 	"github.com/go-logr/logr"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/auth"
+	"github.com/moby/buildkit/session/auth/authprovider"
 	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -20,19 +20,22 @@ import (
 var authBackoff = wait.Backoff{
 	Duration: time.Second,
 	Factor:   2,
-	Steps:    3, // 1s, 2s, 4s
+	Steps:    3,
 }
 
 // RefreshingAuthProvider fetches fresh credentials on-demand when BuildKit requests them.
 // For cloud registries (ACR/ECR/GCR), it calls the cloud provider to get a fresh token.
-// For other registries, it falls back to the static docker config.
+// For other registries, it falls back to the static docker config via DockerAuthProvider.
 type RefreshingAuthProvider struct {
 	auth.UnimplementedAuthServer
 
-	cloudAuth    *cloudauth.Registry
-	staticConfig *configfile.ConfigFile
-	logger       logr.Logger
-	mu           sync.Mutex
+	cloudAuth            *cloudauth.Registry
+	staticConfigProvider session.Attachable
+	logger               logr.Logger
+	// mu protects against concurrent Credentials() calls from BuildKit and guards
+	// the retry state (authConfig, lastErr) within each call. While cloudAuth.Registry
+	// appears thread-safe, this mutex ensures safe access to local variables during retries.
+	mu sync.Mutex
 }
 
 // NewRefreshingAuthProvider creates a new auth provider that refreshes cloud credentials on-demand.
@@ -41,13 +44,17 @@ func NewRefreshingAuthProvider(
 	dockerConfigDir string,
 	logger logr.Logger,
 ) session.Attachable {
-	// Load static config once at initialization (may be nil if not available)
+	// Load static config and create a DockerAuthProvider for fallback
 	staticConfig, _ := config.Load(dockerConfigDir)
+	staticConfigProvider := authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{
+		ConfigFile: staticConfig,
+		TLSConfigs: nil,
+	})
 
 	return &RefreshingAuthProvider{
-		cloudAuth:    cloudAuth,
-		staticConfig: staticConfig,
-		logger:       logger.WithName("refreshing-auth-provider"),
+		cloudAuth:            cloudAuth,
+		staticConfigProvider: staticConfigProvider,
+		logger:               logger.WithName("refreshing-auth-provider"),
 	}
 }
 
@@ -97,59 +104,17 @@ func (p *RefreshingAuthProvider) Credentials(
 		}, nil
 	}
 
-	// If not a cloud registry or cloud auth failed, fall back to static config
+	// If not a cloud registry or cloud auth failed, fall back to static config provider
 	if err != nil && err != cloudauth.ErrNoLoader && lastErr != nil {
 		p.logger.Error(lastErr, "Cloud auth failed after retries, falling back to static config", "host", host)
 	}
 
-	return p.fallbackToStaticConfig(host)
-}
-
-// FetchToken implements the AuthServer interface but is not used for basic username/password auth.
-func (p *RefreshingAuthProvider) FetchToken(
-	_ context.Context,
-	_ *auth.FetchTokenRequest,
-) (*auth.FetchTokenResponse, error) {
-	return &auth.FetchTokenResponse{}, nil
-}
-
-// GetTokenAuthority implements the AuthServer interface but is not used for basic username/password auth.
-func (p *RefreshingAuthProvider) GetTokenAuthority(
-	_ context.Context,
-	_ *auth.GetTokenAuthorityRequest,
-) (*auth.GetTokenAuthorityResponse, error) {
-	return &auth.GetTokenAuthorityResponse{}, nil
-}
-
-// VerifyTokenAuthority implements the AuthServer interface but is not used for basic username/password auth.
-func (p *RefreshingAuthProvider) VerifyTokenAuthority(
-	_ context.Context,
-	_ *auth.VerifyTokenAuthorityRequest,
-) (*auth.VerifyTokenAuthorityResponse, error) {
-	return &auth.VerifyTokenAuthorityResponse{}, nil
-}
-
-//nolint:unparam // error return kept for consistency with auth interface patterns
-func (p *RefreshingAuthProvider) fallbackToStaticConfig(host string) (*auth.CredentialsResponse, error) {
-	if p.staticConfig == nil {
-		p.logger.V(1).Info("No static config available", "host", host)
+	// Delegate to DockerAuthProvider for static config handling
+	p.logger.V(1).Info("Falling back to static config provider", "host", host)
+	authServer, ok := p.staticConfigProvider.(auth.AuthServer)
+	if !ok {
+		p.logger.V(1).Info("Static config provider does not implement AuthServer", "host", host)
 		return &auth.CredentialsResponse{}, nil
 	}
-
-	cfg, err := p.staticConfig.GetAuthConfig(host)
-	if err != nil {
-		p.logger.Error(err, "Failed to get auth config from static config", "host", host)
-		return &auth.CredentialsResponse{}, nil
-	}
-
-	if cfg.Username == "" && cfg.Password == "" && cfg.IdentityToken == "" && cfg.RegistryToken == "" {
-		p.logger.V(1).Info("No credentials found in static config", "host", host)
-		return &auth.CredentialsResponse{}, nil
-	}
-
-	p.logger.V(1).Info("Returning credentials from static config", "host", host)
-	return &auth.CredentialsResponse{
-		Username: cfg.Username,
-		Secret:   cfg.Password,
-	}, nil
+	return authServer.Credentials(ctx, req)
 }
