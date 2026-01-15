@@ -336,11 +336,11 @@ func (c *Client) Prune() error {
 	return nil
 }
 
-func (c *Client) ResolveAuth(registryHostname string) (authn.Authenticator, error) {
+func (c *Client) ResolveAuth(ctx context.Context, registryHostname string) (authn.Authenticator, error) {
 	// Try custom auth provider first (for fresh cloud credentials)
 	if c.authProvider != nil {
 		if authServer, ok := c.authProvider.(auth.AuthServer); ok {
-			resp, err := authServer.Credentials(context.Background(), &auth.CredentialsRequest{
+			resp, err := authServer.Credentials(ctx, &auth.CredentialsRequest{
 				Host: registryHostname,
 			})
 			if err == nil && (resp.GetUsername() != "" || resp.GetSecret() != "") {

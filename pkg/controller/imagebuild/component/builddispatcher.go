@@ -320,7 +320,7 @@ func retrieveImage(
 		}
 	}
 
-	auth, err := c.ResolveAuth(registryName)
+	auth, err := c.ResolveAuth(ctx, registryName)
 	if err != nil {
 		return nil, err
 	}
