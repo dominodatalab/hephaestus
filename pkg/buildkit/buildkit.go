@@ -18,6 +18,7 @@ import (
 	bkclient "github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/cmd/buildctl/build"
 	"github.com/moby/buildkit/session"
+	"github.com/moby/buildkit/session/auth"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/session/secrets/secretsprovider"
 	"github.com/moby/buildkit/util/progress/progressui"
@@ -336,6 +337,22 @@ func (c *Client) Prune() error {
 }
 
 func (c *Client) ResolveAuth(registryHostname string) (authn.Authenticator, error) {
+	// Try custom auth provider first (for fresh cloud credentials)
+	if c.authProvider != nil {
+		if authServer, ok := c.authProvider.(auth.AuthServer); ok {
+			resp, err := authServer.Credentials(context.Background(), &auth.CredentialsRequest{
+				Host: registryHostname,
+			})
+			if err == nil && (resp.GetUsername() != "" || resp.GetSecret() != "") {
+				return authn.FromConfig(authn.AuthConfig{
+					Username: resp.GetUsername(),
+					Password: resp.GetSecret(),
+				}), nil
+			}
+		}
+	}
+
+	// Fallback to docker config
 	cf, err := config.Load(c.dockerConfigDir)
 	if err != nil {
 		return nil, err
