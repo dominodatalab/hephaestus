@@ -104,8 +104,8 @@ func (p *RefreshingAuthProvider) Credentials(
 		}, nil
 	}
 
-	// If not a cloud registry or cloud auth failed, fall back to static config provider
-	if err != nil && err != cloudauth.ErrNoLoader && lastErr != nil {
+	// Log if cloud auth failed (not just "not a cloud registry")
+	if err != cloudauth.ErrNoLoader && lastErr != nil {
 		p.logger.Error(lastErr, "Cloud auth failed after retries, falling back to static config", "host", host)
 	}
 
