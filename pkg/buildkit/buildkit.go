@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/docker/cli/cli/config"
+	"github.com/docker/cli/cli/config/configfile"
 	"github.com/go-logr/logr"
 	"github.com/google/go-containerregistry/pkg/authn"
 	bkclient "github.com/moby/buildkit/client"
@@ -379,7 +380,8 @@ func (c *Client) getAuthProvider() session.Attachable {
 	// Fallback to default DockerAuthProvider
 	dockerConfig, err := config.Load(c.dockerConfigDir)
 	if err != nil {
-		c.log.Error(err, "Error loading config file")
+		c.log.Error(err, "Error loading config file, continuing with empty credentials")
+		dockerConfig = configfile.New("")
 	}
 	return authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{
 		ConfigFile: dockerConfig,
