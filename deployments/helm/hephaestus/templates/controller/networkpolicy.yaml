@@ -21,6 +21,10 @@ spec:
     - ports:
         - port: {{ .manager.metricsPort }}
           protocol: TCP
+        {{- if .Values.istio.ambient }}
+        - port: 15008 # Allow Istio Ambient mode's HBONE traffic
+          protocol: TCP
+        {{- end }}
       from:
         - podSelector:
             matchLabels:

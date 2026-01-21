@@ -41,6 +41,9 @@ istio:
   # Elevate pod execution permissions so that Istio's init container can modify
   # network settings when CNI plugin is NOT installed.
   cni: false
+  # In ambient mode, network policies are amended to include port 15008. This
+  # does have the side effect of allowing access to all container ports.
+  ambient: false
 
 # New Relic APM configuration
 newRelic:
