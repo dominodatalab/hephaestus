@@ -9,6 +9,8 @@
 # - kubectl
 # - golang
 
+#shellcheck disable=SC2250,SC2312
+
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -40,7 +42,7 @@ generate_kubernetes_swagger() {
 	sleep 5
 
 	info "Fetching Kubernetes OpenAPI specification"
-	kubectl get --raw="/openapi/v2" >$KUBERNETES_SWAGGER_FILE
+	kubectl get --raw="/openapi/v2" > "$KUBERNETES_SWAGGER_FILE"
 
 	info "Verifying CRD installation"
 	kubectl get crd -o name |
@@ -73,7 +75,7 @@ info "Creating SDK version: $VERSION"
 generate_kubernetes_swagger
 
 info "Generating Swagger JSON"
-go run "$SCRIPT_DIR"/main.go -json $KUBERNETES_SWAGGER_FILE -version "$VERSION" >$SWAGGER_FILE
+go run "$SCRIPT_DIR"/main.go -json "$KUBERNETES_SWAGGER_FILE" -version "$VERSION" > "$SWAGGER_FILE"
 
 
 info "Generating Java client library"
@@ -81,14 +83,14 @@ mkdir -p "$GEN_DIR"
 ##--invoker-package io.kubernetes.client.openapi 
 ##	--invoker-package com.dominodatalab.hephaestus.v1.client \
 docker run -q --user "$(id -u):$(id -g)" --rm -v "$PROJECT_DIR:/wd" --workdir /wd \
-	openapitools/openapi-generator-cli:$OPENAPI_GENERATOR_CLI_VERSION generate \
-	--input-spec /wd/$SWAGGER_FILE \
+	"openapitools/openapi-generator-cli:$OPENAPI_GENERATOR_CLI_VERSION" generate \
+	--input-spec "/wd/$SWAGGER_FILE" \
 	--generator-name java \
 	--output /wd/sdks/gen \
 	--library okhttp-gson \
 	--api-package com.dominodatalab.hephaestus.v1.apis \
 	--model-package com.dominodatalab.hephaestus.v1.models \
-    --invoker-package io.kubernetes.client.openapi \
+	--invoker-package io.kubernetes.client.openapi \
 	--group-id com.dominodatalab.hephaestus \
 	--artifact-id hephaestus-client-java \
 	--additional-properties dateLibrary=java8,testFramework=junit5  \
@@ -100,7 +102,7 @@ docker run -q --user "$(id -u):$(id -g)" --rm -v "$PROJECT_DIR:/wd" --workdir /w
 	--import-mappings v1.Status=io.kubernetes.client.openapi.models.V1Status \
 	--import-mappings v1.Time=java.time.OffsetDateTime \
 	--http-user-agent "Hephaestus Java Client/$VERSION" \
-    --skip-validate-spec \
+	--skip-validate-spec \
 	--generate-alias-as-model
 
 info "Copying generated Java files to $JAVA_DIR"

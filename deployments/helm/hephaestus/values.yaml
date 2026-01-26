@@ -307,8 +307,8 @@ buildkit:
   persistence:
     enabled: true
     pvcRetentionPolicy:
-      whenDeleted: "Delete"
-      whenScaled: "Retain"
+      whenDeleted: Delete
+      whenScaled: Retain
     storageClass: ""
     accessModes:
       - ReadWriteOnce

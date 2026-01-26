@@ -31,14 +31,14 @@ runs:
       run: |
          echo "VERSION_BUILDARG=$(git describe --tags --always)" >> $GITHUB_ENV
     - name: Login to container registry
-      uses: docker/login-action@v3
+      uses: docker/login-action@v3.6.0
       with:
         registry: ${{ inputs.registry }}
         username: ${{ inputs.username }}
         password: ${{ inputs.password }}
     - id: meta
       name: Extract Docker metadata
-      uses: docker/metadata-action@v5
+      uses: docker/metadata-action@v5.8.0
       env:
         DOCKER_METADATA_PR_HEAD_SHA: "true"
       with:
@@ -50,7 +50,7 @@ runs:
           type=semver,pattern={{major}}.{{minor}}
           type=sha
     - name: Build and push Docker production image
-      uses: docker/build-push-action@v6
+      uses: docker/build-push-action@v6.18.0
       with:
         context: .
         file: ./Dockerfile
@@ -63,7 +63,7 @@ runs:
         cache-from: type=gha, scope=${{ env.VERSION_BUILDARG }}
         cache-to: type=gha, scope=${{ env.VERSION_BUILDARG }}
     - name: Build and push Docker debug image
-      uses: docker/build-push-action@v6
+      uses: docker/build-push-action@v6.18.0
       with:
         file: ./Dockerfile.debug
         platforms: ${{ inputs.platforms }}
