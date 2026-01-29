@@ -74,7 +74,19 @@ func (p *RefreshingAuthProvider) Credentials(
 	host := req.GetHost()
 	p.logger.V(1).Info("Credentials requested", "host", host)
 
-	// Try cloud auth with retry
+	// Check static config first (credentials from secrets persisted at build start)
+	authServer, ok := p.staticConfigProvider.(auth.AuthServer)
+	if ok {
+		resp, err := authServer.Credentials(ctx, req)
+		if err == nil && (resp.GetUsername() != "" || resp.GetSecret() != "") {
+			p.logger.V(1).Info("Using static credentials from docker config", "host", host)
+			return resp, nil
+		}
+	}
+
+	// No static credentials for this host, try cloud auth with retry
+	p.logger.V(1).Info("No static credentials found, trying cloud auth", "host", host)
+
 	var authConfig *registry.AuthConfig
 	var lastErr error
 
@@ -83,7 +95,7 @@ func (p *RefreshingAuthProvider) Credentials(
 		authConfig, err = p.cloudAuth.RetrieveAuthorization(ctx, p.logger, host)
 
 		if err == cloudauth.ErrNoLoader {
-			// Not a cloud registry, stop retrying and fall back to static config
+			// Not a cloud registry, stop retrying
 			return true, err
 		}
 		if err != nil {
@@ -97,7 +109,6 @@ func (p *RefreshingAuthProvider) Credentials(
 	// If cloud auth succeeded, return fresh credentials
 	if err == nil && authConfig != nil {
 		p.logger.Info("Returning fresh cloud credentials", "host", host, "username", authConfig.Username)
-		p.logger.V(1).Info("Cloud credentials retrieved successfully", "host", host, "hasPassword", authConfig.Password != "")
 		return &auth.CredentialsResponse{
 			Username: authConfig.Username,
 			Secret:   authConfig.Password,
@@ -106,15 +117,10 @@ func (p *RefreshingAuthProvider) Credentials(
 
 	// Log if cloud auth failed (not just "not a cloud registry")
 	if err != cloudauth.ErrNoLoader && lastErr != nil {
-		p.logger.Error(lastErr, "Cloud auth failed after retries, falling back to static config", "host", host)
+		p.logger.Error(lastErr, "Cloud auth failed after retries", "host", host)
 	}
 
-	// Delegate to DockerAuthProvider for static config handling
-	p.logger.V(1).Info("Falling back to static config provider", "host", host)
-	authServer, ok := p.staticConfigProvider.(auth.AuthServer)
-	if !ok {
-		p.logger.V(1).Info("Static config provider does not implement AuthServer", "host", host)
-		return &auth.CredentialsResponse{}, nil
-	}
-	return authServer.Credentials(ctx, req)
+	// No credentials found
+	p.logger.V(1).Info("No credentials found for host", "host", host)
+	return &auth.CredentialsResponse{}, nil
 }

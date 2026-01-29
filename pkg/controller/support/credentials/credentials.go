@@ -108,16 +108,11 @@ func Persist(
 
 			helpMessage = append(helpMessage, "basic authentication username and password")
 		default:
-			pac, err := CloudAuthRegistry.RetrieveAuthorization(ctx, logger, cred.Server)
-			if err != nil {
-				if err != cloudauth.ErrNoLoader {
-					return "", nil, fmt.Errorf("registry authorization failed: %w", err)
-				}
-				return "", nil, fmt.Errorf("failed to authorize server %s, credentials may be misconfigured", cred.Server)
-			}
-
-			ac = *pac
-			helpMessage = append(helpMessage, fmt.Sprintf("cloud provider access configuration (server: %s)", cred.Server))
+			// Cloud auth credentials are fetched on-demand by RefreshingAuthProvider.
+			// Skip writing them to static config to allow on-demand refresh for long builds.
+			logger.Info("Cloud registry will use on-demand authentication", "server", cred.Server)
+			helpMessage = append(helpMessage, fmt.Sprintf("cloud provider on-demand authentication (server: %s)", cred.Server))
+			continue
 		}
 
 		auths[cred.Server] = ac
