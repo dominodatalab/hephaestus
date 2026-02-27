@@ -30,7 +30,7 @@ type awsLogger struct {
 	logr.Logger
 }
 
-func (l awsLogger) Logf(classification logging.Classification, format string, v ...interface{}) {
+func (l awsLogger) Logf(classification logging.Classification, format string, v ...any) {
 	var level int
 	if classification == logging.Debug {
 		level = 1

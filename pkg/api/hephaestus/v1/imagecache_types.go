@@ -28,10 +28,10 @@ type ImageCacheStatus struct {
 
 type ImageCache struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitzero"`
 
-	Spec   ImageCacheSpec   `json:"spec,omitempty"`
-	Status ImageCacheStatus `json:"status,omitempty"`
+	Spec   ImageCacheSpec   `json:"spec,omitzero"`
+	Status ImageCacheStatus `json:"status,omitzero"`
 }
 
 func (in *ImageCache) GetConditions() *[]metav1.Condition {
@@ -50,7 +50,7 @@ func (in *ImageCache) SetPhase(p Phase) {
 
 type ImageCacheList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
+	metav1.ListMeta `json:"metadata,omitzero"`
 
 	Items []ImageCache `json:"items"`
 }

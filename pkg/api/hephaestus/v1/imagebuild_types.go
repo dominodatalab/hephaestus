@@ -41,7 +41,7 @@ type ImageBuildSpec struct {
 type ImageBuildTransition struct {
 	PreviousPhase Phase       `json:"previousPhase"`
 	Phase         Phase       `json:"phase"`
-	OccurredAt    metav1.Time `json:"occurredAt,omitempty"`
+	OccurredAt    metav1.Time `json:"occurredAt,omitzero"`
 }
 
 type ImageBuildStatus struct {
@@ -78,10 +78,10 @@ type ImageBuildStatus struct {
 
 type ImageBuild struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitzero"`
 
-	Spec   ImageBuildSpec   `json:"spec,omitempty"`
-	Status ImageBuildStatus `json:"status,omitempty"`
+	Spec   ImageBuildSpec   `json:"spec,omitzero"`
+	Status ImageBuildStatus `json:"status,omitzero"`
 }
 
 func (in *ImageBuild) ObjectKey() client.ObjectKey {
@@ -112,7 +112,7 @@ func (in *ImageBuild) SetPhase(p Phase) {
 
 type ImageBuildList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
+	metav1.ListMeta `json:"metadata,omitzero"`
 
 	Items []ImageBuild `json:"items"`
 }
