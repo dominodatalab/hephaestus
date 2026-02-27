@@ -99,6 +99,7 @@ func schema_pkg_api_hephaestus_v1_ImageBuild(ref common.ReferenceCallback) commo
 						},
 					},
 				},
+				Required: []string{"metadata", "spec", "status"},
 			},
 		},
 		Dependencies: []string{
@@ -170,7 +171,7 @@ func schema_pkg_api_hephaestus_v1_ImageBuildList(ref common.ReferenceCallback) c
 						},
 					},
 				},
-				Required: []string{"items"},
+				Required: []string{"metadata", "items"},
 			},
 		},
 		Dependencies: []string{
@@ -217,6 +218,7 @@ func schema_pkg_api_hephaestus_v1_ImageBuildMessage(ref common.ReferenceCallback
 						},
 					},
 				},
+				Required: []string{"metadata", "spec", "status"},
 			},
 		},
 		Dependencies: []string{
@@ -298,7 +300,7 @@ func schema_pkg_api_hephaestus_v1_ImageBuildMessageList(ref common.ReferenceCall
 						},
 					},
 				},
-				Required: []string{"items"},
+				Required: []string{"metadata", "items"},
 			},
 		},
 		Dependencies: []string{
@@ -724,7 +726,7 @@ func schema_pkg_api_hephaestus_v1_ImageBuildTransition(ref common.ReferenceCallb
 						},
 					},
 				},
-				Required: []string{"previousPhase", "phase"},
+				Required: []string{"previousPhase", "phase", "occurredAt"},
 			},
 		},
 		Dependencies: []string{
@@ -771,6 +773,7 @@ func schema_pkg_api_hephaestus_v1_ImageCache(ref common.ReferenceCallback) commo
 						},
 					},
 				},
+				Required: []string{"metadata", "spec", "status"},
 			},
 		},
 		Dependencies: []string{
@@ -818,7 +821,7 @@ func schema_pkg_api_hephaestus_v1_ImageCacheList(ref common.ReferenceCallback) c
 						},
 					},
 				},
-				Required: []string{"items"},
+				Required: []string{"metadata", "items"},
 			},
 		},
 		Dependencies: []string{
