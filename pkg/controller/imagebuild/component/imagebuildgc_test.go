@@ -191,6 +191,7 @@ func TestGCIBsDeleteErr(t *testing.T) {
 
 	gc := &ImageBuildGC{
 		HistoryLimit: 0,
+		Interval:     0,
 		Client:       iFakeClient,
 		Namespaces:   []string{""},
 	}
@@ -205,6 +206,7 @@ func TestGCNoIBs(t *testing.T) {
 	recorder := newRecorder(fakeClient)
 	gc := &ImageBuildGC{
 		HistoryLimit: 1,
+		Interval:     0,
 		Client:       recorder.client,
 		Namespaces:   []string{""},
 	}

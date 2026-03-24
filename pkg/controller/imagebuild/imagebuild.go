@@ -37,6 +37,7 @@ func Register(mgr ctrl.Manager,
 	}
 	return mgr.Add(&component.ImageBuildGC{
 		HistoryLimit: cfg.Manager.ImageBuild.HistoryLimit,
+		Interval:     cfg.Manager.ImageBuild.Interval,
 		Client:       mgr.GetClient(),
 		Namespaces:   namespaces,
 	})

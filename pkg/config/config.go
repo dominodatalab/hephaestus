@@ -18,6 +18,7 @@ var CompressionMethod string
 type ImageBuild struct {
 	Concurrency  int `json:"concurrency" yaml:"concurrency"`
 	HistoryLimit int `json:"historyLimit" yaml:"historyLimit"`
+	Interval     int `json:"interval" yaml:"interval"`
 }
 
 type Controller struct {
