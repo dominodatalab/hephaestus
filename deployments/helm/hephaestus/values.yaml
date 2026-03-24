@@ -139,6 +139,8 @@ controller:
       # Maximum number of concurrent builds which can be run
       concurrency: 5
       historyLimit: 5
+      # interval to run garbage collection in hours default 1 hour
+      interval: 1
 
     # Webhook server port
     webhookPort: 9443
