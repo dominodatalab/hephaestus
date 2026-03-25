@@ -23,7 +23,7 @@ require (
 	github.com/docker/cli v28.4.0+incompatible
 	github.com/docker/docker v28.4.0+incompatible
 	github.com/dominodatalab/amqp-client v0.1.4
-	github.com/dominodatalab/controller-util v0.1.5
+	github.com/dominodatalab/controller-util v0.1.6
 	github.com/go-logr/logr v1.4.3
 	github.com/go-logr/stdr v1.2.2
 	github.com/go-logr/zapr v1.3.0

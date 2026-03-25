@@ -22,7 +22,7 @@ JAVA_DIR="$SDKS_DIR/java"
 KUBERNETES_SWAGGER_FILE=/tmp/dist.swagger.json
 SWAGGER_FILE=api/openapi-spec/swagger.json
 
-OPENAPI_GENERATOR_CLI_VERSION=v7.15.0
+OPENAPI_GENERATOR_CLI_VERSION=v7.21.0
 info() {
 	echo -e "\033[0;32m[sdk-generate]\033[0m INFO: $*"
 }
