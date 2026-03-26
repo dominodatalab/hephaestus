@@ -112,6 +112,8 @@ controller:
 
   # Node labels for controller pod assignment
   nodeSelector: {}
+  # Node selector for Job pods. Defaults to nodeSelector if not set.
+  jobNodeSelector: {}
 
   # Controller pods priorityClassName
   priorityClassName: ""
