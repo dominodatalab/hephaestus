@@ -30,12 +30,11 @@ type awsLogger struct {
 	logr.Logger
 }
 
-func (l awsLogger) Logf(classification logging.Classification, format string, v ...interface{}) {
+func (l awsLogger) Logf(classification logging.Classification, format string, v ...any) {
 	var level int
 	if classification == logging.Debug {
 		level = 1
 	}
-
 	l.V(level).Info(fmt.Sprintf(format, v...))
 }
 
@@ -52,7 +51,6 @@ var (
 func Register(ctx context.Context, logger logr.Logger, registry *cloudauth.Registry) error {
 	clientMode := aws.LogRequest | aws.LogResponse | aws.LogRetries
 	clientLogger := &awsLogger{logger}
-
 	var err error
 	awsConfig, err = config.LoadDefaultConfig(
 		ctx,
@@ -69,7 +67,6 @@ func Register(ctx context.Context, logger logr.Logger, registry *cloudauth.Regis
 		logger.Info("ECR not registered", "error", err)
 		return nil
 	}
-
 	registry.Register(urlRegex, authenticate)
 	logger.Info("ECR registered")
 	return nil
@@ -83,17 +80,14 @@ func newECRClient(region string) ecrClient {
 
 func authenticate(ctx context.Context, logger logr.Logger, url string) (*registry.AuthConfig, error) {
 	logger.WithName("ecr-auth-provider")
-
 	match := urlRegex.FindStringSubmatch(url)
 	if len(match) == 0 {
 		err := fmt.Errorf("ECR URL is invalid: %q should match pattern %v", url, urlRegex)
 		logger.Info(err.Error())
 		return nil, err
 	}
-
 	client := newClient(match[urlRegexRegionIndex])
 	input := &ecr.GetAuthorizationTokenInput{}
-
 	resp, err := client.GetAuthorizationToken(ctx, input)
 	if err != nil {
 		err = fmt.Errorf("failed to access ECR auth token: %w", err)
@@ -106,14 +100,12 @@ func authenticate(ctx context.Context, logger logr.Logger, url string) (*registr
 		return nil, err
 	}
 	authToken := aws.ToString(resp.AuthorizationData[0].AuthorizationToken)
-
 	username, password, err := decodeAuth(authToken)
 	if err != nil {
 		err = fmt.Errorf("invalid ECR authorization token: %w", err)
 		logger.Info(err.Error())
 		return nil, err
 	}
-
 	logger.Info("Successfully authenticated with ECR")
 	return &registry.AuthConfig{
 		Username: username,
@@ -125,12 +117,10 @@ func decodeAuth(auth string) (string, string, error) {
 	if auth == "" {
 		return "", "", errors.New("docker auth token cannot be blank")
 	}
-
 	decoded, err := base64.StdEncoding.DecodeString(auth)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to decode docker auth token: %w", err)
 	}
-
 	creds := strings.SplitN(string(decoded), ":", 2)
 	if len(creds) != 2 {
 		return "", "", fmt.Errorf("invalid docker auth token: %q", creds)

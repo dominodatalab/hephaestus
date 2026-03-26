@@ -26,7 +26,6 @@ func ChallengeLoginServer(ctx context.Context, loginServerURL string) (*AuthDire
 		if err != nil {
 			return nil, err
 		}
-
 		defer challenge.Body.Close()
 		return nil, fmt.Errorf("registry did not issue a valid AAD challenge, status: %d", challenge.StatusCode)
 	}
@@ -36,7 +35,6 @@ func ChallengeLoginServer(ctx context.Context, loginServerURL string) (*AuthDire
 	if !ok {
 		return nil, fmt.Errorf("challenge response does not contain header 'Www-Authenticate'")
 	}
-
 	if len(authHeader) != 1 {
 		return nil, fmt.Errorf("registry did not issue a valid challenge, authenticate header [%s]",
 			strings.Join(authHeader, ", "))
@@ -48,8 +46,7 @@ func ChallengeLoginServer(ctx context.Context, loginServerURL string) (*AuthDire
 	}
 
 	authParams := map[string]string{}
-	params := strings.Split(authSections[1], ",")
-	for _, p := range params {
+	for p := range strings.SplitSeq(authSections[1], ",") {
 		parts := strings.SplitN(strings.TrimSpace(p), "=", authValueIndex)
 		authParams[parts[0]] = strings.Trim(parts[1], `"`)
 	}
@@ -58,7 +55,6 @@ func ChallengeLoginServer(ctx context.Context, loginServerURL string) (*AuthDire
 	if authParams["realm"] == "" {
 		return nil, fmt.Errorf("Www-Authenticate: missing header \"realm\"")
 	}
-
 	return &AuthDirective{
 		Service: authParams["service"], // optional
 		Realm:   authParams["realm"],

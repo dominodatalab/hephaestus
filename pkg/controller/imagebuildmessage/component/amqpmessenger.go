@@ -3,6 +3,7 @@ package component
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/url"
 	"path"
 	"strings"
@@ -60,7 +61,7 @@ func (c *AMQPMessengerComponent) Initialize(_ *core.Context, bldr *ctrl.Builder)
 	return nil
 }
 
-//nolint:maintidx,funlen
+//nolint:maintidx
 func (c *AMQPMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, error) {
 	log := ctx.Log
 	obj := ctx.Object
@@ -209,9 +210,7 @@ func (c *AMQPMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 				message.Annotations = map[string]string{}
 			}
 			message.Annotations[compressedImageSizeBytesAnnotation] = ib.Status.CompressedImageSizeBytes
-			for key, value := range ib.Status.Labels {
-				message.Annotations[key] = value
-			}
+			maps.Copy(message.Annotations, ib.Status.Labels)
 		case hephv1.PhaseFailed:
 			if ib.Status.Conditions == nil {
 				return ctrl.Result{Requeue: true}, nil

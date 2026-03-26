@@ -53,9 +53,7 @@ func Start(cfg config.Controller) error {
 	if err != nil {
 		return err
 	}
-
 	ctrl.SetLogger(zapr.NewLogger(zapLogger))
-
 	log := ctrl.Log.WithName("setup")
 	log.Info("Using provided configuration", "config", cfg)
 
@@ -75,6 +73,7 @@ func Start(cfg config.Controller) error {
 	if err != nil {
 		return err
 	}
+
 	if err = mgr.Add(pool); err != nil {
 		return err
 	}
@@ -92,7 +91,6 @@ func Start(cfg config.Controller) error {
 	}
 
 	// +kubebuilder:scaffold:builder
-
 	log.Info("Starting controller manager")
 	return mgr.Start(ctrl.SetupSignalHandler())
 }
@@ -114,7 +112,6 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 	scheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(hephv1.AddToScheme(scheme))
-
 	// +kubebuilder:scaffold:scheme
 
 	opts := ctrl.Options{
@@ -124,8 +121,8 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 		LeaderElection:         cfg.EnableLeaderElection,
 		LeaderElectionID:       "hephaestus-controller-lock",
 	}
-	webhookOpts := webhook.Options{Port: cfg.WebhookPort}
 
+	webhookOpts := webhook.Options{Port: cfg.WebhookPort}
 	if certDir := os.Getenv("WEBHOOK_SERVER_CERT_DIR"); certDir != "" {
 		log.Info("Overriding webhook server certificate directory", "value", certDir)
 		webhookOpts.CertDir = certDir
@@ -141,23 +138,14 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 	} else {
 		log.Info("Watching all namespaces")
 	}
-	opts.WebhookServer = webhook.NewServer(webhookOpts)
 
-	opts.WebhookServer.Register("/mutate-hephaestus-dominodatalab-com-v1-imagebuild", admission.WithCustomDefaulter(
-		opts.Scheme,
-		&hephv1.ImageBuild{},
-		&hephv1.ImageBuild{},
-	))
-	opts.WebhookServer.Register("/validate-hephaestus-dominodatalab-com-v1-imagebuild", admission.WithCustomValidator(
-		opts.Scheme,
-		&hephv1.ImageBuild{},
-		&hephv1.ImageBuild{},
-	))
-	opts.WebhookServer.Register("/validate-hephaestus-dominodatalab-com-v1-imagecache", admission.WithCustomValidator(
-		opts.Scheme,
-		&hephv1.ImageCache{},
-		&hephv1.ImageCache{},
-	))
+	opts.WebhookServer = webhook.NewServer(webhookOpts)
+	opts.WebhookServer.Register("/mutate-hephaestus-dominodatalab-com-v1-imagebuild",
+		admission.WithDefaulter[*hephv1.ImageBuild](opts.Scheme, &hephv1.ImageBuild{}))
+	opts.WebhookServer.Register("/validate-hephaestus-dominodatalab-com-v1-imagebuild",
+		admission.WithValidator[*hephv1.ImageBuild](opts.Scheme, &hephv1.ImageBuild{}))
+	opts.WebhookServer.Register("/validate-hephaestus-dominodatalab-com-v1-imagecache",
+		admission.WithValidator[*hephv1.ImageCache](opts.Scheme, &hephv1.ImageCache{}))
 	opts.WebhookServer.Register("/livez", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		log.Info("Webhook livez endpoint called")
 		mux := opts.WebhookServer.WebhookMux()
@@ -169,7 +157,6 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 			}
 			return
 		}
-
 		w.Header().Set("Content-Type", "text/plain")
 		_, err := fmt.Fprintf(w, "Webhook server is alive.")
 		if err != nil {
@@ -177,7 +164,6 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 			return
 		}
 	}))
-
 	opts.WebhookServer.Register("/eastereggz", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		log.V(1).Info("Webhook livez endpoint called")
 		mux := opts.WebhookServer.WebhookMux()
@@ -189,7 +175,6 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 			}
 			return
 		}
-
 		w.Header().Set("Content-Type", "text/plain")
 		w.Header().Set("X-Clacks-Overhead", "GNU Terry Pratchett")
 		//nolint:lll
@@ -199,7 +184,6 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 			return
 		}
 	}))
-
 	opts.WebhookServer.Register("/debugz", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		log.Info("Debug endpoint called")
 		mux := opts.WebhookServer.WebhookMux()
@@ -211,14 +195,12 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 			}
 			return
 		}
-
 		w.Header().Set("Content-Type", "text/plain")
 		_, err := fmt.Fprintf(w, "Webhook server is running\n\nRegistered paths:\n")
 		if err != nil {
 			log.Error(err, "Failed to write response.")
 			return
 		}
-
 		testPaths := []string{
 			"/",
 			"/mutate-hephaestus-dominodatalab-com-v1-imagebuild",
@@ -247,9 +229,11 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if err = mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		return nil, err
 	}
+
 	if err = mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		return nil, err
 	}
@@ -270,11 +254,9 @@ func createWorkerPool(
 	if mit := cfg.PoolMaxIdleTime; mit != nil {
 		poolOpts = append(poolOpts, worker.MaxIdleTime(*mit))
 	}
-
 	if swt := cfg.PoolSyncWaitTime; swt != nil {
 		poolOpts = append(poolOpts, worker.SyncWaitTime(*swt))
 	}
-
 	if wt := cfg.PoolEndpointWatchTimeout; wt != nil {
 		poolOpts = append(poolOpts, worker.EndpointWatchTimeoutSeconds(*wt))
 	}
