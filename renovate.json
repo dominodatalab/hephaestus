@@ -1,22 +1,29 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    ":dependencyDashboard",
-    ":semanticPrefixFixDepsChoreOthers",
-    "group:monorepos",
-    "group:recommended",
-    "replacements:all",
-    "workarounds:all"
-  ],
-
-  "postUpdateOptions": [
-    "gomodTidy"
+    "github>cerebrotech/renovate-config:go-minimal",
+    "github>cerebrotech/renovate-config:docker-minimal"
   ],
   "packageRules": [
-      {
-          "description": "Disable helm dependency updates",
-          "matchManagers": ["helm"],
-          "enabled": false
-      }
+    {
+      "description": "Disable helm dependency updates",
+      "matchManagers": ["helm"],
+      "enabled": false
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["^\\.github/workflows/.*\\.ya?ml$"],
+      "matchStrings": ["GO_VERSION:\\s*[\"']?(?<currentValue>[\\d.]+)[\"']?"],
+      "depNameTemplate": "golang",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "fileMatch": ["^\\.github/workflows/.*\\.ya?ml$"],
+      "matchStrings": ["MAVEN_DOCKER_IMAGE:\\s*(?<depName>[^:]+):(?<currentValue>[^\\s\"']+)"],
+      "datasourceTemplate": "docker"
+    }
   ]
 }
