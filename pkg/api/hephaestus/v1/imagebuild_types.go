@@ -78,6 +78,7 @@ type ImageBuildStatus struct {
 
 type ImageBuild struct {
 	metav1.TypeMeta   `json:",inline"`
+	// +optional
 	metav1.ObjectMeta `json:"metadata,omitzero"`
 
 	Spec   ImageBuildSpec   `json:"spec,omitzero"`
