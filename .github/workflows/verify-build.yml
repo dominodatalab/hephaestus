@@ -1,0 +1,259 @@
+name: Verify Build
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to verify (e.g., pr-382, sha-abc1234)'
+        required: true
+        type: string
+
+jobs:
+  verify-multiarch:
+    name: Verify Multi-arch Images
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "tag=${{ inputs.image_tag }}" >> $GITHUB_OUTPUT
+          else
+            # Extract tag from the triggering workflow
+            echo "tag=sha-$(echo ${{ github.event.workflow_run.head_sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Quay.io
+        uses: docker/login-action@v3
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_PASSWORD }}
+
+      - name: Verify multi-arch manifests
+        run: |
+          chmod +x ./scripts/verify-multiarch-build.sh
+          ./scripts/verify-multiarch-build.sh "${{ steps.tag.outputs.tag }}"
+
+  verify-amd64-pull:
+    name: Verify amd64 Image Pull
+    runs-on: ubuntu-latest
+    needs: verify-multiarch
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "tag=${{ inputs.image_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=sha-$(echo ${{ github.event.workflow_run.head_sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull and verify amd64 image
+        run: |
+          IMAGE="ghcr.io/dominodatalab/hephaestus:${{ steps.tag.outputs.tag }}"
+
+          echo "Pulling $IMAGE for linux/amd64..."
+          docker pull --platform linux/amd64 "$IMAGE"
+
+          echo "Verifying architecture..."
+          ARCH=$(docker inspect "$IMAGE" --format '{{.Architecture}}')
+          echo "Image architecture: $ARCH"
+
+          if [[ "$ARCH" != "amd64" ]]; then
+            echo "ERROR: Expected amd64, got $ARCH"
+            exit 1
+          fi
+
+          echo "✓ amd64 image verified"
+
+      - name: Test container execution
+        run: |
+          IMAGE="ghcr.io/dominodatalab/hephaestus:${{ steps.tag.outputs.tag }}"
+
+          echo "Testing container startup..."
+          # The controller expects certain env vars, so just verify it's a valid executable
+          docker run --rm --entrypoint /bin/sh "$IMAGE" -c "test -x /usr/bin/hephaestus-controller && echo 'Binary is executable'"
+
+          echo "✓ Container execution test passed"
+
+  verify-arm64-pull:
+    name: Verify arm64 Image Pull
+    runs-on: ubuntu-24.04-arm
+    needs: verify-multiarch
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "tag=${{ inputs.image_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=sha-$(echo ${{ github.event.workflow_run.head_sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull and verify arm64 image
+        run: |
+          IMAGE="ghcr.io/dominodatalab/hephaestus:${{ steps.tag.outputs.tag }}"
+
+          echo "Pulling $IMAGE for linux/arm64..."
+          docker pull --platform linux/arm64 "$IMAGE"
+
+          echo "Verifying architecture..."
+          ARCH=$(docker inspect "$IMAGE" --format '{{.Architecture}}')
+          echo "Image architecture: $ARCH"
+
+          if [[ "$ARCH" != "arm64" ]]; then
+            echo "ERROR: Expected arm64, got $ARCH"
+            exit 1
+          fi
+
+          echo "✓ arm64 image verified"
+
+      - name: Test container execution
+        run: |
+          IMAGE="ghcr.io/dominodatalab/hephaestus:${{ steps.tag.outputs.tag }}"
+
+          echo "Testing container startup..."
+          docker run --rm --entrypoint /bin/sh "$IMAGE" -c "test -x /usr/bin/hephaestus-controller && echo 'Binary is executable'"
+
+          echo "✓ Container execution test passed"
+
+  verify-debug-images:
+    name: Verify Debug Images
+    runs-on: ubuntu-latest
+    needs: verify-multiarch
+    steps:
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "tag=${{ inputs.image_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=sha-$(echo ${{ github.event.workflow_run.head_sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify debug image exists and has both architectures
+        run: |
+          IMAGE="ghcr.io/dominodatalab/hephaestus:${{ steps.tag.outputs.tag }}-debug"
+
+          echo "Inspecting debug image manifest: $IMAGE"
+          docker manifest inspect "$IMAGE"
+
+          # Verify both architectures present
+          MANIFEST=$(docker manifest inspect "$IMAGE")
+
+          if echo "$MANIFEST" | grep -q '"architecture": "amd64"'; then
+            echo "✓ Debug image has amd64"
+          else
+            echo "ERROR: Debug image missing amd64"
+            exit 1
+          fi
+
+          if echo "$MANIFEST" | grep -q '"architecture": "arm64"'; then
+            echo "✓ Debug image has arm64"
+          else
+            echo "ERROR: Debug image missing arm64"
+            exit 1
+          fi
+
+      - name: Verify debug image has debug tools
+        run: |
+          IMAGE="ghcr.io/dominodatalab/hephaestus:${{ steps.tag.outputs.tag }}-debug"
+
+          echo "Pulling debug image..."
+          docker pull --platform linux/amd64 "$IMAGE"
+
+          echo "Checking for debug tools..."
+          # Debug image should be based on Ubuntu and have a shell
+          docker run --rm "$IMAGE" bash -c "echo 'Shell is available'"
+
+          echo "✓ Debug image verified"
+
+  summary:
+    name: Verification Summary
+    runs-on: ubuntu-latest
+    needs: [verify-multiarch, verify-amd64-pull, verify-arm64-pull, verify-debug-images]
+    if: always()
+    steps:
+      - name: Check results
+        run: |
+          echo "## Build Verification Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "${{ needs.verify-multiarch.result }}" == "success" ]]; then
+            echo "✅ Multi-arch manifests: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Multi-arch manifests: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [[ "${{ needs.verify-amd64-pull.result }}" == "success" ]]; then
+            echo "✅ amd64 image pull: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ amd64 image pull: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [[ "${{ needs.verify-arm64-pull.result }}" == "success" ]]; then
+            echo "✅ arm64 image pull: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ arm64 image pull: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [[ "${{ needs.verify-debug-images.result }}" == "success" ]]; then
+            echo "✅ Debug images: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Debug images: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Fail if any job failed
+          if [[ "${{ needs.verify-multiarch.result }}" != "success" ]] || \
+             [[ "${{ needs.verify-amd64-pull.result }}" != "success" ]] || \
+             [[ "${{ needs.verify-arm64-pull.result }}" != "success" ]] || \
+             [[ "${{ needs.verify-debug-images.result }}" != "success" ]]; then
+            echo ""
+            echo "Some verification checks failed!"
+            exit 1
+          fi
+
+          echo ""
+          echo "All verification checks passed! ✅"

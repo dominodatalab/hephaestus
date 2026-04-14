@@ -1,15 +1,16 @@
-FROM golang:1.25-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS build
 ARG VERSION=dev
-ENV VERSION=${VERSION}
+ARG TARGETOS
+ARG TARGETARCH
 WORKDIR /app
-COPY go.mod .
-COPY go.sum .
+COPY go.mod go.sum ./
 RUN go mod download
 COPY cmd ./cmd
 COPY pkg ./pkg
 COPY deployments/crds ./deployments/crds
-ENV CGO_ENABLED=0 GOOS=linux
-RUN go build -ldflags="-X 'main.Version=${VERSION}'" -o hephaestus-controller ./cmd/controller
+# Cross-compile natively using Go's built-in support (no QEMU emulation needed)
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -ldflags="-X 'main.Version=${VERSION}'" -o hephaestus-controller ./cmd/controller
 
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
