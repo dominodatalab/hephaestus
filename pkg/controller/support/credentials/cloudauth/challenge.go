@@ -48,7 +48,7 @@ func ChallengeLoginServer(ctx context.Context, loginServerURL string) (*AuthDire
 	}
 
 	authParams := map[string]string{}
-	for p := range strings.SplitSeq(authSections[1], ",") {
+	for _, p := range strings.Split(authSections[1], ",") {
 		parts := strings.SplitN(strings.TrimSpace(p), "=", authValueIndex)
 		authParams[parts[0]] = strings.Trim(parts[1], `"`)
 	}
