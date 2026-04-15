@@ -78,11 +78,11 @@ type ImageBuildStatus struct {
 // +kubebuilder:printcolumn:name="Builder Address",type=string,JSONPath=".status.builderAddr",priority=10
 
 type ImageBuild struct {
-	metav1.TypeMeta   `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitzero"`
 
-	Spec   ImageBuildSpec   `json:"spec,omitzero"`
+	Spec ImageBuildSpec `json:"spec,omitzero"`
 	// +optional
 	Status ImageBuildStatus `json:"status,omitzero"`
 }
