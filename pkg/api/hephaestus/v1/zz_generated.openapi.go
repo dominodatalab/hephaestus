@@ -218,7 +218,7 @@ func schema_pkg_api_hephaestus_v1_ImageBuildMessage(ref common.ReferenceCallback
 						},
 					},
 				},
-				Required: []string{"metadata", "spec", "status"},
+				Required: []string{"spec"},
 			},
 		},
 		Dependencies: []string{
@@ -773,7 +773,7 @@ func schema_pkg_api_hephaestus_v1_ImageCache(ref common.ReferenceCallback) commo
 						},
 					},
 				},
-				Required: []string{"metadata", "spec", "status"},
+				Required: []string{"spec"},
 			},
 		},
 		Dependencies: []string{

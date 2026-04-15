@@ -26,10 +26,12 @@ type ImageBuildMessageStatus struct {
 // +kubebuilder:subresource:status
 
 type ImageBuildMessage struct {
-	metav1.TypeMeta   `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
+	// +optional
 	metav1.ObjectMeta `json:"metadata,omitzero"`
 
-	Spec   ImageBuildMessageSpec   `json:"spec,omitzero"`
+	Spec ImageBuildMessageSpec `json:"spec,omitzero"`
+	// +optional
 	Status ImageBuildMessageStatus `json:"status,omitzero"`
 }
 

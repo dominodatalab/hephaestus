@@ -27,10 +27,12 @@ type ImageCacheStatus struct {
 // +kubebuilder:printcolumn:name="Target Pods",type=string,JSONPath=".status.buildkitPods",priority=10
 
 type ImageCache struct {
-	metav1.TypeMeta   `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
+	// +optional
 	metav1.ObjectMeta `json:"metadata,omitzero"`
 
-	Spec   ImageCacheSpec   `json:"spec,omitzero"`
+	Spec ImageCacheSpec `json:"spec,omitzero"`
+	// +optional
 	Status ImageCacheStatus `json:"status,omitzero"`
 }
 
