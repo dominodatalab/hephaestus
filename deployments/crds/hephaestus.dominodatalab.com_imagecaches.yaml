@@ -166,6 +166,8 @@ spec:
                 description: Phase represents a step in a resource processing lifecycle.
                 type: string
             type: object
+        required:
+        - spec
         type: object
     served: true
     storage: true

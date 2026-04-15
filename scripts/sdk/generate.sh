@@ -78,8 +78,7 @@ go run "$SCRIPT_DIR"/main.go -json $KUBERNETES_SWAGGER_FILE -version "$VERSION" 
 
 info "Generating Java client library"
 mkdir -p "$GEN_DIR"
-##--invoker-package io.kubernetes.client.openapi 
-##	--invoker-package com.dominodatalab.hephaestus.v1.client \
+
 docker run -q --user "$(id -u):$(id -g)" --rm -v "$PROJECT_DIR:/wd" --workdir /wd \
 	openapitools/openapi-generator-cli:$OPENAPI_GENERATOR_CLI_VERSION generate \
 	--input-spec /wd/$SWAGGER_FILE \
@@ -88,7 +87,7 @@ docker run -q --user "$(id -u):$(id -g)" --rm -v "$PROJECT_DIR:/wd" --workdir /w
 	--library okhttp-gson \
 	--api-package com.dominodatalab.hephaestus.v1.apis \
 	--model-package com.dominodatalab.hephaestus.v1.models \
-    --invoker-package io.kubernetes.client.openapi \
+    --invoker-package com.dominodatalab.hephaestus.v1.client \
 	--group-id com.dominodatalab.hephaestus \
 	--artifact-id hephaestus-client-java \
 	--additional-properties dateLibrary=java8,testFramework=junit5  \
@@ -104,7 +103,7 @@ docker run -q --user "$(id -u):$(id -g)" --rm -v "$PROJECT_DIR:/wd" --workdir /w
 	--generate-alias-as-model
 
 info "Copying generated Java files to $JAVA_DIR"
-rm -rf "$GEN_DIR"/src/main/{java/io,AndroidManifest.xml}
+rm -rf "$GEN_DIR"/src/main/AndroidManifest.xml
 cp -r "$GEN_DIR"/docs "$JAVA_DIR"
 cp -r "$GEN_DIR"/src "$JAVA_DIR"
 rm -rf "$GEN_DIR"

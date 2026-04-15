@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/url"
 	"os"
 	"path"
@@ -227,9 +228,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 	}
 
 	// merge in preloaded data
-	for name, contents := range opts.SecretsData {
-		secrets[name] = contents
-	}
+	maps.Copy(secrets, opts.SecretsData)
 
 	contentsFS, err := fsutil.NewFS(contentsDir)
 	if err != nil {
@@ -285,9 +284,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 			return "", fmt.Errorf("cannot parse build args: %w", err)
 		}
 
-		for k, v := range attrs {
-			solveOpt.FrontendAttrs[k] = v
-		}
+		maps.Copy(solveOpt.FrontendAttrs, attrs)
 	}
 	for _, name := range opts.Images {
 		bkclientattrs := validateCompression(hephconfig.CompressionMethod, name)
@@ -304,7 +301,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 func (c *Client) Cache(ctx context.Context, image string) error {
 	return c.solveWith(ctx, func(buildDir string, solveOpt *bkclient.SolveOpt) error {
 		dockerfile := filepath.Join(buildDir, "Dockerfile")
-		contents := []byte(fmt.Sprintf("FROM %s\nRUN echo extract\n", image))
+		contents := fmt.Appendf(nil, "FROM %s\nRUN echo extract\n", image)
 		if err := os.WriteFile(dockerfile, contents, 0644); err != nil {
 			return fmt.Errorf("failed to create dockerfile: %w", err)
 		}

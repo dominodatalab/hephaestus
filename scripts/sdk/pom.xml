@@ -11,7 +11,7 @@
         <java.version>17</java.version>
         <maven.compiler.source>${java.version}</maven.compiler.source>
         <maven.compiler.target>${java.version}</maven.compiler.target>
-        <swagger-core-version>1.6.15</swagger-core-version>
+        <swagger-core-version>1.6.16</swagger-core-version>
         <okhttp-version>4.12.0</okhttp-version>
         <gson-version>2.12.1</gson-version>
         <javax-annotation-version>1.3.2</javax-annotation-version>
@@ -24,7 +24,7 @@
         <dependency>
             <groupId>io.kubernetes</groupId>
             <artifactId>client-java</artifactId>
-            <version>24.0.0</version>
+            <version>24.0.0-legacy</version>
         </dependency>
         <dependency>
             <groupId>io.swagger</groupId>
@@ -71,7 +71,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-deploy-plugin</artifactId>
-                <version>3.1.3</version>
+                <version>3.1.4</version>
             </plugin>
         </plugins>
     </build>

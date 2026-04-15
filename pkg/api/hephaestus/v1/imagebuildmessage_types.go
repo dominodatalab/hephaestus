@@ -27,17 +27,17 @@ type ImageBuildMessageStatus struct {
 
 type ImageBuildMessage struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitzero"`
 
-	Spec   ImageBuildMessageSpec   `json:"spec,omitempty"`
-	Status ImageBuildMessageStatus `json:"status,omitempty"`
+	Spec   ImageBuildMessageSpec   `json:"spec,omitzero"`
+	Status ImageBuildMessageStatus `json:"status,omitzero"`
 }
 
 // +kubebuilder:object:root=true
 
 type ImageBuildMessageList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
+	metav1.ListMeta `json:"metadata,omitzero"`
 
 	Items []ImageBuildMessage `json:"items"`
 }
