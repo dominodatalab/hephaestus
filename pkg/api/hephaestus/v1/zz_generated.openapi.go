@@ -99,7 +99,7 @@ func schema_pkg_api_hephaestus_v1_ImageBuild(ref common.ReferenceCallback) commo
 						},
 					},
 				},
-				Required: []string{"metadata", "spec", "status"},
+				Required: []string{"spec"},
 			},
 		},
 		Dependencies: []string{
@@ -726,7 +726,7 @@ func schema_pkg_api_hephaestus_v1_ImageBuildTransition(ref common.ReferenceCallb
 						},
 					},
 				},
-				Required: []string{"previousPhase", "phase", "occurredAt"},
+				Required: []string{"previousPhase", "phase"},
 			},
 		},
 		Dependencies: []string{
