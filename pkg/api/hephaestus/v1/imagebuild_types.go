@@ -39,8 +39,8 @@ type ImageBuildSpec struct {
 }
 
 type ImageBuildTransition struct {
-	PreviousPhase Phase       `json:"previousPhase"`
-	Phase         Phase       `json:"phase"`
+	PreviousPhase Phase `json:"previousPhase"`
+	Phase         Phase `json:"phase"`
 	// +optional
 	OccurredAt metav1.Time `json:"occurredAt,omitzero"`
 }
