@@ -257,32 +257,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 	}
 	imageName, err := bk.Build(solveCtx, buildOpts)
 	if err != nil {
-		// if the underlying buildkit pod is terminated via resource delete, then buildCtx will be closed and there will
-		// be an error on it. otherwise, some external event (e.g. pod terminated) cancelled the build, so we should
-		// mark the build as failed.
-		if buildCtx.Err() != nil {
-			log.Info("Build cancelled via resource delete")
-			txn.AddAttribute("cancelled", true)
-
-			return ctrl.Result{}, nil
-		}
-
-		if errors.Is(err, context.DeadlineExceeded) || (solveCtx.Err() == context.DeadlineExceeded) {
-			buildLog.Error(err, "Build exceeded configured timeout", "timeout", c.cfg.BuildTimeout)
-			txn.NoticeError(newrelic.Error{
-				Message: err.Error(),
-				Class:   "BuildTimeoutError",
-			})
-			return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, fmt.Errorf("build exceeded timeout %s: %w", c.cfg.BuildTimeout, err))
-		}
-
-		buildLog.Error(err, fmt.Sprintf("Failed to build image: %s", err.Error()))
-
-		txn.NoticeError(newrelic.Error{
-			Message: err.Error(),
-			Class:   "ImageBuildError",
-		})
-		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, fmt.Errorf("build failed: %w", err))
+		return c.handleBuildError(coreCtx, obj, buildCtx, solveCtx, txn, log, buildLog, err)
 	}
 	obj.Status.BuildTime = time.Since(start).Truncate(time.Millisecond).String()
 	buildSeg.End()
@@ -299,6 +274,38 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 	return ctrl.Result{}, nil
 }
 
+// handleBuildError categorizes a bk.Build error into resource-delete (no-op), timeout, or
+// generic build failure, and routes it to the appropriate phase transition + New Relic class.
+// Split out of Reconcile to keep that function under the maintainability-index linter threshold.
+func (c *BuildDispatcherComponent) handleBuildError(
+	coreCtx *core.Context,
+	obj *hephv1.ImageBuild,
+	buildCtx, solveCtx context.Context,
+	txn *newrelic.Transaction,
+	log, buildLog logr.Logger,
+	err error,
+) (ctrl.Result, error) {
+	// if the underlying buildkit pod is terminated via resource delete, then buildCtx will be closed
+	// and there will be an error on it. otherwise, some external event (e.g. pod terminated)
+	// cancelled the build, so we should mark the build as failed.
+	if buildCtx.Err() != nil {
+		log.Info("Build cancelled via resource delete")
+		txn.AddAttribute("cancelled", true)
+		return ctrl.Result{}, nil
+	}
+
+	if errors.Is(err, context.DeadlineExceeded) || solveCtx.Err() == context.DeadlineExceeded {
+		buildLog.Error(err, "Build exceeded configured timeout", "timeout", c.cfg.BuildTimeout)
+		txn.NoticeError(newrelic.Error{Message: err.Error(), Class: "BuildTimeoutError"})
+		wrapped := fmt.Errorf("build exceeded timeout %s: %w", c.cfg.BuildTimeout, err)
+		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, wrapped)
+	}
+
+	buildLog.Error(err, fmt.Sprintf("Failed to build image: %s", err.Error()))
+	txn.NoticeError(newrelic.Error{Message: err.Error(), Class: "ImageBuildError"})
+	return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, fmt.Errorf("build failed: %w", err))
+}
+
 // runningAge returns the time since the most recent transition into Running (or
 // Initializing, whichever is latest). Returns "unknown" if no such transition is
 // recorded on the object. Used to annotate the orphan-build failure message so
@@ -310,7 +317,7 @@ func runningAge(obj *hephv1.ImageBuild) string {
 		if t.Phase != hephv1.PhaseRunning && t.Phase != hephv1.PhaseInitializing {
 			continue
 		}
-		if t.OccurredAt.Time.After(latest) {
+		if t.OccurredAt.After(latest) {
 			latest = t.OccurredAt.Time
 		}
 	}
