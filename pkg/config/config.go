@@ -120,6 +120,10 @@ type Buildkit struct {
 	// FetchAndExtractTimeout used when processing the remote Docker context tarball.
 	// Fetch retries have a hard timeout limit of 4.25 mins because, come on, don't be ridiculous.
 	FetchAndExtractTimeout time.Duration `json:"fetchAndExtractTimeout" yaml:"fetchAndExtractTimeout"`
+	// BuildTimeout caps the total duration of a single buildkit Solve call. Zero means no timeout.
+	// Bounds the blast radius of a hung gRPC stream or stuck progress consumer so the buildkit worker lease
+	// is always released and the ImageBuild never gets stuck in Running indefinitely.
+	BuildTimeout time.Duration `json:"buildTimeout" yaml:"buildTimeout"`
 }
 
 // RegistryConfig options used to relax registry push/pull restrictions.
