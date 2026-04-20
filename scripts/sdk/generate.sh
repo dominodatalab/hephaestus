@@ -103,8 +103,6 @@ docker run -q --user "$(id -u):$(id -g)" --rm -v "$PROJECT_DIR:/wd" --workdir /w
 	--generate-alias-as-model
 
 info "Applying kubernetes client-java v24 compatibility patches to generated code"
-# v24 removed the basePath parameter from ApiClient.buildCall()
-find "$GEN_DIR/src" -name "*Api.java" -exec perl -pi -e 's/buildCall\(basePath, localVarPath,/buildCall(localVarPath,/g' {} \;
 # v24 changed JSON.getGson() from a static method to an instance method
 find "$GEN_DIR/src" -name "*.java" -exec perl -pi -e 's/JSON\.getGson\(\)/new JSON().getGson()/g' {} \;
 
