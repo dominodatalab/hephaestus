@@ -1,27 +1,67 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "github>cerebrotech/renovate-config:go-minimal",
-    "github>cerebrotech/renovate-config:docker-minimal"
+    "config:recommended"
   ],
+  "dependencyDashboard": true,
+  "timezone": "America/Los_Angeles",
+  "schedule": ["every weekend"],
+  "prHourlyLimit": 15,
+  "stopUpdatingLabel": "renovate-stop-updating",
+  "postUpdateOptions": ["gomodTidy"],
   "packageRules": [
+    {
+      "description": "Disable major updates",
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "description": "Disable golang.org/x/tools updates",
+      "matchPackageNames": ["golang.org/x/tools"],
+      "enabled": false
+    },
     {
       "description": "Disable helm dependency updates",
       "matchManagers": ["helm"],
       "enabled": false
+    },
+    {
+      "description": "Default Domino Dockerfile match -- no major updates",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["quay.io/domino"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "description": "Default Domino Dockerfile match",
+      "groupName": "all dockerfiles",
+      "matchPackagePatterns": ["quay.io/domino"],
+      "versioning": "regex:^v?(?<major>\\d+)(\\.(?<minor>\\d+))?(\\.(?<patch>\\d+))?(-r?(?<build>\\d+))?(-patch(?<hotfix>\\d+))?(-(?<compatibility>.*?))?$"
+    },
+    {
+      "description": "Default Distroless match since they don't have traditional versions",
+      "matchDatasources": ["docker"],
+      "matchPackagePatterns": ["gcr.io/distroless"],
+      "pinDigest": true,
+      "versioning": "docker"
+    },
+    {
+      "description": "Strip v prefix from version tags of Chainguard packages",
+      "matchPackageNames": ["cgr.dev/dominodatalab.com/*"],
+      "extractVersion": "^v?(?<version>.*)$"
     }
   ],
   "customManagers": [
     {
       "customType": "regex",
-      "fileMatch": ["^\\.github/workflows/.*\\.ya?ml$"],
+      "managerFilePatterns": ["/^\\.github/workflows/.*\\.ya?ml$/"],
       "matchStrings": ["GO_VERSION:\\s*[\"']?(?<currentValue>[\\d.]+)[\"']?"],
       "depNameTemplate": "golang",
       "datasourceTemplate": "docker"
     },
     {
       "customType": "regex",
-      "fileMatch": ["^\\.github/workflows/.*\\.ya?ml$"],
+      "managerFilePatterns": ["/^\\.github/workflows/.*\\.ya?ml$/"],
       "matchStrings": ["MAVEN_DOCKER_IMAGE:\\s*(?<depName>[^:]+):(?<currentValue>[^\\s\"']+)"],
       "datasourceTemplate": "docker"
     }
