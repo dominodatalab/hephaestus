@@ -170,7 +170,7 @@ releases:
                       "event": .,
                       "stream": "stdout",
                       "time": message.ts,
-                      "time_nano": to_string(to_unix_timestamp(parse_timestamp!(message.ts, "%+"), unit: "nanoseconds")),
+                      "time_nano": to_string(to_unix_timestamp!(parse_timestamp!(message.ts, "%+"), unit: "nanoseconds")),
                       "log": message.msg,
                       "logKey": message.logKey,
                     }
