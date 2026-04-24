@@ -381,8 +381,8 @@ func (c *Client) getAuthProvider() session.Attachable {
 		dockerConfig = configfile.New("")
 	}
 	return authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{
-		ConfigFile: dockerConfig,
-		TLSConfigs: nil,
+		AuthConfigProvider: authprovider.LoadAuthConfig(dockerConfig),
+		TLSConfigs:         nil,
 	})
 }
 

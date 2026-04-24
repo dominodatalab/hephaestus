@@ -47,8 +47,8 @@ func NewRefreshingAuthProvider(
 	// Load static config and create a DockerAuthProvider for fallback
 	staticConfig, _ := config.Load(dockerConfigDir)
 	staticConfigProvider := authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{
-		ConfigFile: staticConfig,
-		TLSConfigs: nil,
+		AuthConfigProvider: authprovider.LoadAuthConfig(staticConfig),
+		TLSConfigs:         nil,
 	})
 
 	return &RefreshingAuthProvider{
