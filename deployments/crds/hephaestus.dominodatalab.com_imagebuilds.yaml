@@ -140,6 +140,8 @@ spec:
                   expose to individual image builds.
                 items:
                   properties:
+                    mountPath:
+                      type: string
                     name:
                       type: string
                     namespace:

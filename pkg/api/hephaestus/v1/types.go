@@ -64,6 +64,7 @@ type RegistryCredentials struct {
 type SecretReference struct {
 	Name      string `json:"name,omitempty"`
 	Namespace string `json:"namespace,omitempty"`
+	MountPath string `json:"mountPath,omitempty"`
 }
 
 // ImageBuildStatusTransitionMessage contains information about ImageBuild status transitions.
