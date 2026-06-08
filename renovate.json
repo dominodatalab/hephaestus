@@ -49,6 +49,11 @@
       "description": "Strip v prefix from version tags of Chainguard packages",
       "matchPackageNames": ["cgr.dev/dominodatalab.com/*"],
       "extractVersion": "^v?(?<version>.*)$"
+    },
+    {
+      "description": "Group the Go version bump (go.mod toolchain directive, Dockerfile base image, CI GO_VERSION) into one PR",
+      "groupName": "go version",
+      "matchDepNames": ["go", "golang"]
     }
   ],
   "customManagers": [
