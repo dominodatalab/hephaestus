@@ -2,6 +2,8 @@ module github.com/dominodatalab/testenv
 
 go 1.25.7
 
+toolchain go1.26.4
+
 require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/go-version v1.7.0
