@@ -295,7 +295,7 @@ buildkit:
   image:
     registry: ""
     repository: moby/buildkit
-    tag: v0.24.0
+    tag: v0.30.0
     pullPolicy: IfNotPresent
     pullSecrets: []
 
@@ -303,7 +303,7 @@ buildkit:
   rootlessImage:
     registry: ""
     repository: moby/buildkit
-    tag: v0.24.0-rootless
+    tag: v0.30.0-rootless
     pullPolicy: IfNotPresent
     pullSecrets: []
 
