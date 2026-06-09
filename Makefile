@@ -13,9 +13,18 @@ docker: ## Build docker image
 docker-debug:
 	docker build --build-arg VERSION=${VERSION} -f Dockerfile.debug -t ghcr.io/dominodatalab/hephaestus:latest-debug .
 
-.PHONY: test
-test: ## Run test suite
+.PHONY: unit
+unit: ## Run unit test suite
 	go test -v -timeout=5m -race ./...
+
+ENVTEST_K8S_VERSION ?= 1.31.0
+
+.PHONY: integration
+integration: tools ## Run integration test suite (envtest)
+	ENVTEST_K8S_VERSION=$(ENVTEST_K8S_VERSION) go test -v -timeout=10m -tags integration ./test/integration/...
+
+.PHONY: test
+test: unit integration ## Run test suite
 
 lint: tools ## Run linter suite
 	golangci-lint version

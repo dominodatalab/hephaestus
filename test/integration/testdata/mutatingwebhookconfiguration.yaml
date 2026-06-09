@@ -1,0 +1,19 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: hephaestus-integration
+webhooks:
+  - name: mutate-imagebuild.hephaestus.dominodatalab.com
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    failurePolicy: Fail
+    clientConfig:
+      service:
+        name: hephaestus-webhook-server
+        namespace: default
+        path: /mutate-hephaestus-dominodatalab-com-v1-imagebuild
+    rules:
+      - apiGroups: ["hephaestus.dominodatalab.com"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["imagebuilds"]

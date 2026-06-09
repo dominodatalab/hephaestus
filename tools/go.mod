@@ -8,6 +8,7 @@ require (
 	github.com/golangci/golangci-lint/v2 v2.12.2
 	golang.org/x/tools v0.45.0
 	k8s.io/code-generator v0.36.1
+	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.24.1
 	sigs.k8s.io/controller-tools v0.21.0
 )
 
@@ -79,6 +80,7 @@ require (
 	github.com/ghostiam/protogetter v0.3.21 // indirect
 	github.com/go-critic/go-critic v0.14.3 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
+	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/go-openapi/jsonpointer v0.23.1 // indirect
 	github.com/go-openapi/jsonreference v0.21.6 // indirect
 	github.com/go-openapi/swag v0.26.1 // indirect
