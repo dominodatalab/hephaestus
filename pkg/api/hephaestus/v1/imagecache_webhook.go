@@ -3,27 +3,25 @@ package v1
 import (
 	"context"
 
-	runtime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 var imagecachelog = logf.Log.WithName("webhook").WithName("imagecache")
 
-var _ webhook.CustomValidator = &ImageCache{}
+var _ admission.Validator[*ImageCache] = &ImageCache{}
 
-func (in *ImageCache) ValidateCreate(context.Context, runtime.Object) (admission.Warnings, error) {
+func (in *ImageCache) ValidateCreate(context.Context, *ImageCache) (admission.Warnings, error) {
 	return in.validateImageCache("create")
 }
 
-func (in *ImageCache) ValidateUpdate(context.Context, runtime.Object, runtime.Object) (admission.Warnings, error) {
+func (in *ImageCache) ValidateUpdate(context.Context, *ImageCache, *ImageCache) (admission.Warnings, error) {
 	return in.validateImageCache("update")
 }
 
-func (in *ImageCache) ValidateDelete(context.Context, runtime.Object) (admission.Warnings, error) {
+func (in *ImageCache) ValidateDelete(context.Context, *ImageCache) (admission.Warnings, error) {
 	return admission.Warnings{}, nil
 }
 

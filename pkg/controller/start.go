@@ -143,21 +143,18 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 	}
 	opts.WebhookServer = webhook.NewServer(webhookOpts)
 
-	opts.WebhookServer.Register("/mutate-hephaestus-dominodatalab-com-v1-imagebuild", admission.WithCustomDefaulter(
-		opts.Scheme,
-		&hephv1.ImageBuild{},
-		&hephv1.ImageBuild{},
-	))
-	opts.WebhookServer.Register("/validate-hephaestus-dominodatalab-com-v1-imagebuild", admission.WithCustomValidator(
-		opts.Scheme,
-		&hephv1.ImageBuild{},
-		&hephv1.ImageBuild{},
-	))
-	opts.WebhookServer.Register("/validate-hephaestus-dominodatalab-com-v1-imagecache", admission.WithCustomValidator(
-		opts.Scheme,
-		&hephv1.ImageCache{},
-		&hephv1.ImageCache{},
-	))
+	opts.WebhookServer.Register(
+		"/mutate-hephaestus-dominodatalab-com-v1-imagebuild",
+		admission.WithDefaulter[*hephv1.ImageBuild](opts.Scheme, &hephv1.ImageBuild{}),
+	)
+	opts.WebhookServer.Register(
+		"/validate-hephaestus-dominodatalab-com-v1-imagebuild",
+		admission.WithValidator[*hephv1.ImageBuild](opts.Scheme, &hephv1.ImageBuild{}),
+	)
+	opts.WebhookServer.Register(
+		"/validate-hephaestus-dominodatalab-com-v1-imagecache",
+		admission.WithValidator[*hephv1.ImageCache](opts.Scheme, &hephv1.ImageCache{}),
+	)
 	opts.WebhookServer.Register("/livez", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		log.Info("Webhook livez endpoint called")
 		mux := opts.WebhookServer.WebhookMux()
