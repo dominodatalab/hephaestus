@@ -216,8 +216,9 @@ func TestReadSecretsTakesOwnership(t *testing.T) {
 			simpleClient := fake.NewSimpleClientset(tc.ReturnedSecret)
 			clientsetFunc = func(*rest.Config) (kubernetes.Interface, error) { return simpleClient, nil }
 
-			schema, _ := hephv1.SchemeBuilder.Build()
-			secretData, err := ReadSecrets(context.Background(), img, logr.Discard(), nil, schema)
+			scheme := runtime.NewScheme()
+			_ = hephv1.AddToScheme(scheme)
+			secretData, err := ReadSecrets(context.Background(), img, logr.Discard(), nil, scheme)
 
 			assert.NoError(t, err)
 			assert.Equal(t, tc.Want, secretData)

@@ -1,17 +1,26 @@
 package v1
 
 import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"sigs.k8s.io/controller-runtime/pkg/scheme"
 )
+
+const GroupName = "hephaestus.dominodatalab.com"
 
 var (
-	// SchemeGroupVersion is group version used to register these objects.
-	SchemeGroupVersion = schema.GroupVersion{Group: "hephaestus.dominodatalab.com", Version: "v1"}
-
-	// SchemeBuilder is used to add go types to the GroupVersionKind scheme.
-	SchemeBuilder = &scheme.Builder{GroupVersion: SchemeGroupVersion}
-
-	// AddToScheme adds the types in this group-version to the given scheme.
-	AddToScheme = SchemeBuilder.AddToScheme
+	SchemeGroupVersion = schema.GroupVersion{Group: GroupName, Version: "v1"}
+	SchemeBuilder      = runtime.NewSchemeBuilder(addKnownTypes)
+	AddToScheme        = SchemeBuilder.AddToScheme
 )
+
+func addKnownTypes(scheme *runtime.Scheme) error {
+	scheme.AddKnownTypes(SchemeGroupVersion,
+		&ImageBuild{}, &ImageBuildList{},
+		&ImageBuildMessage{}, &ImageBuildMessageList{},
+		&ImageCache{}, &ImageCacheList{},
+	)
+
+	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
+	return nil
+}

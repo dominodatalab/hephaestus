@@ -204,7 +204,7 @@ func (p *AutoscalingPool) Release(ctx context.Context, addr string) error {
 		return errors.New("invalid address: must be an absolute URI including scheme")
 	}
 
-	podName := strings.Split(u.Host, ".")[0]
+	podName, _, _ := strings.Cut(u.Host, ".")
 
 	p.log.Info("Querying for pod", "name", podName, "namespace", p.namespace)
 	pod, err := p.podClient.Get(ctx, podName, metav1.GetOptions{})

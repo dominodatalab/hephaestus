@@ -79,7 +79,7 @@ func TestRefreshingAuthProvider_Credentials_Fallback(t *testing.T) {
 	// Create docker config with static credentials
 	dockerConfig := configfile.New(configFile)
 	dockerConfig.AuthConfigs = map[string]types.AuthConfig{
-		"docker.io": {
+		"https://index.docker.io/v1/": {
 			Username: "static-user",
 			Password: "static-pass",
 		},

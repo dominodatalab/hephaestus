@@ -43,7 +43,3 @@ type ImageBuildMessageList struct {
 
 	Items []ImageBuildMessage `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&ImageBuildMessage{}, &ImageBuildMessageList{})
-}

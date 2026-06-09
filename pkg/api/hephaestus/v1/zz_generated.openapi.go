@@ -163,8 +163,7 @@ func schema_pkg_api_hephaestus_v1_ImageBuildList(ref common.ReferenceCallback) c
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuild"),
+										Ref: ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuild"),
 									},
 								},
 							},
@@ -292,8 +291,7 @@ func schema_pkg_api_hephaestus_v1_ImageBuildMessageList(ref common.ReferenceCall
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildMessage"),
+										Ref: ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildMessage"),
 									},
 								},
 							},
@@ -367,8 +365,7 @@ func schema_pkg_api_hephaestus_v1_ImageBuildMessageStatus(ref common.ReferenceCa
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildMessageRecord"),
+										Ref: ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildMessageRecord"),
 									},
 								},
 							},
@@ -410,9 +407,8 @@ func schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref common.ReferenceCallback) c
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
+										Type:   []string{"string"},
+										Format: "",
 									},
 								},
 							},
@@ -425,9 +421,8 @@ func schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref common.ReferenceCallback) c
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
+										Type:   []string{"string"},
+										Format: "",
 									},
 								},
 							},
@@ -447,8 +442,7 @@ func schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref common.ReferenceCallback) c
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.RegistryCredentials"),
+										Ref: ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.RegistryCredentials"),
 									},
 								},
 							},
@@ -467,9 +461,8 @@ func schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref common.ReferenceCallback) c
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
+										Type:   []string{"string"},
+										Format: "",
 									},
 								},
 							},
@@ -496,8 +489,7 @@ func schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref common.ReferenceCallback) c
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.SecretReference"),
+										Ref: ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.SecretReference"),
 									},
 								},
 							},
@@ -560,9 +552,8 @@ func schema_pkg_api_hephaestus_v1_ImageBuildStatus(ref common.ReferenceCallback)
 								Allows: true,
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
+										Type:   []string{"string"},
+										Format: "",
 									},
 								},
 							},
@@ -574,8 +565,7 @@ func schema_pkg_api_hephaestus_v1_ImageBuildStatus(ref common.ReferenceCallback)
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Condition"),
+										Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Condition"),
 									},
 								},
 							},
@@ -587,8 +577,7 @@ func schema_pkg_api_hephaestus_v1_ImageBuildStatus(ref common.ReferenceCallback)
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildTransition"),
+										Ref: ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildTransition"),
 									},
 								},
 							},
@@ -631,9 +620,8 @@ func schema_pkg_api_hephaestus_v1_ImageBuildStatusTransitionMessage(ref common.R
 								Allows: true,
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
+										Type:   []string{"string"},
+										Format: "",
 									},
 								},
 							},
@@ -676,9 +664,8 @@ func schema_pkg_api_hephaestus_v1_ImageBuildStatusTransitionMessage(ref common.R
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
+										Type:   []string{"string"},
+										Format: "",
 									},
 								},
 							},
@@ -813,8 +800,7 @@ func schema_pkg_api_hephaestus_v1_ImageCacheList(ref common.ReferenceCallback) c
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCache"),
+										Ref: ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCache"),
 									},
 								},
 							},
@@ -841,9 +827,8 @@ func schema_pkg_api_hephaestus_v1_ImageCacheSpec(ref common.ReferenceCallback) c
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
+										Type:   []string{"string"},
+										Format: "",
 									},
 								},
 							},
@@ -855,8 +840,7 @@ func schema_pkg_api_hephaestus_v1_ImageCacheSpec(ref common.ReferenceCallback) c
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.RegistryCredentials"),
+										Ref: ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.RegistryCredentials"),
 									},
 								},
 							},
@@ -883,9 +867,8 @@ func schema_pkg_api_hephaestus_v1_ImageCacheStatus(ref common.ReferenceCallback)
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
+										Type:   []string{"string"},
+										Format: "",
 									},
 								},
 							},
@@ -897,9 +880,8 @@ func schema_pkg_api_hephaestus_v1_ImageCacheStatus(ref common.ReferenceCallback)
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
+										Type:   []string{"string"},
+										Format: "",
 									},
 								},
 							},
@@ -911,8 +893,7 @@ func schema_pkg_api_hephaestus_v1_ImageCacheStatus(ref common.ReferenceCallback)
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Condition"),
+										Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Condition"),
 									},
 								},
 							},
