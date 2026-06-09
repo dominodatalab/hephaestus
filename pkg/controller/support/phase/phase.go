@@ -73,7 +73,7 @@ func (h *TransitionHelper) updateStatus(ctx *core.Context, obj PhasedObject) {
 			obj,
 			corev1.EventTypeWarning,
 			"StatusUpdate",
-			"Failed to update phase %s: %w", obj.GetPhase(), err,
+			"Failed to update phase %s: %v", obj.GetPhase(), err,
 		)
 	}
 }
