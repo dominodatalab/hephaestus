@@ -56,7 +56,3 @@ type ImageCacheList struct {
 
 	Items []ImageCache `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&ImageCache{}, &ImageCacheList{})
-}

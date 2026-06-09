@@ -119,7 +119,3 @@ type ImageBuildList struct {
 
 	Items []ImageBuild `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&ImageBuild{}, &ImageBuildList{})
-}
