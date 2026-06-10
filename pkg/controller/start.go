@@ -238,7 +238,6 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 		}
 	}))
 
-	// Webhook server will be started automatically by controller-runtime manager
 	log.Info("Creating new controller manager")
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), opts)
 	if err != nil {
@@ -248,6 +247,14 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 		return nil, err
 	}
 	if err = mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		return nil, err
+	}
+
+	// Wire GetWebhookServer into a readiness check so the server is scheduled and the pod stays NotReady
+	// until the webhook is genuinely serving.
+	// TODO: the registration and startup of this manager diverges from idiomatic kubebuilder - it may be
+	// worth bringing it back into line with the typical controller code.
+	if err = mgr.AddReadyzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
 		return nil, err
 	}
 
