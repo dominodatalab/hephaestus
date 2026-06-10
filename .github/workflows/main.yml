@@ -30,7 +30,9 @@ jobs:
       - name: Build
         run: make build
       - name: Unit test
-        run: make test
+        run: make unit
+      - name: Integration test
+        run: make integration
 
   docker-build:
     runs-on: ${{ matrix.runner }}
