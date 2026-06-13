@@ -12,7 +12,7 @@ require (
 	github.com/hashicorp/terraform-exec v0.22.0
 	// helmfile >= v0.162.0 requires go1.22
 	github.com/helmfile/helmfile v0.171.0
-	github.com/zclconf/go-cty v1.16.2
+	github.com/zclconf/go-cty v1.18.1
 )
 
 require (
