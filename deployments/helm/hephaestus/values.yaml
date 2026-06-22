@@ -172,6 +172,11 @@ controller:
     # Defaults to 4.25 mins for fetch retries and an unlimited amount of time to extract.
     fetchAndExtractTimeout: null
 
+    # Maximum duration for a single buildkit Solve call. Guards against hung gRPC streams
+    # that would otherwise leave the ImageBuild stuck in Running and hold the buildkit
+    # worker lease. Null or zero disables the timeout.
+    buildTimeout: null
+
     # Global secrets (name: path) to expose into all image builds
     secrets: {}
 

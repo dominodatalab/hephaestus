@@ -73,7 +73,7 @@ func (c *BuildDispatcherComponent) Initialize(ctx *core.Context, _ *ctrl.Builder
 	return nil
 }
 
-//nolint:funlen
+//nolint:funlen,maintidx
 func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result, error) {
 	obj := coreCtx.Object.(*hephv1.ImageBuild)
 
@@ -85,7 +85,10 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 	case hephv1.PhaseInitializing, hephv1.PhaseRunning:
 		var err error
 		if _, running := c.cancels.Load(obj.ObjectKey()); !running {
-			err = c.phase.SetFailed(coreCtx, obj, errNotRunning)
+			age := runningAge(obj)
+			log.Info("Failing orphaned build with no in-memory cancel",
+				"phase", obj.Status.Phase, "runningAge", age)
+			err = c.phase.SetFailed(coreCtx, obj, fmt.Errorf("%w (running for %s)", errNotRunning, age))
 		}
 		return ctrl.Result{}, err
 
@@ -245,25 +248,24 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 
 	// best effort phase change regardless if the original context is "done"
 	coreCtx.Context = context.Background()
-	imageName, err := bk.Build(buildCtx, buildOpts)
+
+	solveCtx := buildCtx
+	if c.cfg.BuildTimeout > 0 {
+		var cancelTimeout context.CancelFunc
+		solveCtx, cancelTimeout = context.WithTimeout(buildCtx, c.cfg.BuildTimeout)
+		defer cancelTimeout()
+	}
+	imageName, err := bk.Build(solveCtx, buildOpts)
 	if err != nil {
-		// if the underlying buildkit pod is terminated via resource delete, then buildCtx will be closed and there will
-		// be an error on it. otherwise, some external event (e.g. pod terminated) cancelled the build, so we should
-		// mark the build as failed.
+		// buildCtx is closed when the ImageBuild is deleted or the cancellation handler fires
+		// (see processCancellations). In that case the build was intentionally aborted, so suppress
+		// the error so the CR doesn't go into Failed on user-initiated cancellation.
 		if buildCtx.Err() != nil {
 			log.Info("Build cancelled via resource delete")
 			txn.AddAttribute("cancelled", true)
-
 			return ctrl.Result{}, nil
 		}
-
-		buildLog.Error(err, fmt.Sprintf("Failed to build image: %s", err.Error()))
-
-		txn.NoticeError(newrelic.Error{
-			Message: err.Error(),
-			Class:   "ImageBuildError",
-		})
-		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, fmt.Errorf("build failed: %w", err))
+		return ctrl.Result{}, c.failBuild(solveCtx, coreCtx, obj, txn, buildLog, err)
 	}
 	obj.Status.BuildTime = time.Since(start).Truncate(time.Millisecond).String()
 	buildSeg.End()
@@ -278,6 +280,50 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 
 	c.phase.SetSucceeded(coreCtx, obj)
 	return ctrl.Result{}, nil
+}
+
+// failBuild categorizes a non-cancellation bk.Build error into timeout or generic build failure
+// and routes it to the appropriate phase transition + New Relic class. Split out of Reconcile to
+// keep that function under the maintainability-index linter threshold.
+func (c *BuildDispatcherComponent) failBuild(
+	solveCtx context.Context,
+	coreCtx *core.Context,
+	obj *hephv1.ImageBuild,
+	txn *newrelic.Transaction,
+	buildLog logr.Logger,
+	err error,
+) error {
+	if errors.Is(err, context.DeadlineExceeded) || solveCtx.Err() == context.DeadlineExceeded {
+		buildLog.Error(err, "Build exceeded configured timeout", "timeout", c.cfg.BuildTimeout)
+		txn.NoticeError(newrelic.Error{Message: err.Error(), Class: "BuildTimeoutError"})
+		wrapped := fmt.Errorf("build exceeded timeout %s: %w", c.cfg.BuildTimeout, err)
+		return c.phase.SetFailed(coreCtx, obj, wrapped)
+	}
+
+	buildLog.Error(err, fmt.Sprintf("Failed to build image: %s", err.Error()))
+	txn.NoticeError(newrelic.Error{Message: err.Error(), Class: "ImageBuildError"})
+	return c.phase.SetFailed(coreCtx, obj, fmt.Errorf("build failed: %w", err))
+}
+
+// runningAge returns the time since the most recent transition into Running (or
+// Initializing, whichever is latest). Returns "unknown" if no such transition is
+// recorded on the object. Used to annotate the orphan-build failure message so
+// post-mortems can distinguish "killed by manager restart of a fresh build" from
+// "stale build that was already stuck before the restart".
+func runningAge(obj *hephv1.ImageBuild) string {
+	var latest time.Time
+	for _, t := range obj.Status.Transitions {
+		if t.Phase != hephv1.PhaseRunning && t.Phase != hephv1.PhaseInitializing {
+			continue
+		}
+		if t.OccurredAt.After(latest) {
+			latest = t.OccurredAt.Time
+		}
+	}
+	if latest.IsZero() {
+		return "unknown"
+	}
+	return time.Since(latest).Truncate(time.Second).String()
 }
 
 func (c *BuildDispatcherComponent) processCancellations(log logr.Logger) {

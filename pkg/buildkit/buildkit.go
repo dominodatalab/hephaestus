@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/docker/cli/cli/config"
@@ -413,39 +414,56 @@ func (c *Client) solveWith(ctx context.Context, modify func(buildDir string, sol
 	return err
 }
 
+// runProgressSolve runs a solve producer and a progress consumer concurrently, guaranteeing the
+// status channel is closed exactly once on the producer side. The defer-close is load-bearing:
+// buildkit's client is contractually supposed to close the channel when Solve returns, but
+// variants in the wild (dropped gRPC stream after the final push, internal panic, etc.) leave the
+// channel unclosed — which hangs the consumer forever and is the root cause of the
+// "ImageBuild stuck in Running after push completes" symptom. The consumer uses the errgroup
+// context so it also unblocks on sibling cancellation.
+func runProgressSolve(
+	ctx context.Context,
+	solve func(ctx context.Context, ch chan *bkclient.SolveStatus) error,
+	consume func(ctx context.Context, ch chan *bkclient.SolveStatus) error,
+) error {
+	ch := make(chan *bkclient.SolveStatus)
+	var closeOnce sync.Once
+	closeCh := func() { closeOnce.Do(func() { close(ch) }) }
+
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.Go(func() error { return consume(egCtx, ch) })
+	eg.Go(func() error {
+		defer closeCh()
+		return solve(egCtx, ch)
+	})
+	return eg.Wait()
+}
+
 func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (string, error) {
 	lw := &LogWriter{Logger: c.log}
-	ch := make(chan *bkclient.SolveStatus)
-	eg, ctx := errgroup.WithContext(ctx)
 
 	d, err := progressui.NewDisplay(lw, progressui.PlainMode)
 	if err != nil {
 		return "", fmt.Errorf("unable to setup buildkit logging: %w", err)
 	}
 
-	//nolint:contextcheck
-	eg.Go(func() error {
-		// this operation should return cleanly when solve returns (either by itself or when cancelled) so there's no
-		// need to cancel it explicitly. see https://github.com/moby/buildkit/pull/1721 for details.
-		_, err = d.UpdateFrom(context.Background(), ch)
-		return err
-	})
-
 	var imageName string
-
-	eg.Go(func() error {
-		res, err := c.bk.Solve(ctx, nil, so, ch)
-		if err != nil {
+	err = runProgressSolve(ctx,
+		func(ctx context.Context, ch chan *bkclient.SolveStatus) error {
+			res, err := c.bk.Solve(ctx, nil, so, ch)
+			if err != nil {
+				return err
+			}
+			c.log.Info("Solve complete")
+			imageName = res.ExporterResponse["image.name"]
+			return nil
+		},
+		func(ctx context.Context, ch chan *bkclient.SolveStatus) error {
+			_, err := d.UpdateFrom(ctx, ch)
 			return err
-		}
-
-		c.log.Info("Solve complete")
-		imageName = res.ExporterResponse["image.name"]
-
-		return nil
-	})
-
-	if err := eg.Wait(); err != nil {
+		},
+	)
+	if err != nil {
 		c.log.Info(fmt.Sprintf("Build failed: %s", err.Error()))
 		return "", fmt.Errorf("buildkit solve issue: %w", err)
 	}
