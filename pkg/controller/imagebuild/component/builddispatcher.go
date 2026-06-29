@@ -85,7 +85,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 	case hephv1.PhaseInitializing, hephv1.PhaseRunning:
 		var err error
 		if _, running := c.cancels.Load(obj.ObjectKey()); !running {
-			err = c.phase.SetFailed(coreCtx, obj, errNotRunning)
+			err = c.failBuild(coreCtx, obj, errNotRunning, "NotRunning")
 		}
 		return ctrl.Result{}, err
 
@@ -122,7 +122,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 			Class:   "ClusterSecretsReadError",
 		})
 
-		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, err)
+		return ctrl.Result{}, c.failBuild(coreCtx, obj, err, "ClusterSecretsReadError")
 	}
 	secretsReadSeq.End()
 
@@ -136,7 +136,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 			Class:   "CredentialsPersistError",
 		})
 
-		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, err)
+		return ctrl.Result{}, c.failBuild(coreCtx, obj, err, "CredentialsPersistError")
 	}
 	persistCredsSeg.End()
 
@@ -163,7 +163,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 		})
 
 		buildLog.Error(err, fmt.Sprintf("Failed to validate registry credentials: %s", err.Error()))
-		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, err)
+		return ctrl.Result{}, c.failBuild(coreCtx, obj, err, "CredentialsValidateError")
 	}
 	validateCredsSeg.End()
 
@@ -180,7 +180,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 			Class:   "WorkerLeaseError",
 		})
 
-		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, fmt.Errorf("buildkit service lookup failed: %w", err))
+		return ctrl.Result{}, c.failBuild(coreCtx, obj, fmt.Errorf("buildkit service lookup failed: %w", err), "WorkerLeaseError")
 	}
 	leaseSeg.End()
 
@@ -221,7 +221,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 			Message: err.Error(),
 			Class:   "WorkerClientInitError",
 		})
-		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, err)
+		return ctrl.Result{}, c.failBuild(coreCtx, obj, err, "WorkerClientInitError")
 	}
 	clientInitSeg.End()
 
@@ -263,7 +263,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 			Message: err.Error(),
 			Class:   "ImageBuildError",
 		})
-		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, fmt.Errorf("build failed: %w", err))
+		return ctrl.Result{}, c.failBuild(coreCtx, obj, fmt.Errorf("build failed: %w", err), "ImageBuildError")
 	}
 	obj.Status.BuildTime = time.Since(start).Truncate(time.Millisecond).String()
 	buildSeg.End()
@@ -276,8 +276,23 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 		populateBuildStatus(obj, buildLog, img, imageName)
 	}
 
-	c.phase.SetSucceeded(coreCtx, obj)
+	c.succeedBuild(coreCtx, obj)
 	return ctrl.Result{}, nil
+}
+
+// failBuild records a terminal Failed transition for the build, incrementing the
+// phase metric with the given reason before delegating to the phase helper. reason
+// mirrors the New Relic error.class set at the call site.
+func (c *BuildDispatcherComponent) failBuild(ctx *core.Context, obj *hephv1.ImageBuild, err error, reason string) error {
+	recordImageBuildPhase(hephv1.PhaseFailed, reason)
+	return c.phase.SetFailed(ctx, obj, err)
+}
+
+// succeedBuild records a terminal Succeeded transition for the build, incrementing the
+// phase metric (with an empty failure_reason) before delegating to the phase helper.
+func (c *BuildDispatcherComponent) succeedBuild(ctx *core.Context, obj *hephv1.ImageBuild) {
+	recordImageBuildPhase(hephv1.PhaseSucceeded, "")
+	c.phase.SetSucceeded(ctx, obj)
 }
 
 func (c *BuildDispatcherComponent) processCancellations(log logr.Logger) {
