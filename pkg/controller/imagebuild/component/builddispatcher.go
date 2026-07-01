@@ -180,7 +180,8 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 			Class:   "WorkerLeaseError",
 		})
 
-		return ctrl.Result{}, c.failBuild(coreCtx, obj, fmt.Errorf("buildkit service lookup failed: %w", err), "WorkerLeaseError")
+		return ctrl.Result{}, c.failBuild(coreCtx, obj,
+			fmt.Errorf("buildkit service lookup failed: %w", err), "WorkerLeaseError")
 	}
 	leaseSeg.End()
 
@@ -283,7 +284,9 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 // failBuild records a terminal Failed transition for the build, incrementing the
 // phase metric with the given reason before delegating to the phase helper. reason
 // mirrors the New Relic error.class set at the call site.
-func (c *BuildDispatcherComponent) failBuild(ctx *core.Context, obj *hephv1.ImageBuild, err error, reason string) error {
+func (c *BuildDispatcherComponent) failBuild(
+	ctx *core.Context, obj *hephv1.ImageBuild, err error, reason string,
+) error {
 	recordImageBuildPhase(hephv1.PhaseFailed, reason)
 	return c.phase.SetFailed(ctx, obj, err)
 }
