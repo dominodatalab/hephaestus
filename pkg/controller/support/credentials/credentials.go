@@ -3,6 +3,7 @@ package credentials
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/containerd/errdefs"
 
+	"github.com/distribution/reference"
 	typesregistry "github.com/docker/docker/api/types/registry"
 	"github.com/docker/docker/registry"
 	"github.com/go-logr/logr"
@@ -132,7 +134,44 @@ func Persist(
 	return dir, helpMessage, err
 }
 
-func Verify(ctx context.Context, configDir string, insecureRegistries []string, helpMessage []string) error {
+// normalizeRegistryHost reduces a docker config server key or an image ref
+// domain to a plain hostname so the two can be compared. Docker Hub goes by
+// several names, so they all collapse to "docker.io".
+func normalizeRegistryHost(server string) string {
+	host := registry.ConvertToHostname(server)
+	if host == "index.docker.io" || host == "registry-1.docker.io" {
+		host = "docker.io"
+	}
+
+	return host
+}
+
+// usedRegistryHosts returns the set of registry hostnames the build is known
+// to use, taken from the image refs it will push.
+func usedRegistryHosts(images []string) map[string]bool {
+	hosts := map[string]bool{}
+	for _, image := range images {
+		named, err := reference.ParseNormalizedNamed(image)
+		if err != nil {
+			// Image refs are validated by the webhook. A ref that does not
+			// parse cannot match any registry, so it adds nothing here.
+			continue
+		}
+
+		hosts[normalizeRegistryHost(reference.Domain(named))] = true
+	}
+
+	return hosts
+}
+
+func Verify(
+	ctx context.Context,
+	logger logr.Logger,
+	configDir string,
+	insecureRegistries []string,
+	helpMessage []string,
+	images []string,
+) error {
 	filename := filepath.Join(configDir, "config.json")
 	data, err := os.ReadFile(filename)
 	if err != nil {
@@ -149,25 +188,57 @@ func Verify(ctx context.Context, configDir string, insecureRegistries []string, 
 		return err
 	}
 
+	usedHosts := usedRegistryHosts(images)
+
 	var errs []error
 	for server, auth := range configJSON.Auths {
+		// Only check credentials for registries this build pushes to. A cred
+		// for any other registry cannot fail the build here, no matter its
+		// state. If no images are given, check everything.
+		if len(usedHosts) > 0 && !usedHosts[normalizeRegistryHost(server)] {
+			logger.Info("Skipping credential check for registry not used by this build", "registry", server)
+			continue
+		}
+
 		auth.ServerAddress = server
 
+		var authErr error
 		err := wait.ExponentialBackoffWithContext(ctx, defaultBackoff, func(ctx context.Context) (bool, error) {
-			if _, _, err = svc.Auth(ctx, &auth, "DominoDataLab_Hephaestus/1.0"); err != nil {
-				if errdefs.IsUnauthorized(err) {
-					return false, err
+			if _, _, authErr = svc.Auth(ctx, &auth, "DominoDataLab_Hephaestus/1.0"); authErr != nil {
+				if errdefs.IsUnauthorized(authErr) {
+					return false, authErr
 				}
 				return false, nil
 			}
 
 			return true, nil
 		})
-		if err != nil {
+		if err == nil {
+			continue
+		}
+
+		// A cancelled or expired build context is fatal. It is not a registry
+		// being unreachable, so do not skip it.
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+
+		// Bad credentials fail the build now so the error is clear and no worker
+		// time is wasted on creds we know are wrong.
+		if errdefs.IsUnauthorized(err) {
 			//nolint:lll
 			detailedErr := fmt.Errorf("client credentials are invalid for registry %q.\nMake sure the following sources of credentials are correct: %s.\nUnderlying error: %w", server, strings.Join(helpMessage, ", "), err)
 			errs = append(errs, detailedErr)
+			continue
 		}
+
+		// A registry we cannot reach must not fail a build that does not use it.
+		// Buildkit still fails the build later if it actually needs this registry.
+		reason := err
+		if authErr != nil {
+			reason = authErr
+		}
+		logger.Info("Skipping credential check for unreachable registry", "registry", server, "reason", reason.Error())
 	}
 	if len(errs) != 0 {
 		return multierr.Combine(errs...)
