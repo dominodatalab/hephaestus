@@ -9,7 +9,9 @@ import (
 	"github.com/dominodatalab/controller-util/core"
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -162,5 +164,62 @@ func TestSucceedBuildCountsOnlyOnDurableTransition(t *testing.T) {
 	}
 	if got := testutil.ToFloat64(labels); got != 1 {
 		t.Fatalf("counter after durable transition: got %v, want 1", got)
+	}
+}
+
+// TestStaleCacheDoesNotDoubleCount covers the case where, after a build's terminal Failed
+// phase is durably persisted with its real reason, a subsequent reconcile reads a STALE
+// informer cache that still shows Running/Initializing and therefore re-enters the
+// NotRunning branch. The stale object carries an out-of-date resourceVersion, so its
+// status write is rejected with a 409 Conflict; because the metric increments only after a
+// successful write, the NotRunning increment never happens and the reason is not
+// double-counted. This is protection via optimistic concurrency — it does not depend on
+// the cache being up to date.
+func TestStaleCacheDoesNotDoubleCount(t *testing.T) {
+	imageBuildPhaseTotal.Reset()
+	t.Cleanup(imageBuildPhaseTotal.Reset)
+
+	key := types.NamespacedName{Namespace: "aloha", Name: "b3"}
+	obj := &hephv1.ImageBuild{
+		TypeMeta:   metav1.TypeMeta{Kind: ibGVK.Kind, APIVersion: hephv1.SchemeGroupVersion.String()},
+		ObjectMeta: metav1.ObjectMeta{Name: key.Name, Namespace: key.Namespace},
+		Status:     hephv1.ImageBuildStatus{Phase: hephv1.PhaseRunning},
+	}
+	cl := fake.NewClientBuilder().WithScheme(scheme()).WithObjects(obj).WithStatusSubresource(obj).Build()
+	c := newPhaseTestDispatcher(cl)
+	ctx := context.Background()
+
+	// A stale cache snapshot at the pre-terminal (Running) resourceVersion.
+	stale := &hephv1.ImageBuild{}
+	if err := cl.Get(ctx, key, stale); err != nil {
+		t.Fatal(err)
+	}
+
+	// The real reconcile object (fresh) fails with the real reason and durably persists Failed.
+	fresh := &hephv1.ImageBuild{}
+	if err := cl.Get(ctx, key, fresh); err != nil {
+		t.Fatal(err)
+	}
+	err := c.failBuild(newPhaseTestCtx(cl, fresh), fresh, errNotRunning, "CredentialsValidateError")
+	if !errors.Is(err, errNotRunning) {
+		t.Fatalf("expected build error on durable transition, got: %v", err)
+	}
+
+	realReason := imageBuildPhaseTotal.WithLabelValues(string(hephv1.PhaseFailed), "CredentialsValidateError")
+	notRunning := imageBuildPhaseTotal.WithLabelValues(string(hephv1.PhaseFailed), "NotRunning")
+	if got := testutil.ToFloat64(realReason); got != 1 {
+		t.Fatalf("real-reason counter after durable transition: got %v, want 1", got)
+	}
+
+	// The stale-cache reconcile re-enters the NotRunning branch; its write must 409, so no increment.
+	persistErr := c.failBuild(newPhaseTestCtx(cl, stale), stale, errNotRunning, "NotRunning")
+	if !apierrors.IsConflict(persistErr) {
+		t.Fatalf("expected 409 Conflict from stale-resourceVersion write, got: %v", persistErr)
+	}
+	if got := testutil.ToFloat64(notRunning); got != 0 {
+		t.Fatalf("NotRunning double-counted from stale cache: got %v, want 0", got)
+	}
+	if got := testutil.ToFloat64(realReason); got != 1 {
+		t.Fatalf("real-reason counter changed unexpectedly: got %v, want 1", got)
 	}
 }
