@@ -277,25 +277,42 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 		populateBuildStatus(obj, buildLog, img, imageName)
 	}
 
-	c.succeedBuild(coreCtx, obj)
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, c.succeedBuild(coreCtx, obj)
 }
 
-// failBuild records a terminal Failed transition for the build, incrementing the
-// phase metric with the given reason before delegating to the phase helper. reason
-// mirrors the New Relic error.class set at the call site.
+// failBuild records a terminal Failed transition for the build and increments the phase
+// metric with the given reason. The metric is incremented only after the transition is
+// durably persisted, so a reconcile requeue triggered by a failed status write does not
+// double-count (the retry re-persists and increments exactly once). reason mirrors the
+// New Relic error.class set at the call site. On a successful persist the original build
+// error is returned unchanged, preserving the existing reconcile requeue/error behavior.
 func (c *BuildDispatcherComponent) failBuild(
 	ctx *core.Context, obj *hephv1.ImageBuild, err error, reason string,
 ) error {
+	if persistErr := c.phase.SetFailed(ctx, obj, err); persistErr != nil {
+		// Terminal phase not persisted; do not count. The non-nil return requeues the
+		// reconcile, which retries the write and increments once it lands.
+		return persistErr
+	}
+
 	recordImageBuildPhase(hephv1.PhaseFailed, reason)
-	return c.phase.SetFailed(ctx, obj, err)
+
+	return err
 }
 
-// succeedBuild records a terminal Succeeded transition for the build, incrementing the
-// phase metric (with an empty failure_reason) before delegating to the phase helper.
-func (c *BuildDispatcherComponent) succeedBuild(ctx *core.Context, obj *hephv1.ImageBuild) {
+// succeedBuild records a terminal Succeeded transition for the build and increments the
+// phase metric (with an empty failure_reason). As with failBuild, the metric is
+// incremented only after the transition is durably persisted; a failed status write is
+// returned so the reconcile requeues and retries rather than silently counting a
+// non-durable transition.
+func (c *BuildDispatcherComponent) succeedBuild(ctx *core.Context, obj *hephv1.ImageBuild) error {
+	if persistErr := c.phase.SetSucceeded(ctx, obj); persistErr != nil {
+		return persistErr
+	}
+
 	recordImageBuildPhase(hephv1.PhaseSucceeded, "")
-	c.phase.SetSucceeded(ctx, obj)
+
+	return nil
 }
 
 func (c *BuildDispatcherComponent) processCancellations(log logr.Logger) {
