@@ -34,16 +34,20 @@ func (h *TransitionHelper) SetInitializing(ctx *core.Context, obj PhasedObject) 
 	reason, message := h.ConditionMeta.Initialize()
 	ctx.Conditions.SetUnknown(h.ReadyCondition, reason, message)
 
-	h.updateStatus(ctx, obj)
+	_ = h.updateStatus(ctx, obj)
 }
 
-func (h *TransitionHelper) SetSucceeded(ctx *core.Context, obj PhasedObject) {
+// SetSucceeded transitions the object to the Succeeded phase and persists it, returning
+// the status-write error (nil on success). Callers should treat a non-nil return as a
+// non-durable terminal transition — the phase was not recorded and the reconcile should be
+// retried before acting on the transition (e.g. emitting a terminal-outcome metric).
+func (h *TransitionHelper) SetSucceeded(ctx *core.Context, obj PhasedObject) error {
 	obj.SetPhase(hephv1.PhaseSucceeded)
 
 	reason, message := h.ConditionMeta.Success()
 	ctx.Conditions.SetTrue(h.ReadyCondition, reason, message)
 
-	h.updateStatus(ctx, obj)
+	return h.updateStatus(ctx, obj)
 }
 
 func (h *TransitionHelper) SetRunning(ctx *core.Context, obj PhasedObject) {
@@ -52,19 +56,21 @@ func (h *TransitionHelper) SetRunning(ctx *core.Context, obj PhasedObject) {
 	reason, message := h.ConditionMeta.Success()
 	ctx.Conditions.SetUnknown(h.ReadyCondition, reason, message)
 
-	h.updateStatus(ctx, obj)
+	_ = h.updateStatus(ctx, obj)
 }
 
+// SetFailed transitions the object to the Failed phase and persists it. It returns the
+// status-write error (nil on success), NOT the passed-in build error: a non-nil return
+// means the terminal transition was not durably recorded and the reconcile should be
+// retried. err is used only to populate the failure condition message.
 func (h *TransitionHelper) SetFailed(ctx *core.Context, obj PhasedObject, err error) error {
 	obj.SetPhase(hephv1.PhaseFailed)
 	ctx.Conditions.SetFalse(h.ReadyCondition, "ExecutionError", err.Error())
 
-	h.updateStatus(ctx, obj)
-
-	return err
+	return h.updateStatus(ctx, obj)
 }
 
-func (h *TransitionHelper) updateStatus(ctx *core.Context, obj PhasedObject) {
+func (h *TransitionHelper) updateStatus(ctx *core.Context, obj PhasedObject) error {
 	ctx.Log.Info("Transitioning status", "phase", obj.GetPhase())
 
 	if err := ctx.Client.Status().Update(ctx, obj); err != nil {
@@ -75,5 +81,9 @@ func (h *TransitionHelper) updateStatus(ctx *core.Context, obj PhasedObject) {
 			"StatusUpdate",
 			"Failed to update phase %s: %v", obj.GetPhase(), err,
 		)
+
+		return err
 	}
+
+	return nil
 }

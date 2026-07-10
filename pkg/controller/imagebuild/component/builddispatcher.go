@@ -85,7 +85,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 	case hephv1.PhaseInitializing, hephv1.PhaseRunning:
 		var err error
 		if _, running := c.cancels.Load(obj.ObjectKey()); !running {
-			err = c.phase.SetFailed(coreCtx, obj, errNotRunning)
+			err = c.failBuild(coreCtx, obj, errNotRunning, "NotRunning")
 		}
 		return ctrl.Result{}, err
 
@@ -122,7 +122,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 			Class:   "ClusterSecretsReadError",
 		})
 
-		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, err)
+		return ctrl.Result{}, c.failBuild(coreCtx, obj, err, "ClusterSecretsReadError")
 	}
 	secretsReadSeq.End()
 
@@ -136,7 +136,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 			Class:   "CredentialsPersistError",
 		})
 
-		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, err)
+		return ctrl.Result{}, c.failBuild(coreCtx, obj, err, "CredentialsPersistError")
 	}
 	persistCredsSeg.End()
 
@@ -163,7 +163,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 		})
 
 		buildLog.Error(err, fmt.Sprintf("Failed to validate registry credentials: %s", err.Error()))
-		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, err)
+		return ctrl.Result{}, c.failBuild(coreCtx, obj, err, "CredentialsValidateError")
 	}
 	validateCredsSeg.End()
 
@@ -180,7 +180,8 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 			Class:   "WorkerLeaseError",
 		})
 
-		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, fmt.Errorf("buildkit service lookup failed: %w", err))
+		return ctrl.Result{}, c.failBuild(coreCtx, obj,
+			fmt.Errorf("buildkit service lookup failed: %w", err), "WorkerLeaseError")
 	}
 	leaseSeg.End()
 
@@ -221,7 +222,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 			Message: err.Error(),
 			Class:   "WorkerClientInitError",
 		})
-		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, err)
+		return ctrl.Result{}, c.failBuild(coreCtx, obj, err, "WorkerClientInitError")
 	}
 	clientInitSeg.End()
 
@@ -263,7 +264,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 			Message: err.Error(),
 			Class:   "ImageBuildError",
 		})
-		return ctrl.Result{}, c.phase.SetFailed(coreCtx, obj, fmt.Errorf("build failed: %w", err))
+		return ctrl.Result{}, c.failBuild(coreCtx, obj, fmt.Errorf("build failed: %w", err), "ImageBuildError")
 	}
 	obj.Status.BuildTime = time.Since(start).Truncate(time.Millisecond).String()
 	buildSeg.End()
@@ -276,8 +277,42 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 		populateBuildStatus(obj, buildLog, img, imageName)
 	}
 
-	c.phase.SetSucceeded(coreCtx, obj)
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, c.succeedBuild(coreCtx, obj)
+}
+
+// failBuild records a terminal Failed transition for the build and increments the phase
+// metric with the given reason. The metric is incremented only after the transition is
+// durably persisted, so a reconcile requeue triggered by a failed status write does not
+// double-count (the retry re-persists and increments exactly once). reason mirrors the
+// New Relic error.class set at the call site. On a successful persist the original build
+// error is returned unchanged, preserving the existing reconcile requeue/error behavior.
+func (c *BuildDispatcherComponent) failBuild(
+	ctx *core.Context, obj *hephv1.ImageBuild, err error, reason string,
+) error {
+	if persistErr := c.phase.SetFailed(ctx, obj, err); persistErr != nil {
+		// Terminal phase not persisted; do not count. The non-nil return requeues the
+		// reconcile, which retries the write and increments once it lands.
+		return persistErr
+	}
+
+	recordImageBuildPhase(hephv1.PhaseFailed, reason)
+
+	return err
+}
+
+// succeedBuild records a terminal Succeeded transition for the build and increments the
+// phase metric (with an empty failure_reason). As with failBuild, the metric is
+// incremented only after the transition is durably persisted; a failed status write is
+// returned so the reconcile requeues and retries rather than silently counting a
+// non-durable transition.
+func (c *BuildDispatcherComponent) succeedBuild(ctx *core.Context, obj *hephv1.ImageBuild) error {
+	if persistErr := c.phase.SetSucceeded(ctx, obj); persistErr != nil {
+		return persistErr
+	}
+
+	recordImageBuildPhase(hephv1.PhaseSucceeded, "")
+
+	return nil
 }
 
 func (c *BuildDispatcherComponent) processCancellations(log logr.Logger) {
