@@ -152,9 +152,11 @@ func validateCompression(compression string, name string) map[string]string {
 		attrs["compression"] = "zstd"
 		attrs["force-compression"] = truth
 		attrs["push"] = truth
+		attrs["oci-mediatypes"] = "false"
 	// default is gzip
 	default:
 		attrs["push"] = truth
+		attrs["oci-mediatypes"] = "false"
 	}
 	return attrs
 }
