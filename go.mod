@@ -39,9 +39,9 @@ require (
 	github.com/tonistiigi/fsutil v0.0.0-20260605065046-8e8fbeee8226
 	go.uber.org/multierr v1.11.0
 	go.uber.org/zap v1.28.0
-	golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93
+	golang.org/x/exp v0.0.0-20260718201538-764159d718ef
 	golang.org/x/oauth2 v0.36.0
-	golang.org/x/sync v0.21.0
+	golang.org/x/sync v0.22.0
 	google.golang.org/grpc v1.81.1
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
