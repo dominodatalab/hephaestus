@@ -201,7 +201,7 @@ jobs:
       - name: Install Helm
         uses: azure/setup-helm@v4
         with:
-          version: v3.15.4
+          version: v3.21.3
       - id: helm_pkg
         name: Package Helm chart
         shell: bash
