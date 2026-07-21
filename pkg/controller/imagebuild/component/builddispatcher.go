@@ -156,7 +156,8 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 	}
 
 	buildLog.Info("Validating registry credentials")
-	if err = credentials.Verify(coreCtx, configDir, insecureRegistries, helpMessage); err != nil {
+	err = credentials.Verify(coreCtx, buildLog, configDir, insecureRegistries, helpMessage, obj.Spec.Images)
+	if err != nil {
 		txn.NoticeError(newrelic.Error{
 			Message: err.Error(),
 			Class:   "CredentialsValidateError",
