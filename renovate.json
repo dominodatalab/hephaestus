@@ -35,15 +35,21 @@
     {
       "description": "Default Domino Dockerfile match",
       "groupName": "all dockerfiles",
-      "matchPackagePatterns": ["quay.io/domino"],
-      "versioning": "regex:^v?(?<major>\\d+)(\\.(?<minor>\\d+))?(\\.(?<patch>\\d+))?(-r?(?<build>\\d+))?(-patch(?<hotfix>\\d+))?(-(?<compatibility>.*?))?$"
+      "versioning": "regex:^v?(?<major>\\d+)(\\.(?<minor>\\d+))?(\\.(?<patch>\\d+))?(-r?(?<build>\\d+))?(-patch(?<hotfix>\\d+))?(-(?<compatibility>.*?))?$",
+      "matchPackageNames": [
+        "/quay.io/domino/"
+      ]
     },
     {
       "description": "Default Distroless match since they don't have traditional versions",
       "matchDatasources": ["docker"],
-      "matchPackagePatterns": ["gcr.io/distroless"],
-      "pinDigest": true,
-      "versioning": "docker"
+      "pinDigest": {
+        "enabled": true
+      },
+      "versioning": "docker",
+      "matchPackageNames": [
+        "/gcr.io/distroless/"
+      ]
     },
     {
       "description": "Strip v prefix from version tags of Chainguard packages",
