@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -135,10 +136,15 @@ func Persist(
 }
 
 // normalizeRegistryHost reduces a docker config server key or an image ref
-// domain to a plain hostname so the two can be compared. Docker Hub goes by
-// several names, so they all collapse to "docker.io".
+// domain to a plain hostname so the two can be compared. Config keys may carry
+// a scheme, a path and even userinfo; hosts are compared case-insensitively.
+// Docker Hub goes by several names, so they all collapse to "docker.io".
 func normalizeRegistryHost(server string) string {
-	host := registry.ConvertToHostname(server)
+	host := strings.ToLower(registry.ConvertToHostname(server))
+	if at := strings.LastIndex(host, "@"); at != -1 {
+		host = host[at+1:]
+	}
+
 	if host == "index.docker.io" || host == "registry-1.docker.io" {
 		host = "docker.io"
 	}
@@ -146,16 +152,19 @@ func normalizeRegistryHost(server string) string {
 	return host
 }
 
-// usedRegistryHosts returns the set of registry hostnames the build is known
-// to use, taken from the image refs it will push.
-func usedRegistryHosts(images []string) map[string]bool {
+// usedRegistryHosts returns the set of registry hostnames the build is known to
+// use, taken from the refs it pushes and the remote caches it imports. Base
+// images are not included: they live in the Dockerfile, and resolving them means
+// parsing it, so buildkit is left to fail the build if a base image cred is bad.
+//
+// A nil result means "unknown, check everything". A ref that does not parse
+// could name any registry, so narrowing the check on it would be unsound.
+func usedRegistryHosts(refs []string) map[string]bool {
 	hosts := map[string]bool{}
-	for _, image := range images {
-		named, err := reference.ParseNormalizedNamed(image)
+	for _, ref := range refs {
+		named, err := reference.ParseNormalizedNamed(ref)
 		if err != nil {
-			// Image refs are validated by the webhook. A ref that does not
-			// parse cannot match any registry, so it adds nothing here.
-			continue
+			return nil
 		}
 
 		hosts[normalizeRegistryHost(reference.Domain(named))] = true
@@ -170,7 +179,7 @@ func Verify(
 	configDir string,
 	insecureRegistries []string,
 	helpMessage []string,
-	images []string,
+	refs []string,
 ) error {
 	filename := filepath.Join(configDir, "config.json")
 	data, err := os.ReadFile(filename)
@@ -188,15 +197,20 @@ func Verify(
 		return err
 	}
 
-	usedHosts := usedRegistryHosts(images)
+	usedHosts := usedRegistryHosts(refs)
+	if usedHosts == nil {
+		logger.Info("Checking every credential: a build reference could not be parsed", "references", refs)
+	}
 
 	var errs []error
 	for server, auth := range configJSON.Auths {
-		// Only check credentials for registries this build pushes to. A cred
-		// for any other registry cannot fail the build here, no matter its
-		// state. If no images are given, check everything.
-		if len(usedHosts) > 0 && !usedHosts[normalizeRegistryHost(server)] {
-			logger.Info("Skipping credential check for registry not used by this build", "registry", server)
+		host := normalizeRegistryHost(server)
+
+		// Only check credentials for registries this build is known to use. A
+		// cred for any other registry cannot fail the build here, no matter its
+		// state. With no known hosts, check everything.
+		if len(usedHosts) > 0 && !usedHosts[host] {
+			logger.Info("Skipping credential check for registry not used by this build", "registry", host)
 			continue
 		}
 
@@ -218,27 +232,29 @@ func Verify(
 		}
 
 		// A cancelled or expired build context is fatal. It is not a registry
-		// being unreachable, so do not skip it.
+		// being unreachable, so do not skip it, and do not discard credential
+		// failures already proven for other registries.
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return err
+			return multierr.Append(multierr.Combine(errs...), err)
 		}
 
-		// Bad credentials fail the build now so the error is clear and no worker
-		// time is wasted on creds we know are wrong.
-		if errdefs.IsUnauthorized(err) {
-			//nolint:lll
-			detailedErr := fmt.Errorf("client credentials are invalid for registry %q.\nMake sure the following sources of credentials are correct: %s.\nUnderlying error: %w", server, strings.Join(helpMessage, ", "), err)
-			errs = append(errs, detailedErr)
+		// A registry we could not reach at all must not fail the build: it may be
+		// down for reasons that have nothing to do with these creds, and buildkit
+		// still fails the build later if it truly needs this registry. Anything
+		// the registry did answer, 401 and 403 alike, is a credential problem, so
+		// fail now while the error is clear and no worker time has been spent.
+		if _, ok := errors.AsType[net.Error](authErr); ok {
+			logger.Info("Skipping credential check for unreachable registry", "registry", host, "reason", authErr.Error())
 			continue
 		}
 
-		// A registry we cannot reach must not fail a build that does not use it.
-		// Buildkit still fails the build later if it actually needs this registry.
 		reason := err
 		if authErr != nil {
 			reason = authErr
 		}
-		logger.Info("Skipping credential check for unreachable registry", "registry", server, "reason", reason.Error())
+		//nolint:lll
+		detailedErr := fmt.Errorf("client credentials are invalid for registry %q.\nMake sure the following sources of credentials are correct: %s.\nUnderlying error: %w", host, strings.Join(helpMessage, ", "), reason)
+		errs = append(errs, detailedErr)
 	}
 	if len(errs) != 0 {
 		return multierr.Combine(errs...)

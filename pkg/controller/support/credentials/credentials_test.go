@@ -105,6 +105,26 @@ func unreachableHost(t *testing.T) string {
 	return strings.TrimPrefix(srv.URL, "http://")
 }
 
+// respondingHost starts a registry that answers every request with the given
+// status after a basic-auth challenge, and returns its host:port.
+func respondingHost(t *testing.T, status int) string {
+	t.Helper()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") == "" {
+			w.Header().Set("WWW-Authenticate", `Basic realm="registry"`)
+			w.WriteHeader(http.StatusUnauthorized)
+
+			return
+		}
+
+		w.WriteHeader(status)
+	}))
+	t.Cleanup(srv.Close)
+
+	return strings.TrimPrefix(srv.URL, "http://")
+}
+
 // cancelledContext returns an already cancelled context. Verify aborts before
 // contacting a registry it checks, so tests use it to observe whether a
 // credential was checked (context.Canceled) or skipped (nil).
@@ -115,20 +135,50 @@ func cancelledContext() context.Context {
 	return ctx
 }
 
+// shortBackoff makes Verify try once with no real wait, so tests that let it
+// contact a registry stay fast.
+func shortBackoff(t *testing.T) {
+	t.Helper()
+
+	orig := defaultBackoff
+	defaultBackoff = wait.Backoff{Duration: time.Millisecond, Steps: 1}
+	t.Cleanup(func() { defaultBackoff = orig })
+}
+
 func TestVerify(t *testing.T) {
 	t.Run("unreachable_registry_is_skipped", func(t *testing.T) {
 		// A refused connection is not an unauthorized error, so Verify must
 		// skip the registry and let the build continue instead of failing it.
 		host := unreachableHost(t)
 		dir := writeDockerConfig(t, host)
-
-		// Keep the test quick: one attempt, no long backoff.
-		orig := defaultBackoff
-		defaultBackoff = wait.Backoff{Duration: time.Millisecond, Steps: 1}
-		t.Cleanup(func() { defaultBackoff = orig })
+		shortBackoff(t)
 
 		err := Verify(context.Background(), logr.Discard(), dir, nil, []string{"test"}, []string{host + "/org/app:latest"})
 		assert.NoError(t, err)
+	})
+
+	t.Run("unauthorized_registry_is_fatal", func(t *testing.T) {
+		// The registry answered, so this is a credential problem and not an
+		// outage. It must fail the build before a worker is leased.
+		host := respondingHost(t, http.StatusUnauthorized)
+		dir := writeDockerConfig(t, host)
+		shortBackoff(t)
+
+		err := Verify(context.Background(), logr.Discard(), dir, []string{host}, []string{"test"}, []string{host + "/org/app:latest"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "client credentials are invalid")
+	})
+
+	t.Run("forbidden_registry_is_fatal", func(t *testing.T) {
+		// A 403 is not an outage either: the account exists but cannot use this
+		// registry. Only errors with no response at all are skipped.
+		host := respondingHost(t, http.StatusForbidden)
+		dir := writeDockerConfig(t, host)
+		shortBackoff(t)
+
+		err := Verify(context.Background(), logr.Discard(), dir, []string{host}, []string{"test"}, []string{host + "/org/app:latest"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "client credentials are invalid")
 	})
 
 	t.Run("cancelled_context_is_fatal", func(t *testing.T) {
@@ -160,12 +210,59 @@ func TestVerify(t *testing.T) {
 		assert.ErrorIs(t, err, context.Canceled)
 	})
 
-	t.Run("no_images_checks_all", func(t *testing.T) {
-		// Without an image list Verify falls back to checking every
+	t.Run("no_refs_checks_all", func(t *testing.T) {
+		// Without a reference list Verify falls back to checking every
 		// credential, so the check runs and reports the cancelled context.
 		dir := writeDockerConfig(t, "unused.example.com")
 
 		err := Verify(cancelledContext(), logr.Discard(), dir, nil, []string{"test"}, nil)
+		assert.ErrorIs(t, err, context.Canceled)
+	})
+
+	t.Run("host_case_is_ignored", func(t *testing.T) {
+		// A server key and an image ref that differ only in case name the same
+		// registry, so the credential must still be checked.
+		dir := writeDockerConfig(t, "MyReg.Example.com")
+
+		err := Verify(cancelledContext(), logr.Discard(), dir, nil, []string{"test"}, []string{"myreg.example.com/org/app:latest"})
+		assert.ErrorIs(t, err, context.Canceled)
+	})
+
+	t.Run("server_key_userinfo_is_stripped", func(t *testing.T) {
+		// Credentials embedded in a server key must not stop it matching the
+		// registry it names.
+		dir := writeDockerConfig(t, "https://alice:s3cr3t@myreg.example.com/v1/")
+
+		err := Verify(cancelledContext(), logr.Discard(), dir, nil, []string{"test"}, []string{"myreg.example.com/org/app:latest"})
+		assert.ErrorIs(t, err, context.Canceled)
+	})
+
+	t.Run("cache_import_registry_is_checked", func(t *testing.T) {
+		// Remote build caches are pulled with these credentials, so a cache-only
+		// registry counts as used.
+		dir := writeDockerConfig(t, "cache.example.com")
+
+		//nolint:lll
+		err := Verify(cancelledContext(), logr.Discard(), dir, nil, []string{"test"}, []string{"push.example.com/org/app:latest", "cache.example.com/org/app-cache:latest"})
+		assert.ErrorIs(t, err, context.Canceled)
+	})
+
+	t.Run("unparseable_ref_checks_all", func(t *testing.T) {
+		// A reference we cannot resolve to a host could name any registry, so
+		// narrowing the check would be unsound: check everything instead.
+		dir := writeDockerConfig(t, "unused.example.com")
+		badRef := "aaaabbbbccccddddeeeeffff0000111122223333444455556666777788889999"
+
+		err := Verify(cancelledContext(), logr.Discard(), dir, nil, []string{"test"}, []string{badRef})
+		assert.ErrorIs(t, err, context.Canceled)
+	})
+
+	t.Run("port_is_part_of_the_host", func(t *testing.T) {
+		// A registry on a non-default port is a distinct host, matched with its
+		// port on both sides.
+		dir := writeDockerConfig(t, "myreg.example.com:5000")
+
+		err := Verify(cancelledContext(), logr.Discard(), dir, nil, []string{"test"}, []string{"myreg.example.com:5000/org/app:latest"})
 		assert.ErrorIs(t, err, context.Canceled)
 	})
 }
