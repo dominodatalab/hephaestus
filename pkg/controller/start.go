@@ -268,7 +268,7 @@ func createWorkerPool(
 	log logr.Logger,
 	mgr ctrl.Manager,
 	cfg config.Buildkit,
-) (worker.Pool, error) {
+) (worker.PoolSet, error) {
 	log.Info("Initializing buildkit worker pool")
 	poolOpts := []worker.PoolOption{
 		worker.Logger(ctrl.Log.WithName("buildkit.worker-pool")),
@@ -288,23 +288,23 @@ func createWorkerPool(
 
 	clientset, err := kubernetes.Clientset(mgr.GetConfig())
 	if err != nil {
-		return nil, err
+		return worker.PoolSet{}, err
 	}
 
-	return worker.NewPool(clientset, cfg, poolOpts...), nil
+	return worker.NewPoolSet(clientset, cfg, poolOpts...), nil
 }
 
 func registerControllers(
 	log logr.Logger,
 	mgr ctrl.Manager,
-	pool worker.Pool,
+	pools worker.PoolSet,
 	nr *newrelic.Application,
 	cfg config.Controller,
 ) error {
 	deleteCh := make(chan client.ObjectKey, 10)
 
 	log.Info("Registering ImageBuild controller")
-	if err := imagebuild.Register(mgr, cfg, pool, nr, deleteCh); err != nil {
+	if err := imagebuild.Register(mgr, cfg, pools, nr, deleteCh); err != nil {
 		return err
 	}
 

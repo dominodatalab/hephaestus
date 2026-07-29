@@ -208,6 +208,19 @@ func (b Buildkit) PlatformCapabilities() hephv1.PlatformCapabilities {
 	return hephv1.NewPlatformCapabilities(poolPlatforms)
 }
 
+// WithPool returns a copy of b with its worker-identity fields (Namespace/PodLabels/
+// StatefulSetName/ServiceName) replaced by the given pool's, preserving every other setting
+// (DaemonPort, MTLS, Secrets, Registries, etc.) which is shared across all pools. This lets each
+// pool be constructed as an independent worker.Pool via the existing single-pool NewPool.
+func (b Buildkit) WithPool(pool PlatformPool) Buildkit {
+	b.Namespace = pool.Namespace
+	b.PodLabels = pool.PodLabels
+	b.StatefulSetName = pool.StatefulSetName
+	b.ServiceName = pool.ServiceName
+
+	return b
+}
+
 // RegistryConfig options used to relax registry push/pull restrictions.
 type RegistryConfig struct {
 	// Insecure will allow self-signed certificates.

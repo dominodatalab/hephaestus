@@ -220,6 +220,40 @@ func TestBuildkitPools(t *testing.T) {
 	})
 }
 
+func TestBuildkitWithPool(t *testing.T) {
+	buildkit := Buildkit{
+		Namespace:       "shared-ns",
+		PodLabels:       map[string]string{"app": "buildkit"},
+		StatefulSetName: "buildkit",
+		ServiceName:     "buildkit",
+		DaemonPort:      1234,
+		Secrets:         map[string]string{"npmrc": "/secrets/npmrc"},
+	}
+
+	pool := PlatformPool{
+		Name:            "arm64",
+		Namespace:       "arm64-ns",
+		PodLabels:       map[string]string{"app": "buildkit-arm64"},
+		StatefulSetName: "buildkit-arm64",
+		ServiceName:     "buildkit-arm64",
+		Platforms:       []string{"linux/arm64"},
+	}
+
+	result := buildkit.WithPool(pool)
+
+	assert.Equal(t, pool.Namespace, result.Namespace)
+	assert.Equal(t, pool.PodLabels, result.PodLabels)
+	assert.Equal(t, pool.StatefulSetName, result.StatefulSetName)
+	assert.Equal(t, pool.ServiceName, result.ServiceName)
+
+	// pool-agnostic settings are preserved unchanged
+	assert.Equal(t, buildkit.DaemonPort, result.DaemonPort)
+	assert.Equal(t, buildkit.Secrets, result.Secrets)
+
+	// original is untouched
+	assert.Equal(t, "shared-ns", buildkit.Namespace)
+}
+
 func TestBuildkitPlatformCapabilities(t *testing.T) {
 	t.Run("no capabilities when unconfigured", func(t *testing.T) {
 		buildkit := Buildkit{Namespace: "test-ns", PodLabels: map[string]string{"app": "buildkit"}}
