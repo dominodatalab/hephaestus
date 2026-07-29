@@ -17,13 +17,13 @@ import (
 
 func Register(mgr ctrl.Manager,
 	cfg config.Controller,
-	pool worker.Pool,
+	pools worker.PoolSet,
 	nr *newrelic.Application,
 	deleteChan chan client.ObjectKey,
 ) error {
 	err := core.NewReconciler(mgr).
 		For(&hephv1.ImageBuild{}).
-		Component("build-dispatcher", component.BuildDispatcher(cfg.Buildkit, pool, nr, deleteChan)).
+		Component("build-dispatcher", component.BuildDispatcher(cfg.Buildkit, pools, nr, deleteChan)).
 		WithControllerOptions(controller.Options{MaxConcurrentReconciles: cfg.Manager.ImageBuild.Concurrency}).
 		WithWebhooks().
 		Complete()
