@@ -297,6 +297,7 @@ func (c *BuildDispatcherComponent) failBuild(
 	}
 
 	recordImageBuildPhase(hephv1.PhaseFailed, reason)
+	recordImageBuildPlatformPhases(obj.Status.Platforms, hephv1.PhaseFailed, reason)
 
 	return err
 }
@@ -312,6 +313,7 @@ func (c *BuildDispatcherComponent) succeedBuild(ctx *core.Context, obj *hephv1.I
 	}
 
 	recordImageBuildPhase(hephv1.PhaseSucceeded, "")
+	recordImageBuildPlatformPhases(obj.Status.Platforms, hephv1.PhaseSucceeded, "")
 
 	return nil
 }
