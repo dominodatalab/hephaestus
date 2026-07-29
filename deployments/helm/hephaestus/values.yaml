@@ -427,6 +427,44 @@ buildkit:
                     - {{ .Chart.Name }}
             topologyKey: "kubernetes.io/hostname"
 
+  # Declares one or more named buildkit pools and the platforms each can serve (natively or via
+  # emulation - see binfmt below), passed through verbatim into the controller's
+  # buildkit.platformPools config. Leave empty to keep the single StatefulSet deployed by this
+  # chart as an implicit, un-platform-aware "default" pool (the pre-multi-arch behavior).
+  #
+  # This chart deploys exactly one buildkit StatefulSet; declaring more than one pool here only
+  # makes sense once additional buildkit StatefulSets serving those pools are deployed separately
+  # (e.g. hand-written manifests, or a second release of this chart with different pod placement) -
+  # this chart does not yet template multiple StatefulSets from this list.
+  #
+  # Example:
+  # platformPools:
+  #   - name: default
+  #     namespace: my-namespace
+  #     statefulSetName: my-release-buildkit
+  #     serviceName: my-release-buildkit
+  #     podLabels:
+  #       app.kubernetes.io/component: buildkit
+  #     platforms: ["linux/amd64", "linux/arm64"]
+  platformPools: []
+
+  # Registers QEMU user-mode emulation handlers (via tonistiigi/binfmt) on buildkit's nodes, letting
+  # a single buildkit pool solve for non-native platforms (e.g. requesting linux/arm64 on an amd64
+  # node). This is what makes a platformPools entry listing more than one platform actually work
+  # when there's no natively-matching hardware - without it, a non-native platform request will
+  # fail at solve time even though admission validation allowed it (validation only checks that some
+  # pool *declares* the platform, it can't verify emulation is actually registered).
+  binfmt:
+    enabled: false
+    image:
+      registry: ""
+      repository: tonistiigi/binfmt
+      tag: latest
+      pullPolicy: IfNotPresent
+    # Node selector scoping which nodes get the (privileged) emulation DaemonSet.
+    nodeSelector: {}
+    tolerations: []
+
 # waitForNetworking starts an initContainer that requires a curl_image
 # Set this to true in istio ambient mode to cause Hephaestus Manager to start up
 # with networking. We're not sure why this works. See: https://dominodatalab.atlassian.net/browse/DOM-70981

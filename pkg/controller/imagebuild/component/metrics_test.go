@@ -44,6 +44,83 @@ hephaestus_imagebuild_phase_total{failure_reason="ImageBuildError",phase="Failed
 	}
 }
 
+func TestRecordImageBuildPlatformPhases(t *testing.T) {
+	imageBuildPlatformPhaseTotal.Reset()
+	t.Cleanup(imageBuildPlatformPhaseTotal.Reset)
+
+	recordImageBuildPlatformPhases(
+		[]hephv1.PlatformResult{{Platform: "linux/amd64"}, {Platform: "linux/arm64"}},
+		hephv1.PhaseSucceeded, "",
+	)
+	recordImageBuildPlatformPhases(
+		[]hephv1.PlatformResult{{Platform: "linux/amd64", Error: "boom"}},
+		hephv1.PhaseFailed, "ImageBuildError",
+	)
+
+	expected := `
+# HELP hephaestus_imagebuild_platform_phase_total Count of terminal phase transitions for multi-pool ImageBuilds, labeled by platform, phase, and failure reason.
+# TYPE hephaestus_imagebuild_platform_phase_total counter
+hephaestus_imagebuild_platform_phase_total{failure_reason="",phase="Succeeded",platform="linux/amd64"} 1
+hephaestus_imagebuild_platform_phase_total{failure_reason="",phase="Succeeded",platform="linux/arm64"} 1
+hephaestus_imagebuild_platform_phase_total{failure_reason="ImageBuildError",phase="Failed",platform="linux/amd64"} 1
+`
+
+	if err := testutil.CollectAndCompare(imageBuildPlatformPhaseTotal, strings.NewReader(expected)); err != nil {
+		t.Errorf("unexpected metric state:\n%v", err)
+	}
+}
+
+func TestRecordImageBuildPlatformPhasesEmpty(t *testing.T) {
+	imageBuildPlatformPhaseTotal.Reset()
+	t.Cleanup(imageBuildPlatformPhaseTotal.Reset)
+
+	// The single-pool case (no platform breakdown) must not increment anything.
+	recordImageBuildPlatformPhases(nil, hephv1.PhaseSucceeded, "")
+
+	if err := testutil.CollectAndCompare(imageBuildPlatformPhaseTotal, strings.NewReader("")); err != nil {
+		t.Errorf("expected no samples, got:\n%v", err)
+	}
+}
+
+// TestFailBuildRecordsPlatformPhasesOnlyOnDurableTransition mirrors
+// TestFailBuildCountsOnlyOnDurableTransition for the per-platform counter: it must not increment
+// until the terminal Failed status - including its Platforms breakdown - is durably persisted.
+func TestFailBuildRecordsPlatformPhasesOnlyOnDurableTransition(t *testing.T) {
+	imageBuildPlatformPhaseTotal.Reset()
+	t.Cleanup(imageBuildPlatformPhaseTotal.Reset)
+
+	obj := &hephv1.ImageBuild{
+		TypeMeta:   metav1.TypeMeta{Kind: ibGVK.Kind, APIVersion: hephv1.SchemeGroupVersion.String()},
+		ObjectMeta: metav1.ObjectMeta{Name: "b4", Namespace: "aloha"},
+		Status: hephv1.ImageBuildStatus{
+			Phase:     hephv1.PhaseRunning,
+			Platforms: []hephv1.PlatformResult{{Platform: "linux/amd64"}, {Platform: "linux/arm64"}},
+		},
+	}
+	base := fake.NewClientBuilder().WithScheme(scheme()).WithObjects(obj).WithStatusSubresource(obj).Build()
+	cl := flakyStatusClient(t, base, 1) // first requeue fails to persist, second succeeds
+
+	c := newPhaseTestDispatcher(cl)
+	buildErr := errors.New("build failed")
+	labels := imageBuildPlatformPhaseTotal.WithLabelValues("linux/amd64", string(hephv1.PhaseFailed), "ImageBuildError")
+
+	ctx := newPhaseTestCtx(cl, obj)
+	if err := c.failBuild(ctx, obj, buildErr, "ImageBuildError"); err == nil {
+		t.Fatal("expected non-nil error when status write fails")
+	}
+	if got := testutil.ToFloat64(labels); got != 0 {
+		t.Fatalf("counter incremented on non-durable transition: got %v, want 0", got)
+	}
+
+	ctx = newPhaseTestCtx(cl, obj)
+	if err := c.failBuild(ctx, obj, buildErr, "ImageBuildError"); !errors.Is(err, buildErr) {
+		t.Fatalf("expected original build error on durable transition, got: %v", err)
+	}
+	if got := testutil.ToFloat64(labels); got != 1 {
+		t.Fatalf("counter after durable transition: got %v, want 1", got)
+	}
+}
+
 // newPhaseTestCtx builds the minimal core.Context the phase helper needs (client,
 // condition helper, recorder, logger) around a fake client.
 func newPhaseTestCtx(cl client.Client, obj *hephv1.ImageBuild) *core.Context {

@@ -1,0 +1,51 @@
+{{- if .Values.buildkit.binfmt.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "hephaestus.buildkit.fullname" . }}-binfmt
+  labels:
+    {{- include "common.labels.standard" . | nindent 4 }}
+    app.kubernetes.io/component: binfmt
+spec:
+  selector:
+    matchLabels:
+      {{- include "common.labels.matchLabels" . | nindent 6 }}
+      app.kubernetes.io/component: binfmt
+  template:
+    metadata:
+      labels:
+        {{- include "common.labels.matchLabels" . | nindent 8 }}
+        app.kubernetes.io/component: binfmt
+    spec:
+      {{- include "hephaestus.imagePullSecrets" . | indent 6 }}
+      # Registration writes to /proc/sys/fs/binfmt_misc, which is not mount-namespaced - a
+      # privileged container's registration is visible to the host kernel without any special
+      # volume mounts or host namespace sharing.
+      initContainers:
+        - name: binfmt
+          image: {{ include "hephaestus.buildkit.binfmt.image" . }}
+          imagePullPolicy: {{ .Values.buildkit.binfmt.image.pullPolicy }}
+          args: ["--install", "all"]
+          securityContext:
+            privileged: true
+      containers:
+        - name: pause
+          image: {{ include "hephaestus.buildkit.binfmt.image" . }}
+          imagePullPolicy: {{ .Values.buildkit.binfmt.image.pullPolicy }}
+          command: ["sleep", "infinity"]
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
+            limits:
+              cpu: 10m
+              memory: 32Mi
+      {{- with .Values.buildkit.binfmt.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.buildkit.binfmt.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
