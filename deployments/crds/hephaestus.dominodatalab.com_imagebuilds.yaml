@@ -101,6 +101,15 @@ spec:
               logKey:
                 description: LogKey is used to uniquely annotate build logs for post-processing
                 type: string
+              platforms:
+                description: |-
+                  Platforms specifies one or more target OS/architecture combinations to build for, using
+                  "os/arch[/variant]" syntax (e.g. "linux/amd64", "linux/arm64"). Each requested platform must be
+                  served by a configured buildkit pool, natively or via emulation, or the request is rejected at
+                  admission time. When empty, the build runs on whatever platform the leased worker natively runs.
+                items:
+                  type: string
+                type: array
               registryAuth:
                 description: RegistryAuth credentials used to pull/push images from/to
                   private registries.
@@ -162,8 +171,9 @@ spec:
                   used during the image build process.
                 type: string
               compressedImageSizeBytes:
-                description: CompressedImageSizeBytes is the total size of all the
-                  compressed layers in the image.
+                description: |-
+                  CompressedImageSizeBytes is the total size of all the compressed layers in the image.
+                  For a multi-platform build spanning more than one buildkit pool, see Platforms instead.
                 type: string
               conditions:
                 items:
@@ -222,7 +232,8 @@ spec:
                   type: object
                 type: array
               digest:
-                description: Digest is the image digest
+                description: Digest is the image digest. For a multi-platform build
+                  this is the manifest list/index digest.
                 type: string
               labels:
                 additionalProperties:
@@ -234,6 +245,41 @@ spec:
               phase:
                 description: Phase represents a step in a resource processing lifecycle.
                 type: string
+              platforms:
+                description: |-
+                  Platforms contains a per-platform breakdown, populated only when a build fans out across more
+                  than one buildkit pool to satisfy Spec.Platforms.
+                items:
+                  description: |-
+                    PlatformResult records the outcome of building a single platform as part of a multi-pool
+                    fan-out build.
+                  properties:
+                    compressedImageSizeBytes:
+                      description: CompressedImageSizeBytes is the total size of all
+                        the compressed layers for this platform.
+                      type: string
+                    digest:
+                      description: Digest is the pushed single-platform image digest.
+                        Empty if Error is set.
+                      type: string
+                    error:
+                      description: Error contains the failure reason when this platform
+                        failed to build.
+                      type: string
+                    labels:
+                      additionalProperties:
+                        type: string
+                      description: Labels contains arbitrary OCI image config metadata
+                        for this platform.
+                      type: object
+                    platform:
+                      description: Platform is the "os/arch[/variant]" this result
+                        corresponds to.
+                      type: string
+                  required:
+                  - platform
+                  type: object
+                type: array
               transitions:
                 items:
                   properties:

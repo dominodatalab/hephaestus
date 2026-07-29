@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	hephv1 "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1"
 )
 
 var CompressionMethod string
@@ -53,6 +55,35 @@ func (c Controller) Validate() error {
 	}
 	if err := validatePort(int(c.Buildkit.DaemonPort)); err != nil {
 		errs = append(errs, fmt.Sprintf("buildkit.daemonPort is invalid: %s", err.Error()))
+	}
+
+	seenPoolNames := make(map[string]bool, len(c.Buildkit.PlatformPools))
+	for idx, pool := range c.Buildkit.PlatformPools {
+		prefix := fmt.Sprintf("buildkit.platformPools[%d]", idx)
+
+		switch {
+		case pool.Name == "":
+			errs = append(errs, prefix+".name cannot be blank")
+		case seenPoolNames[pool.Name]:
+			errs = append(errs, fmt.Sprintf("%s.name %q is duplicated", prefix, pool.Name))
+		default:
+			seenPoolNames[pool.Name] = true
+		}
+		if pool.Namespace == "" {
+			errs = append(errs, prefix+".namespace cannot be blank")
+		}
+		if pool.PodLabels == nil {
+			errs = append(errs, prefix+".podLabels cannot be nil")
+		}
+		if pool.StatefulSetName == "" {
+			errs = append(errs, prefix+".statefulSetName cannot be blank")
+		}
+		if pool.ServiceName == "" {
+			errs = append(errs, prefix+".serviceName cannot be blank")
+		}
+		if len(pool.Platforms) == 0 {
+			errs = append(errs, prefix+".platforms must contain at least 1 entry")
+		}
 	}
 
 	if c.NewRelic.Enabled && c.NewRelic.LicenseKey == "" {
@@ -120,6 +151,61 @@ type Buildkit struct {
 	// FetchAndExtractTimeout used when processing the remote Docker context tarball.
 	// Fetch retries have a hard timeout limit of 4.25 mins because, come on, don't be ridiculous.
 	FetchAndExtractTimeout time.Duration `json:"fetchAndExtractTimeout" yaml:"fetchAndExtractTimeout"`
+	// PlatformPools declares one or more named buildkit pools and the platforms each serves, natively
+	// or via emulation set up out-of-band on their nodes. When empty, a single pool named "default" is
+	// synthesized from the Namespace/PodLabels/StatefulSetName/ServiceName fields above, preserving the
+	// pre-multi-arch behavior of this config exactly.
+	PlatformPools []PlatformPool `json:"platformPools,omitempty" yaml:"platformPools,omitempty"`
+}
+
+// PlatformPool describes a single buildkit worker pool and the platforms it can serve.
+type PlatformPool struct {
+	// Name uniquely identifies this pool.
+	Name string `json:"name" yaml:"name"`
+	// Namespace where the StatefulSet is deployed.
+	Namespace string `json:"namespace" yaml:"namespace"`
+	// PodLabels assigned to pods by the StatefulSet.
+	PodLabels map[string]string `json:"podLabels" yaml:"podLabels"`
+	// StatefulSetName for the supervising workload.
+	StatefulSetName string `json:"statefulSetName" yaml:"statefulSetName"`
+	// ServiceName for the headless service.
+	ServiceName string `json:"serviceName" yaml:"serviceName"`
+	// Platforms this pool can serve, in "os/arch[/variant]" syntax (e.g. "linux/amd64").
+	Platforms []string `json:"platforms" yaml:"platforms"`
+}
+
+// defaultPlatformPoolName is used for the single pool synthesized from the legacy flat
+// Namespace/PodLabels/StatefulSetName/ServiceName fields when PlatformPools is unset.
+const defaultPlatformPoolName = "default"
+
+// Pools returns the configured platform pools, synthesizing a single "default" pool from the legacy
+// flat fields when PlatformPools is empty. This is what guarantees an upgrade with no values changes
+// behaves identically to the pre-multi-arch single-pool topology.
+func (b Buildkit) Pools() []PlatformPool {
+	if len(b.PlatformPools) > 0 {
+		return b.PlatformPools
+	}
+
+	return []PlatformPool{
+		{
+			Name:            defaultPlatformPoolName,
+			Namespace:       b.Namespace,
+			PodLabels:       b.PodLabels,
+			StatefulSetName: b.StatefulSetName,
+			ServiceName:     b.ServiceName,
+		},
+	}
+}
+
+// PlatformCapabilities builds the webhook/dispatcher-facing capability set from Pools(), the single
+// source of truth for which platforms are servable by this configuration.
+func (b Buildkit) PlatformCapabilities() hephv1.PlatformCapabilities {
+	poolPlatforms := make(map[string][]string)
+	for _, pool := range b.Pools() {
+		poolPlatforms[pool.Name] = pool.Platforms
+	}
+
+	return hephv1.NewPlatformCapabilities(poolPlatforms)
 }
 
 // RegistryConfig options used to relax registry push/pull restrictions.

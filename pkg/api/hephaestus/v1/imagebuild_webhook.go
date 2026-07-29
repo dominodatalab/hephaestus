@@ -19,6 +19,9 @@ var _ admission.Defaulter[*ImageBuild] = &ImageBuild{}
 func (in *ImageBuild) Default(context.Context, *ImageBuild) error {
 	log := imagebuildlog.WithName("defaulter").WithValues("imagebuild", client.ObjectKeyFromObject(in))
 	log.V(1).Info("Applying default values")
+
+	in.Spec.Platforms = normalizePlatforms(in.Spec.Platforms)
+
 	return nil
 }
 
@@ -88,6 +91,10 @@ func (in *ImageBuild) validateImageBuild(action string, obj *ImageBuild) (admiss
 	}
 
 	if errs := validateRegistryAuth(log, fp.Child("registryAuth"), obj.Spec.RegistryAuth); errs != nil {
+		errList = append(errList, errs...)
+	}
+
+	if errs := validatePlatforms(log, fp.Child("platforms"), obj.Spec.Platforms, platformCapabilities); errs != nil {
 		errList = append(errList, errs...)
 	}
 
