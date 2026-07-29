@@ -19,6 +19,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	bkclient "github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/cmd/buildctl/build"
+	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/auth"
 	"github.com/moby/buildkit/session/auth/authprovider"
@@ -124,6 +125,13 @@ type BuildOptions struct {
 	Secrets                  map[string]string
 	SecretsData              map[string][]byte
 	FetchAndExtractTimeout   time.Duration
+	// Platforms requests one or more target "os/arch[/variant]" platforms for this solve, passed
+	// through as BuildKit's comma-separated "platform" frontend attr. When more than one platform is
+	// requested, BuildKit produces a multi-platform manifest list/index in a single solve, provided
+	// every requested platform is servable (natively or via emulation) by a worker registered with
+	// the daemon this build is dispatched to. Empty preserves the pre-multi-arch single-platform
+	// behavior of this build exactly.
+	Platforms []string
 }
 
 type Buildkit interface {
@@ -161,11 +169,20 @@ func validateCompression(compression string, name string) map[string]string {
 	return attrs
 }
 
-func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
+// SolveResult carries the outcome of a successful Build.
+type SolveResult struct {
+	// ImageName is the pushed image reference.
+	ImageName string
+	// Digest is the pushed image digest. For a multi-platform BuildOptions.Platforms request, this is
+	// the manifest list/index digest.
+	Digest string
+}
+
+func (c *Client) Build(ctx context.Context, opts BuildOptions) (SolveResult, error) {
 	// setup build directory
 	buildDir, err := os.MkdirTemp("", "hephaestus-build-")
 	if err != nil {
-		return "", fmt.Errorf("failed to create build dir: %w", err)
+		return SolveResult{}, fmt.Errorf("failed to create build dir: %w", err)
 	}
 
 	defer func(path string) {
@@ -185,34 +202,34 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 		c.log.Info("Fetching remote context", "url", opts.Context)
 		extract, extractErr := archive.FetchAndExtract(ctx, c.log, opts.Context, buildDir, opts.FetchAndExtractTimeout)
 		if extractErr != nil {
-			return "", fmt.Errorf("cannot fetch remote context: %w", extractErr)
+			return SolveResult{}, fmt.Errorf("cannot fetch remote context: %w", extractErr)
 		}
 		contentsDir = extract.ContentsDir
 	case strings.TrimSpace(opts.DockerfileContents) != "":
 		c.log.Info("Creating context from DockerfileContents")
 		contentsDir, err = os.MkdirTemp(buildDir, "dockerfile-contents-")
 		if err != nil {
-			return "", fmt.Errorf("cannot create temp directory for dockerfileContents: %w", err)
+			return SolveResult{}, fmt.Errorf("cannot create temp directory for dockerfileContents: %w", err)
 		}
 		err = os.WriteFile(path.Join(contentsDir, "Dockerfile"), []byte(opts.DockerfileContents), os.FileMode(0644))
 		if err != nil {
-			return "", fmt.Errorf("cannot write temporary file for dockerfileContents: %w", err)
+			return SolveResult{}, fmt.Errorf("cannot write temporary file for dockerfileContents: %w", err)
 		}
 	default:
-		return "", errors.New("no valid docker context provided")
+		return SolveResult{}, errors.New("no valid docker context provided")
 	}
 	c.log.V(1).Info("Context extracted", "dir", contentsDir)
 
 	// verify manifest is present
 	dockerfile := filepath.Join(contentsDir, "Dockerfile")
 	if _, err := os.Stat(dockerfile); errors.Is(err, os.ErrNotExist) {
-		return "", fmt.Errorf("build requires a Dockerfile inside context dir: %w", err)
+		return SolveResult{}, fmt.Errorf("build requires a Dockerfile inside context dir: %w", err)
 	}
 
 	if l := c.log.V(1); l.Enabled() {
 		bs, err := os.ReadFile(dockerfile)
 		if err != nil {
-			return "", fmt.Errorf("cannot read Dockerfile: %w", err)
+			return SolveResult{}, fmt.Errorf("cannot read Dockerfile: %w", err)
 		}
 		l.Info("Dockerfile contents:\n" + string(bs))
 	}
@@ -223,7 +240,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 	for name, path := range opts.Secrets {
 		contents, err := os.ReadFile(path)
 		if err != nil {
-			return "", err
+			return SolveResult{}, err
 		}
 
 		secrets[name] = contents
@@ -234,7 +251,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 
 	contentsFS, err := fsutil.NewFS(contentsDir)
 	if err != nil {
-		return "", fmt.Errorf("unable to create context dir: %w", err)
+		return SolveResult{}, fmt.Errorf("unable to create context dir: %w", err)
 	}
 
 	// build solve options
@@ -260,6 +277,10 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 		solveOpt.FrontendAttrs["no-cache"] = ""
 	}
 
+	if len(opts.Platforms) > 0 {
+		solveOpt.FrontendAttrs["platform"] = strings.Join(opts.Platforms, ",")
+	}
+
 	if opts.DisableInlineCacheExport {
 		solveOpt.CacheExports = nil
 	}
@@ -283,7 +304,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 
 		attrs, err := build.ParseOpt(args)
 		if err != nil {
-			return "", fmt.Errorf("cannot parse build args: %w", err)
+			return SolveResult{}, fmt.Errorf("cannot parse build args: %w", err)
 		}
 
 		maps.Copy(solveOpt.FrontendAttrs, attrs)
@@ -415,14 +436,14 @@ func (c *Client) solveWith(ctx context.Context, modify func(buildDir string, sol
 	return err
 }
 
-func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (string, error) {
+func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (SolveResult, error) {
 	lw := &LogWriter{Logger: c.log}
 	ch := make(chan *bkclient.SolveStatus)
 	eg, ctx := errgroup.WithContext(ctx)
 
 	d, err := progressui.NewDisplay(lw, progressui.PlainMode)
 	if err != nil {
-		return "", fmt.Errorf("unable to setup buildkit logging: %w", err)
+		return SolveResult{}, fmt.Errorf("unable to setup buildkit logging: %w", err)
 	}
 
 	//nolint:contextcheck
@@ -433,7 +454,7 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (string, er
 		return err
 	})
 
-	var imageName string
+	var result SolveResult
 
 	eg.Go(func() error {
 		res, err := c.bk.Solve(ctx, nil, so, ch)
@@ -442,16 +463,19 @@ func (c *Client) runSolve(ctx context.Context, so bkclient.SolveOpt) (string, er
 		}
 
 		c.log.Info("Solve complete")
-		imageName = res.ExporterResponse["image.name"]
+		result = SolveResult{
+			ImageName: res.ExporterResponse["image.name"],
+			Digest:    res.ExporterResponse[exptypes.ExporterImageDigestKey],
+		}
 
 		return nil
 	})
 
 	if err := eg.Wait(); err != nil {
 		c.log.Info(fmt.Sprintf("Build failed: %s", err.Error()))
-		return "", fmt.Errorf("buildkit solve issue: %w", err)
+		return SolveResult{}, fmt.Errorf("buildkit solve issue: %w", err)
 	}
 
-	c.log.Info(fmt.Sprintf("Final image name: %s", imageName))
-	return imageName, nil
+	c.log.Info(fmt.Sprintf("Final image name: %s, digest: %s", result.ImageName, result.Digest))
+	return result, nil
 }

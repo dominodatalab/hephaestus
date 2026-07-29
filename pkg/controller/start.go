@@ -66,6 +66,9 @@ func Start(cfg config.Controller) error {
 	}
 	defer nr.Shutdown(5 * time.Second)
 
+	log.Info("Registering buildkit platform capabilities")
+	hephv1.SetPlatformCapabilities(cfg.Buildkit.PlatformCapabilities())
+
 	mgr, err := createManager(log, cfg.Manager)
 	if err != nil {
 		return err
