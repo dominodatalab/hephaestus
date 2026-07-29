@@ -30,6 +30,8 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCacheList":                    schema_pkg_api_hephaestus_v1_ImageCacheList(ref),
 		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCacheSpec":                    schema_pkg_api_hephaestus_v1_ImageCacheSpec(ref),
 		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageCacheStatus":                  schema_pkg_api_hephaestus_v1_ImageCacheStatus(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.PlatformCapabilities":              schema_pkg_api_hephaestus_v1_PlatformCapabilities(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.PlatformResult":                    schema_pkg_api_hephaestus_v1_PlatformResult(ref),
 		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.RegistryCredentials":               schema_pkg_api_hephaestus_v1_RegistryCredentials(ref),
 		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.SecretCredentials":                 schema_pkg_api_hephaestus_v1_SecretCredentials(ref),
 		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.SecretReference":                   schema_pkg_api_hephaestus_v1_SecretReference(ref),
@@ -495,6 +497,20 @@ func schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref common.ReferenceCallback) c
 							},
 						},
 					},
+					"platforms": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Platforms specifies one or more target OS/architecture combinations to build for, using \"os/arch[/variant]\" syntax (e.g. \"linux/amd64\", \"linux/arm64\"). Each requested platform must be served by a configured buildkit pool, natively or via emulation, or the request is rejected at admission time. When empty, the build runs on whatever platform the leased worker natively runs.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
@@ -532,14 +548,14 @@ func schema_pkg_api_hephaestus_v1_ImageBuildStatus(ref common.ReferenceCallback)
 					},
 					"compressedImageSizeBytes": {
 						SchemaProps: spec.SchemaProps{
-							Description: "CompressedImageSizeBytes is the total size of all the compressed layers in the image.",
+							Description: "CompressedImageSizeBytes is the total size of all the compressed layers in the image. For a multi-platform build spanning more than one buildkit pool, see Platforms instead.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"digest": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Digest is the image digest",
+							Description: "Digest is the image digest. For a multi-platform build this is the manifest list/index digest.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -554,6 +570,19 @@ func schema_pkg_api_hephaestus_v1_ImageBuildStatus(ref common.ReferenceCallback)
 									SchemaProps: spec.SchemaProps{
 										Type:   []string{"string"},
 										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"platforms": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Platforms contains a per-platform breakdown, populated only when a build fans out across more than one buildkit pool to satisfy Spec.Platforms.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.PlatformResult"),
 									},
 								},
 							},
@@ -593,7 +622,7 @@ func schema_pkg_api_hephaestus_v1_ImageBuildStatus(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
-			"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildTransition", "k8s.io/apimachinery/pkg/apis/meta/v1.Condition"},
+			"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildTransition", "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.PlatformResult", "k8s.io/apimachinery/pkg/apis/meta/v1.Condition"},
 	}
 }
 
@@ -846,6 +875,20 @@ func schema_pkg_api_hephaestus_v1_ImageCacheSpec(ref common.ReferenceCallback) c
 							},
 						},
 					},
+					"platforms": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Platforms specifies one or more target OS/architecture combinations to warm the cache for, using \"os/arch[/variant]\" syntax (e.g. \"linux/amd64\", \"linux/arm64\"). Each requested platform must be served by a configured buildkit pool, natively or via emulation, or the request is rejected at admission time. When empty, caching runs on whatever platform the leased worker natively runs.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
 				},
 				Required: []string{"images"},
 			},
@@ -910,6 +953,100 @@ func schema_pkg_api_hephaestus_v1_ImageCacheStatus(ref common.ReferenceCallback)
 		},
 		Dependencies: []string{
 			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition"},
+	}
+}
+
+func schema_pkg_api_hephaestus_v1_PlatformCapabilities(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PlatformCapabilities records which platforms are servable, aggregated across every configured buildkit pool. It is populated once at controller startup from config.Buildkit and consulted by the ImageBuild/ImageCache validating webhooks so that a request for an unavailable platform is rejected at admission time rather than left to hang on a pod that can never be scheduled.\n\nThis is a webhook-internal helper type, not a CRD schema type.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"platforms": {
+						SchemaProps: spec.SchemaProps{
+							Description: "platforms maps a normalized platform string to the pool names that can serve it.",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type: []string{"array"},
+										Items: &spec.SchemaOrArray{
+											Schema: &spec.Schema{
+												SchemaProps: spec.SchemaProps{
+													Type:   []string{"string"},
+													Format: "",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"platforms"},
+			},
+		},
+	}
+}
+
+func schema_pkg_api_hephaestus_v1_PlatformResult(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PlatformResult records the outcome of building a single platform as part of a multi-pool fan-out build.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"platform": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Platform is the \"os/arch[/variant]\" this result corresponds to.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"digest": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Digest is the pushed single-platform image digest. Empty if Error is set.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"compressedImageSizeBytes": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CompressedImageSizeBytes is the total size of all the compressed layers for this platform.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"labels": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Labels contains arbitrary OCI image config metadata for this platform.",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"error": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Error contains the failure reason when this platform failed to build.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"platform"},
+			},
+		},
 	}
 }
 

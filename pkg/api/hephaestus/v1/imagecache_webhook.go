@@ -38,6 +38,9 @@ func (in *ImageCache) validateImageCache(action string) (admission.Warnings, err
 	if errs := validateRegistryAuth(log, fp.Child("registryAuth"), in.Spec.RegistryAuth); errs != nil {
 		errList = append(errList, errs...)
 	}
+	if errs := validatePlatforms(log, fp.Child("platforms"), in.Spec.Platforms, platformCapabilities); errs != nil {
+		errList = append(errList, errs...)
+	}
 
 	return admission.Warnings{}, invalidIfNotEmpty(ImageCacheKind, in.Name, errList)
 }
