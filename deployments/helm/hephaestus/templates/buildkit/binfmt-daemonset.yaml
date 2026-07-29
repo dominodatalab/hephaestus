@@ -40,11 +40,13 @@ spec:
             limits:
               cpu: 10m
               memory: 32Mi
-      {{- with .Values.buildkit.binfmt.nodeSelector }}
+      {{- /* Defaults to buildkit's own nodeSelector/tolerations so the binfmt DaemonSet lands on
+      the same nodes as the buildkit pods it registers emulation for, unless overridden. */}}
+      {{- with (.Values.buildkit.binfmt.nodeSelector | default .Values.buildkit.nodeSelector) }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.buildkit.binfmt.tolerations }}
+      {{- with (.Values.buildkit.binfmt.tolerations | default .Values.buildkit.tolerations) }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}

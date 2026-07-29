@@ -3,7 +3,9 @@ package component
 import (
 	"testing"
 
+	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dominodatalab/hephaestus/pkg/config"
 )
@@ -85,10 +87,19 @@ func TestSuffixImageRef(t *testing.T) {
 		assert.Equal(t, "registry.example.com/repo:v1-linux-arm64", ref)
 	})
 
-	t.Run("untagged/digest reference falls back to a whole-string suffix", func(t *testing.T) {
+	t.Run("untagged reference gets the slug appended to the implicit tag", func(t *testing.T) {
+		ref := suffixImageRef("registry.example.com/repo", "linux-arm64")
+		assert.Equal(t, "registry.example.com/repo:latest-linux-arm64", ref)
+	})
+
+	t.Run("digest reference falls back to tagging the repository with the default tag and slug", func(t *testing.T) {
 		ref := suffixImageRef("registry.example.com/repo@sha256:"+
 			"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "linux-arm64")
-		assert.Contains(t, ref, "-linux-arm64")
+		assert.Equal(t, "registry.example.com/repo:latest-linux-arm64", ref)
+
+		parsed, err := name.ParseReference(ref)
+		require.NoError(t, err)
+		assert.Equal(t, "registry.example.com/repo", parsed.Context().Name())
 	})
 }
 
