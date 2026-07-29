@@ -62,7 +62,8 @@
       "matchDepNames": ["go", "golang"]
     },
     {
-      "description": "Automerge patch and digest updates",
+      "description": "Automerge patch and digest updates for Dockerfile bases",
+      "matchManagers": ["dockerfile"],
       "matchUpdateTypes": ["digest", "patch"],
       "schedule": ["at any time"],
       "automerge": true,
