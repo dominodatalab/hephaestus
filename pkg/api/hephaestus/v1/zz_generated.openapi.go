@@ -985,8 +985,23 @@ func schema_pkg_api_hephaestus_v1_PlatformCapabilities(ref common.ReferenceCallb
 							},
 						},
 					},
+					"poolSize": {
+						SchemaProps: spec.SchemaProps{
+							Description: "poolSize maps a pool name to the number of platforms it declares, used to prefer a pool that serves fewer platforms (more likely native) over one serving several (more likely emulated) when a platform is covered by more than one pool.",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"integer"},
+										Format: "int32",
+									},
+								},
+							},
+						},
+					},
 				},
-				Required: []string{"platforms"},
+				Required: []string{"platforms", "poolSize"},
 			},
 		},
 	}

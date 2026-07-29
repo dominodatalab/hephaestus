@@ -18,6 +18,7 @@ API rule violation: list_type_missing,github.com/dominodatalab/hephaestus/pkg/ap
 API rule violation: names_match,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,ImageBuildSpec,DisableCacheLayerExport
 API rule violation: names_match,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,ImageBuildSpec,DisableLocalBuildCache
 API rule violation: names_match,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,PlatformCapabilities,platforms
+API rule violation: names_match,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,PlatformCapabilities,poolSize
 API rule violation: streaming_list_type_json_tags,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,ImageBuildList,ListMeta
 API rule violation: streaming_list_type_json_tags,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,ImageBuildMessageList,ListMeta
 API rule violation: streaming_list_type_json_tags,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,ImageCacheList,ListMeta
