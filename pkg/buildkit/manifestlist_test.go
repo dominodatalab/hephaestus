@@ -1,10 +1,18 @@
 package buildkit
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestAssembleManifestListRejectsEmptyRefs(t *testing.T) {
+	var c *Client
+
+	_, err := c.AssembleManifestList(context.Background(), nil, "registry.example.com/repo:v1", nil)
+	assert.Error(t, err)
+}
 
 func TestParsePlatform(t *testing.T) {
 	t.Run("os/arch", func(t *testing.T) {

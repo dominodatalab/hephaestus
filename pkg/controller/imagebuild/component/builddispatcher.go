@@ -32,6 +32,10 @@ import (
 
 var errNotRunning = errors.New("build not running")
 
+// releaseTimeout bounds how long a worker release is allowed to take once detached from a
+// cancelled build context (see buildPlatform), so a release call can't hang forever.
+const releaseTimeout = 30 * time.Second
+
 type BuildDispatcherComponent struct {
 	cfg      config.Buildkit
 	caps     hephv1.PlatformCapabilities
@@ -416,8 +420,10 @@ func platformImageSlug(platform string) string {
 	return strings.ReplaceAll(platform, "/", "-")
 }
 
-// suffixImageRef appends "-<slug>" to an image reference's tag (or to the whole string as a
-// fallback for an untagged/digest reference), producing a distinct per-platform intermediate tag.
+// suffixImageRef appends "-<slug>" to an image reference's tag, producing a distinct per-platform
+// intermediate tag. Untagged references are parsed as name.Tag with an implicit "latest" tag by
+// name.ParseReference, so the tag branch covers them too; a digest reference falls back to tagging
+// the same repository with "<default-tag>-<slug>", since a digest can't be suffixed in place.
 func suffixImageRef(image, slug string) string {
 	ref, err := name.ParseReference(image)
 	if err != nil {
@@ -427,7 +433,7 @@ func suffixImageRef(image, slug string) string {
 		return tag.Context().Tag(tag.TagStr() + "-" + slug).Name()
 	}
 
-	return image + "-" + slug
+	return ref.Context().Tag(name.DefaultTag + "-" + slug).Name()
 }
 
 // suffixImageRefs applies suffixImageRef to every image, for the given platform.
@@ -464,6 +470,8 @@ func (c *BuildDispatcherComponent) reconcileFanOut(
 	fanOutSeg := txn.StartSegment("image-build-fanout")
 	start := time.Now()
 
+	// best effort phase change regardless if the original context is "done"
+	coreCtx.Context = context.Background()
 	builds := c.buildAllPlatforms(buildCtx, obj, assignments, secretsData, configDir, buildLog)
 
 	obj.Status.BuildTime = time.Since(start).Truncate(time.Millisecond).String()
@@ -555,7 +563,12 @@ func (c *BuildDispatcherComponent) buildPlatform(
 	}
 	defer func() {
 		log.Info("Releasing buildkit worker", "endpoint", addr)
-		if err := pool.Release(ctx, addr); err != nil {
+
+		// best effort release regardless of whether a sibling platform's failure already
+		// cancelled ctx via the shared errgroup context
+		releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), releaseTimeout)
+		defer cancel()
+		if err := pool.Release(releaseCtx, addr); err != nil {
 			log.Error(err, "Failed to release pool endpoint", "endpoint", addr)
 		}
 	}()

@@ -2,6 +2,7 @@ package buildkit
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -32,6 +33,10 @@ func (c *Client) AssembleManifestList(
 	finalRef string,
 	refs []PlatformImageRef,
 ) (string, error) {
+	if len(refs) == 0 {
+		return "", errors.New("no platform image references provided")
+	}
+
 	var idx v1.ImageIndex = empty.Index
 
 	for _, r := range refs {
