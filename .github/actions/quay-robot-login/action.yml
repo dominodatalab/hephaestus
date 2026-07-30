@@ -19,10 +19,6 @@ runs:
           "https://quay.io/oauth2/federation/robot/token")
         quay_token=$(echo "${response}" | jq -r .token)
         echo "::add-mask::${quay_token}"
-
-        ttl=$(echo "${response}" | jq -r '.expires_in // .expiration // empty')
-        echo "Quay robot token TTL: ${ttl:-not reported by response}"
-
         echo "token=${quay_token}" >> "$GITHUB_OUTPUT"
 
     - name: Log in to Quay.io
