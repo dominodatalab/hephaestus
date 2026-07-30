@@ -54,6 +54,15 @@
       "description": "Group the Go version bump (go.mod toolchain directive, Dockerfile base image, CI GO_VERSION) into one PR",
       "groupName": "go version",
       "matchDepNames": ["go", "golang"]
+    },
+    {
+      "description": "Automerge digest and patch updates for Dockerfile bases",
+      "matchUpdateTypes": ["digest", "patch"],
+      "matchManagers": ["dockerfile"],
+      "schedule": ["at any time"],
+      "automerge": true,
+      "platformAutomerge": true,
+      "automergeType": "branch"
     }
   ],
   "customManagers": [
