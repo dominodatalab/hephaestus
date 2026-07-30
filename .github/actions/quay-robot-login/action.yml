@@ -1,0 +1,33 @@
+name: Quay Robot Federation Login
+description: Exchanges a GitHub Actions OIDC token for a short-lived Quay.io robot account token and logs in
+inputs:
+  username:
+    required: true
+    description: Quay robot account username (e.g. org+robotname)
+runs:
+  using: composite
+  steps:
+    - name: Exchange OIDC token for Quay robot token
+      id: quay
+      shell: bash
+      run: |
+        oidc_token=$(curl -sSf -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+          "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=quay.io" | jq -r .value)
+        echo "::add-mask::${oidc_token}"
+
+        response=$(curl -sSf -u "${{ inputs.username }}:${oidc_token}" \
+          "https://quay.io/oauth2/federation/robot/token")
+        quay_token=$(echo "${response}" | jq -r .token)
+        echo "::add-mask::${quay_token}"
+
+        ttl=$(echo "${response}" | jq -r '.expires_in // .expiration // empty')
+        echo "Quay robot token TTL: ${ttl:-not reported by response}"
+
+        echo "token=${quay_token}" >> "$GITHUB_OUTPUT"
+
+    - name: Log in to Quay.io
+      uses: docker/login-action@v3
+      with:
+        registry: quay.io
+        username: ${{ inputs.username }}
+        password: ${{ steps.quay.outputs.token }}
