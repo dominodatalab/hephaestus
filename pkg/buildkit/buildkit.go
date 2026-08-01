@@ -260,6 +260,9 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 		solveOpt.FrontendAttrs["no-cache"] = ""
 	}
 
+	// POC: hardcoded multi-arch build via QEMU emulation, will become configurable later
+	solveOpt.FrontendAttrs["platform"] = "linux/amd64,linux/arm64"
+
 	if opts.DisableInlineCacheExport {
 		solveOpt.CacheExports = nil
 	}
