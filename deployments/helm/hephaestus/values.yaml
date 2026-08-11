@@ -429,24 +429,40 @@ buildkit:
 
   # Declares one or more named buildkit pools and the platforms each can serve (natively or via
   # emulation - see docs/building.md for what buildkit.image needs to support an emulated
-  # platform), passed through verbatim into the controller's
-  # buildkit.platformPools config. Leave empty to keep the single StatefulSet deployed by this
-  # chart as an implicit, un-platform-aware "default" pool (the pre-multi-arch behavior).
+  # platform), passed through verbatim into the controller's buildkit.platformPools config. Leave
+  # empty (the default) to deploy the single buildkit StatefulSet/Service/ServiceAccount/
+  # ConfigMap/NetworkPolicy this chart has always deployed, as an implicit, un-platform-aware
+  # "default" pool - the pre-multi-arch behavior, byte-for-byte.
   #
-  # This chart deploys exactly one buildkit StatefulSet; declaring more than one pool here only
-  # makes sense once additional buildkit StatefulSets serving those pools are deployed separately
-  # (e.g. hand-written manifests, or a second release of this chart with different pod placement) -
-  # this chart does not yet template multiple StatefulSets from this list.
+  # Setting this deploys ONE StatefulSet/Service/ServiceAccount/ConfigMap/NetworkPolicy PER entry
+  # instead, each named "<release>-hephaestus-buildkit-<name>". Only placement/sizing can be
+  # overridden per pool (nodeSelector, tolerations, affinity, resources, replicaCount,
+  # priorityClassName, args, podLabels, podAnnotations) - every other buildkit.* setting (image,
+  # rootless mode, mTLS, service port, persistence) is shared across every pool. namespace defaults
+  # to this release's namespace but can be set independently per pool if that pool's StatefulSet
+  # should live elsewhere; the buildkit NetworkPolicy is generated to allow controller ingress
+  # either way. statefulSetName/serviceName are NOT set here - they're always derived from `name`,
+  # so there's no way for the values file and the actually-deployed object names to drift apart.
   #
-  # Example:
+  # Example - two native pools, each pinned to nodes of the matching architecture:
   # platformPools:
-  #   - name: default
-  #     namespace: my-namespace
-  #     statefulSetName: my-release-buildkit
-  #     serviceName: my-release-buildkit
-  #     podLabels:
-  #       app.kubernetes.io/component: buildkit
-  #     platforms: ["linux/amd64", "linux/arm64"]
+  #   - name: amd64
+  #     platforms: ["linux/amd64"]
+  #     nodeSelector:
+  #       kubernetes.io/arch: amd64
+  #   - name: arm64
+  #     platforms: ["linux/arm64"]
+  #     nodeSelector:
+  #       kubernetes.io/arch: arm64
+  #     tolerations:
+  #       - key: dedicated
+  #         operator: Equal
+  #         value: buildkit-arm64
+  #         effect: NoSchedule
+  #
+  # See docs/building.md in the hephaestus repo for the single-pool-with-emulation alternative,
+  # which needs no more than one pool declared here and buildkit.image built with the emulator
+  # binaries baked in.
   platformPools: []
 
 # waitForNetworking starts an initContainer that requires a curl_image

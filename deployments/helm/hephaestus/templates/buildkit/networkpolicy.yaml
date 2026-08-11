@@ -1,4 +1,4 @@
-{{- if .Values.enableNetworkPolicies }}
+{{- if and .Values.enableNetworkPolicies (not .Values.buildkit.platformPools) }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
