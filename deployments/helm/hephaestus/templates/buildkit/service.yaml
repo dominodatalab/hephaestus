@@ -1,3 +1,4 @@
+{{- if not .Values.buildkit.platformPools }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -16,3 +17,4 @@ spec:
   {{- end }}
   selector:
     {{- include "hephaestus.buildkit.labels.matchLabels" . | nindent 4 }}
+{{- end }}

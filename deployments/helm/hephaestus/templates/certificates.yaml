@@ -80,8 +80,18 @@ metadata:
     {{- include "common.labels.standard" . | nindent 4 }}
 spec:
   dnsNames:
+    {{- if .Values.buildkit.platformPools }}
+    {{- range .Values.buildkit.platformPools }}
+    {{- $pool := . }}
+    {{- $poolFullname := include "hephaestus.buildkit.pool.fullname" (dict "root" $ "pool" $pool) }}
+    {{- $poolNamespace := include "hephaestus.buildkit.pool.namespace" (dict "root" $ "pool" $pool) }}
+    - "*.{{ $poolFullname }}"
+    - "*.{{ $poolFullname }}.{{ $poolNamespace }}"
+    {{- end }}
+    {{- else }}
     - "*.{{ include "hephaestus.buildkit.fullname" . }}"
     - "*.{{ include "hephaestus.buildkit.fullname" . }}.{{ .Release.Namespace }}"
+    {{- end }}
   usages:
     - server auth
   issuerRef:

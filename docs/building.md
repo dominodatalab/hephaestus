@@ -16,7 +16,20 @@ requesting all of them, and BuildKit produces a multi-platform manifest list/OCI
 This is the easiest way to get multi-arch images and requires no additional buildkit deployments -
 just:
 
-1. Declare the pool's platforms in the controller config:
+1. Declare a single pool listing every platform it should serve. Via the Helm chart, set
+   `buildkit.platformPools` in `values.yaml`:
+
+   ```yaml
+   buildkit:
+     platformPools:
+       - name: default
+         platforms: ["linux/amd64", "linux/arm64"]
+   ```
+
+   This is enough on its own - the chart deploys exactly one `StatefulSet`/`Service`/etc. for this
+   pool (see the chart's inline documentation for the placement/sizing fields you can override per
+   pool). Configuring the controller directly (outside Helm) is the same shape, just with
+   `namespace`/`statefulSetName`/`serviceName` given explicitly instead of chart-computed:
 
    ```yaml
    buildkit:
@@ -27,9 +40,6 @@ just:
          serviceName: <buildkit service name>
          platforms: ["linux/amd64", "linux/arm64"]
    ```
-
-   Via the Helm chart, set `buildkit.platformPools` in `values.yaml` (see the chart's inline
-   documentation for the exact shape).
 
 2. For any platform that isn't the pool's native architecture, that pool's nodes need QEMU
    user-mode emulation registered (`binfmt_misc`) - the same mechanism `docker buildx` relies on for
@@ -52,9 +62,33 @@ The build fails atomically - if any platform fails, the whole `ImageBuild` fails
 `status.platforms` records a per-platform digest/size/labels/error breakdown regardless of outcome.
 
 This is the path to use when you have genuinely native hardware for more than one architecture
-(e.g. real arm64 nodes alongside real amd64 nodes) and want to avoid emulation entirely. It requires
-more than one buildkit pool to actually exist - as of this chart version, that means deploying
-additional buildkit `StatefulSet`s/`Service`s yourself (hand-written manifests, or a separate release
-of this chart pointed at different node placement) and declaring each of them as its own entry in
-`buildkit.platformPools`, each with the platform(s) it's native to. Templating multiple buildkit
-`StatefulSet`s from a single list of pools in this chart is a known follow-up, not yet automated.
+(e.g. real arm64 nodes alongside real amd64 nodes) and want to avoid emulation entirely. Declare one
+pool per architecture, each with the platform(s) it's native to and a `nodeSelector`/`tolerations`
+override pinning it to the matching nodes:
+
+```yaml
+buildkit:
+  platformPools:
+    - name: amd64
+      platforms: ["linux/amd64"]
+      nodeSelector:
+        kubernetes.io/arch: amd64
+    - name: arm64
+      platforms: ["linux/arm64"]
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: buildkit-arm64
+          effect: NoSchedule
+```
+
+The chart deploys one `StatefulSet`/`Service`/`ServiceAccount`/`ConfigMap`/`NetworkPolicy` per pool
+entry (named `<release>-hephaestus-buildkit-<name>`), sharing one mTLS certificate/secret pair and
+one `ServiceAccount` identity's worth of RBAC across all of them - only placement/sizing differs per
+pool. A pool's `namespace` can be set independently of the release namespace if that pool's
+`StatefulSet` should live elsewhere; the generated `NetworkPolicy` allows controller ingress either
+way. Outside Helm, the same fan-out just means each pool's `namespace`/`statefulSetName`/
+`serviceName` in the controller config must point at whatever you deployed for it (hand-written
+manifests, or a separate release of this chart), however you chose to deploy it.

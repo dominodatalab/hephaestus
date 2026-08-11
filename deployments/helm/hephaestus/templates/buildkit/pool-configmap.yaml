@@ -1,12 +1,15 @@
-{{- if not .Values.buildkit.platformPools -}}
+{{- range .Values.buildkit.platformPools }}
+{{- $pool := . }}
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "hephaestus.buildkit.fullname" . }}
+  name: {{ include "hephaestus.buildkit.pool.fullname" (dict "root" $ "pool" $pool) }}
+  namespace: {{ include "hephaestus.buildkit.pool.namespace" (dict "root" $ "pool" $pool) }}
   labels:
-    {{- include "hephaestus.buildkit.labels.standard" . | nindent 4 }}
+    {{- include "hephaestus.buildkit.pool.labels.standard" (dict "root" $ "pool" $pool) | nindent 4 }}
 data:
-  {{- with .Values.buildkit }}
+  {{- with $.Values.buildkit }}
   buildkitd.toml: |
     [grpc]
       address = [ "tcp://0.0.0.0:{{ .service.port }}", "{{ .rootless | ternary (printf "unix:///run/user/%v/buildkit/buildkitd.sock" .rootlessUser) "unix:///run/buildkit/buildkitd.sock" }}" ]

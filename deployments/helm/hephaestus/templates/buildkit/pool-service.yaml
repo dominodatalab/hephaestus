@@ -1,0 +1,23 @@
+{{- range .Values.buildkit.platformPools }}
+{{- $pool := . }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "hephaestus.buildkit.pool.fullname" (dict "root" $ "pool" $pool) }}
+  namespace: {{ include "hephaestus.buildkit.pool.namespace" (dict "root" $ "pool" $pool) }}
+  labels:
+    {{- include "hephaestus.buildkit.pool.labels.standard" (dict "root" $ "pool" $pool) | nindent 4 }}
+spec:
+  clusterIP: None
+  {{- with $.Values.buildkit }}
+  type: {{ .service.type }}
+  ports:
+    - name: {{ .service.portName }}
+      port: {{ .service.port }}
+      targetPort: {{ .service.portName }}
+      protocol: TCP
+  {{- end }}
+  selector:
+    {{- include "hephaestus.buildkit.pool.labels.matchLabels" (dict "root" $ "pool" $pool) | nindent 4 }}
+{{- end }}

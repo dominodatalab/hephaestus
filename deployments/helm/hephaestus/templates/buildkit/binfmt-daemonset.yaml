@@ -40,13 +40,25 @@ spec:
             limits:
               cpu: 10m
               memory: 32Mi
-      {{- /* Defaults to buildkit's own nodeSelector/tolerations so the binfmt DaemonSet lands on
-      the same nodes as the buildkit pods it registers emulation for, unless overridden. */}}
-      {{- with (.Values.buildkit.binfmt.nodeSelector | default .Values.buildkit.nodeSelector) }}
+      {{- /* With a single implicit pool, defaults to buildkit's own nodeSelector/tolerations so the
+      binfmt DaemonSet lands on the same nodes as the buildkit pods it registers emulation for.
+      With multiple explicit pools there's no single obvious pool to inherit placement from (they
+      may target entirely different node pools), so it defaults to unrestricted (all nodes) unless
+      explicitly set - harmless, since registering emulation on a node that doesn't need it is a
+      no-op cost, not a correctness problem. */}}
+      {{- $binfmtNodeSelector := .Values.buildkit.binfmt.nodeSelector }}
+      {{- if and (not $binfmtNodeSelector) (not .Values.buildkit.platformPools) }}
+      {{- $binfmtNodeSelector = .Values.buildkit.nodeSelector }}
+      {{- end }}
+      {{- with $binfmtNodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with (.Values.buildkit.binfmt.tolerations | default .Values.buildkit.tolerations) }}
+      {{- $binfmtTolerations := .Values.buildkit.binfmt.tolerations }}
+      {{- if and (not $binfmtTolerations) (not .Values.buildkit.platformPools) }}
+      {{- $binfmtTolerations = .Values.buildkit.tolerations }}
+      {{- end }}
+      {{- with $binfmtTolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}

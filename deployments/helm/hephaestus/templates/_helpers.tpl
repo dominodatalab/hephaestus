@@ -213,3 +213,49 @@ Return the binfmt (QEMU emulation registration) image name.
 {{- define "hephaestus.buildkit.binfmt.image" -}}
 {{- include "common.images.image" (dict "imageRoot" .Values.buildkit.binfmt.image "global" $) }}
 {{- end }}
+
+{{/*
+Return a platform pool's fully-qualified app name. Expects (dict "root" $ "pool" poolValuesEntry).
+*/}}
+{{- define "hephaestus.buildkit.pool.fullname" -}}
+{{- printf "%s-%s" (include "hephaestus.buildkit.fullname" .root) .pool.name | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Return a platform pool's namespace, defaulting to the release namespace. Expects
+(dict "root" $ "pool" poolValuesEntry).
+*/}}
+{{- define "hephaestus.buildkit.pool.namespace" -}}
+{{- .pool.namespace | default .root.Release.Namespace }}
+{{- end }}
+
+{{/*
+Return a platform pool's standard labels - the same as hephaestus.buildkit.labels.standard plus a
+pool-identifying label, since every pool otherwise shares identical standard labels. Expects
+(dict "root" $ "pool" poolValuesEntry).
+*/}}
+{{- define "hephaestus.buildkit.pool.labels.standard" -}}
+{{- include "hephaestus.buildkit.labels.standard" .root }}
+hephaestus.dominodatalab.com/platform-pool: {{ .pool.name }}
+{{- end }}
+
+{{/*
+Return a platform pool's selector labels. The platform-pool label is load-bearing here, not just
+informational: without it every pool's StatefulSet/Service/NetworkPolicy selector would be
+identical and collide. Expects (dict "root" $ "pool" poolValuesEntry).
+*/}}
+{{- define "hephaestus.buildkit.pool.labels.matchLabels" -}}
+{{- include "hephaestus.buildkit.labels.matchLabels" .root }}
+hephaestus.dominodatalab.com/platform-pool: {{ .pool.name }}
+{{- end }}
+
+{{/*
+Return a platform pool's service account name. Expects (dict "root" $ "pool" poolValuesEntry).
+*/}}
+{{- define "hephaestus.buildkit.pool.serviceAccountName" -}}
+{{- if .root.Values.buildkit.serviceAccount.create }}
+{{- include "hephaestus.buildkit.pool.fullname" . }}
+{{- else }}
+{{- default "default" .root.Values.buildkit.serviceAccount.name }}
+{{- end }}
+{{- end }}
