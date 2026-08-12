@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -173,6 +174,35 @@ func usedRegistryHosts(refs []string) map[string]bool {
 	return hosts
 }
 
+// unreachable reports whether an auth attempt failed because the registry never
+// answered, rather than answering with a credential rejection.
+//
+// It deliberately does not test the error as returned. http.Client wraps every
+// failure in *url.Error, which satisfies net.Error whatever the cause, and
+// docker's bearer token transport surfaces registry status errors through it. So
+// testing the returned error reads a bearer 401 or 403 — quay.io, ECR, GCR,
+// Docker Hub and GHCR all speak bearer — as an outage, and lets a bad credential
+// through to a leased worker. Only the transport error underneath answers the
+// question, so that is what gets tested.
+func unreachable(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// The registry named the credential as the problem, so it answered.
+	if errdefs.IsUnauthorized(err) {
+		return false
+	}
+
+	if urlErr, ok := errors.AsType[*url.Error](err); ok {
+		err = urlErr.Err
+	}
+
+	_, ok := errors.AsType[net.Error](err)
+
+	return ok
+}
+
 func Verify(
 	ctx context.Context,
 	logger logr.Logger,
@@ -243,7 +273,7 @@ func Verify(
 		// still fails the build later if it truly needs this registry. Anything
 		// the registry did answer, 401 and 403 alike, is a credential problem, so
 		// fail now while the error is clear and no worker time has been spent.
-		if _, ok := errors.AsType[net.Error](authErr); ok {
+		if unreachable(authErr) {
 			logger.Info("Skipping credential check for unreachable registry", "registry", host, "reason", authErr.Error())
 			continue
 		}

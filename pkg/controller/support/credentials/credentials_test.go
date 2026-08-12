@@ -3,6 +3,7 @@ package credentials
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -125,6 +126,46 @@ func respondingHost(t *testing.T, status int) string {
 	return strings.TrimPrefix(srv.URL, "http://")
 }
 
+// bearerHost starts a registry that answers a token request with the given
+// status after a Bearer challenge, and returns its host:port. Bearer is the flow
+// quay.io, ECR, GCR, Docker Hub and GHCR all use, and it reports a rejected
+// credential through a *url.Error, so it must be covered separately from Basic.
+func bearerHost(t *testing.T, status int) string {
+	t.Helper()
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(`{"errors":[{"code":"UNAUTHORIZED","message":"bad creds"}]}`))
+	})
+	mux.HandleFunc("/v2/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="%s/token",service="registry"`, srv.URL))
+		w.WriteHeader(http.StatusUnauthorized)
+	})
+
+	return strings.TrimPrefix(srv.URL, "http://")
+}
+
+// writeDockerConfigFor writes a config.json holding one credential per server.
+func writeDockerConfigFor(t *testing.T, servers ...string) string {
+	t.Helper()
+
+	auths := AuthConfigs{}
+	for _, server := range servers {
+		auths[server] = registry.AuthConfig{Username: "u", Password: "p"}
+	}
+
+	dir := t.TempDir()
+	data, err := json.Marshal(DockerConfigJSON{Auths: auths})
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.json"), data, 0644))
+
+	return dir
+}
+
 // cancelledContext returns an already cancelled context. Verify aborts before
 // contacting a registry it checks, so tests use it to observe whether a
 // credential was checked (context.Canceled) or skipped (nil).
@@ -179,6 +220,47 @@ func TestVerify(t *testing.T) {
 		err := Verify(context.Background(), logr.Discard(), dir, []string{host}, []string{"test"}, []string{host + "/org/app:latest"})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "client credentials are invalid")
+	})
+
+	t.Run("bearer_unauthorized_registry_is_fatal", func(t *testing.T) {
+		// The registries that matter all speak bearer, and a rejected token comes
+		// back wrapped in a *url.Error, which satisfies net.Error. Testing the
+		// returned error would read this as an outage and let a bad credential
+		// reach a leased worker, so it must be fatal here.
+		host := bearerHost(t, http.StatusUnauthorized)
+		dir := writeDockerConfig(t, host)
+		shortBackoff(t)
+
+		err := Verify(context.Background(), logr.Discard(), dir, []string{host}, []string{"test"}, []string{host + "/org/app:latest"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "client credentials are invalid")
+	})
+
+	t.Run("bearer_forbidden_registry_is_fatal", func(t *testing.T) {
+		// Same as above for a token endpoint that denies rather than rejects: the
+		// registry answered, so the credential is the problem.
+		host := bearerHost(t, http.StatusForbidden)
+		dir := writeDockerConfig(t, host)
+		shortBackoff(t)
+
+		err := Verify(context.Background(), logr.Discard(), dir, []string{host}, []string{"test"}, []string{host + "/org/app:latest"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "client credentials are invalid")
+	})
+
+	t.Run("skipped_registry_does_not_hide_a_bad_credential", func(t *testing.T) {
+		// Skipping one unreachable registry must not discard the credential
+		// failure proven for another registry in the same build.
+		down := unreachableHost(t)
+		bad := respondingHost(t, http.StatusUnauthorized)
+		dir := writeDockerConfigFor(t, down, bad)
+		shortBackoff(t)
+
+		//nolint:lll
+		err := Verify(context.Background(), logr.Discard(), dir, []string{bad}, []string{"test"}, []string{down + "/org/app:latest", bad + "/org/app:latest"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), bad)
+		assert.NotContains(t, err.Error(), down)
 	})
 
 	t.Run("cancelled_context_is_fatal", func(t *testing.T) {
