@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -130,6 +132,31 @@ func bearerHost(t *testing.T, status int) string {
 	return strings.TrimPrefix(srv.URL, "http://")
 }
 
+// rejectThenDieHost 403s authenticated requests, then stops answering. Only the
+// last attempt survives in authErr, so this is the shape that hides a bad cred
+// behind a later outage. The counter lets the test prove the outage happened: if
+// the listener never died, the run proves nothing.
+func rejectThenDieHost(t *testing.T, authed *atomic.Int32) string {
+	t.Helper()
+
+	var srv *httptest.Server
+	var once sync.Once
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") == "" {
+			w.Header().Set("WWW-Authenticate", `Basic realm="registry"`)
+			w.WriteHeader(http.StatusUnauthorized)
+
+			return
+		}
+
+		authed.Add(1)
+		w.WriteHeader(http.StatusForbidden)
+		once.Do(func() { go srv.Close() })
+	}))
+
+	return strings.TrimPrefix(srv.URL, "http://")
+}
+
 // writeDockerConfigFor writes a config.json with one cred per server.
 func writeDockerConfigFor(t *testing.T, servers ...string) string {
 	t.Helper()
@@ -233,6 +260,25 @@ func TestVerify(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), bad)
 		assert.NotContains(t, err.Error(), down)
+	})
+
+	t.Run("rejection_is_not_erased_by_a_later_outage", func(t *testing.T) {
+		// The registry rejected the cred, then went down. The build must still
+		// fail: the outage arrived second and does not clear the rejection.
+		var authed atomic.Int32
+		host := rejectThenDieHost(t, &authed)
+		dir := writeDockerConfigFor(t, host)
+
+		orig := defaultBackoff
+		defaultBackoff = wait.Backoff{Duration: 300 * time.Millisecond, Steps: 3}
+		t.Cleanup(func() { defaultBackoff = orig })
+
+		err := Verify(context.Background(), logr.Discard(), dir, []string{host}, []string{"test"}, []string{host + "/org/app:latest"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "client credentials are invalid")
+		// Without this the run could be three 403s, which passes either way and
+		// would quietly stop being a regression test.
+		require.Equal(t, int32(1), authed.Load(), "registry answered more than once, so no outage followed the rejection")
 	})
 
 	t.Run("cancelled_context_is_fatal", func(t *testing.T) {

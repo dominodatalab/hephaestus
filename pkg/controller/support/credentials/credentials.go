@@ -242,9 +242,17 @@ func Verify(
 
 		auth.ServerAddress = server
 
-		var authErr error
+		var authErr, answered error
 		err := wait.ExponentialBackoffWithContext(ctx, defaultBackoff, func(ctx context.Context) (bool, error) {
 			if _, _, authErr = svc.Auth(ctx, &auth, "DominoDataLab_Hephaestus/1.0"); authErr != nil {
+				// Remember the first answer we got. Only the last retry survives in
+				// authErr, so a registry that answers and then goes down would
+				// otherwise look unreachable and let the bad cred through. Docker's
+				// own HTTPS-then-HTTP attempts inside one Auth call keep only their
+				// last error, so that layer can still mask an answer.
+				if answered == nil && !unreachable(authErr) {
+					answered = authErr
+				}
 				if errdefs.IsUnauthorized(authErr) {
 					return false, authErr
 				}
@@ -267,13 +275,16 @@ func Verify(
 		// for reasons unrelated to these creds, and buildkit fails later if the
 		// build really needs it. Anything it did answer, 401 and 403 alike, is a
 		// cred problem, so fail now before any worker time is spent.
-		if unreachable(authErr) {
+		if answered == nil && unreachable(authErr) {
 			logger.Info("Skipping credential check for unreachable registry", "registry", host, "reason", authErr.Error())
 			continue
 		}
 
 		reason := err
-		if authErr != nil {
+		switch {
+		case answered != nil:
+			reason = answered
+		case authErr != nil:
 			reason = authErr
 		}
 		//nolint:lll
