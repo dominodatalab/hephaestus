@@ -79,24 +79,7 @@ func TestPersist(t *testing.T) {
 	})
 }
 
-// writeDockerConfig writes a config.json holding one credential for the given
-// server key and returns its directory.
-func writeDockerConfig(t *testing.T, server string) string {
-	t.Helper()
-
-	dir := t.TempDir()
-	config := DockerConfigJSON{Auths: AuthConfigs{
-		server: registry.AuthConfig{Username: "u", Password: "p"},
-	}}
-	data, err := json.Marshal(config)
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.json"), data, 0644))
-
-	return dir
-}
-
-// unreachableHost returns a host:port that refuses connections, by closing a
-// listener and reusing its address.
+// unreachableHost returns a host:port that refuses connections.
 func unreachableHost(t *testing.T) string {
 	t.Helper()
 
@@ -106,8 +89,7 @@ func unreachableHost(t *testing.T) string {
 	return strings.TrimPrefix(srv.URL, "http://")
 }
 
-// respondingHost starts a registry that answers every request with the given
-// status after a basic-auth challenge, and returns its host:port.
+// respondingHost answers with the given status after a Basic challenge.
 func respondingHost(t *testing.T, status int) string {
 	t.Helper()
 
@@ -126,10 +108,9 @@ func respondingHost(t *testing.T, status int) string {
 	return strings.TrimPrefix(srv.URL, "http://")
 }
 
-// bearerHost starts a registry that answers a token request with the given
-// status after a Bearer challenge, and returns its host:port. Bearer is the flow
-// quay.io, ECR, GCR, Docker Hub and GHCR all use, and it reports a rejected
-// credential through a *url.Error, so it must be covered separately from Basic.
+// bearerHost answers a token request with the given status after a Bearer
+// challenge. Bearer rejections arrive wrapped in *url.Error, which Basic ones do
+// not, so it needs its own coverage.
 func bearerHost(t *testing.T, status int) string {
 	t.Helper()
 
@@ -149,7 +130,7 @@ func bearerHost(t *testing.T, status int) string {
 	return strings.TrimPrefix(srv.URL, "http://")
 }
 
-// writeDockerConfigFor writes a config.json holding one credential per server.
+// writeDockerConfigFor writes a config.json with one cred per server.
 func writeDockerConfigFor(t *testing.T, servers ...string) string {
 	t.Helper()
 
@@ -166,9 +147,8 @@ func writeDockerConfigFor(t *testing.T, servers ...string) string {
 	return dir
 }
 
-// cancelledContext returns an already cancelled context. Verify aborts before
-// contacting a registry it checks, so tests use it to observe whether a
-// credential was checked (context.Canceled) or skipped (nil).
+// cancelledContext returns a cancelled context. Verify aborts before contacting a
+// registry it checks, so context.Canceled means checked and nil means skipped.
 func cancelledContext() context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -176,8 +156,7 @@ func cancelledContext() context.Context {
 	return ctx
 }
 
-// shortBackoff makes Verify try once with no real wait, so tests that let it
-// contact a registry stay fast.
+// shortBackoff makes Verify try once with no wait.
 func shortBackoff(t *testing.T) {
 	t.Helper()
 
@@ -188,10 +167,9 @@ func shortBackoff(t *testing.T) {
 
 func TestVerify(t *testing.T) {
 	t.Run("unreachable_registry_is_skipped", func(t *testing.T) {
-		// A refused connection is not an unauthorized error, so Verify must
-		// skip the registry and let the build continue instead of failing it.
+		// Refused connection, so skip and let the build run.
 		host := unreachableHost(t)
-		dir := writeDockerConfig(t, host)
+		dir := writeDockerConfigFor(t, host)
 		shortBackoff(t)
 
 		err := Verify(context.Background(), logr.Discard(), dir, nil, []string{"test"}, []string{host + "/org/app:latest"})
@@ -199,10 +177,9 @@ func TestVerify(t *testing.T) {
 	})
 
 	t.Run("unauthorized_registry_is_fatal", func(t *testing.T) {
-		// The registry answered, so this is a credential problem and not an
-		// outage. It must fail the build before a worker is leased.
+		// It answered, so the cred is wrong. Fail before leasing a worker.
 		host := respondingHost(t, http.StatusUnauthorized)
-		dir := writeDockerConfig(t, host)
+		dir := writeDockerConfigFor(t, host)
 		shortBackoff(t)
 
 		err := Verify(context.Background(), logr.Discard(), dir, []string{host}, []string{"test"}, []string{host + "/org/app:latest"})
@@ -211,10 +188,9 @@ func TestVerify(t *testing.T) {
 	})
 
 	t.Run("forbidden_registry_is_fatal", func(t *testing.T) {
-		// A 403 is not an outage either: the account exists but cannot use this
-		// registry. Only errors with no response at all are skipped.
+		// Not an outage either. Only no-response gets skipped.
 		host := respondingHost(t, http.StatusForbidden)
-		dir := writeDockerConfig(t, host)
+		dir := writeDockerConfigFor(t, host)
 		shortBackoff(t)
 
 		err := Verify(context.Background(), logr.Discard(), dir, []string{host}, []string{"test"}, []string{host + "/org/app:latest"})
@@ -223,12 +199,10 @@ func TestVerify(t *testing.T) {
 	})
 
 	t.Run("bearer_unauthorized_registry_is_fatal", func(t *testing.T) {
-		// The registries that matter all speak bearer, and a rejected token comes
-		// back wrapped in a *url.Error, which satisfies net.Error. Testing the
-		// returned error would read this as an outage and let a bad credential
-		// reach a leased worker, so it must be fatal here.
+		// The bearer 401 arrives inside a *url.Error, which satisfies net.Error.
+		// Reading that as an outage is the bug this guards.
 		host := bearerHost(t, http.StatusUnauthorized)
-		dir := writeDockerConfig(t, host)
+		dir := writeDockerConfigFor(t, host)
 		shortBackoff(t)
 
 		err := Verify(context.Background(), logr.Discard(), dir, []string{host}, []string{"test"}, []string{host + "/org/app:latest"})
@@ -237,10 +211,9 @@ func TestVerify(t *testing.T) {
 	})
 
 	t.Run("bearer_forbidden_registry_is_fatal", func(t *testing.T) {
-		// Same as above for a token endpoint that denies rather than rejects: the
-		// registry answered, so the credential is the problem.
+		// Same for 403. It still answered.
 		host := bearerHost(t, http.StatusForbidden)
-		dir := writeDockerConfig(t, host)
+		dir := writeDockerConfigFor(t, host)
 		shortBackoff(t)
 
 		err := Verify(context.Background(), logr.Discard(), dir, []string{host}, []string{"test"}, []string{host + "/org/app:latest"})
@@ -249,8 +222,7 @@ func TestVerify(t *testing.T) {
 	})
 
 	t.Run("skipped_registry_does_not_hide_a_bad_credential", func(t *testing.T) {
-		// Skipping one unreachable registry must not discard the credential
-		// failure proven for another registry in the same build.
+		// Skipping one registry must not bury another's cred failure.
 		down := unreachableHost(t)
 		bad := respondingHost(t, http.StatusUnauthorized)
 		dir := writeDockerConfigFor(t, down, bad)
@@ -264,65 +236,57 @@ func TestVerify(t *testing.T) {
 	})
 
 	t.Run("cancelled_context_is_fatal", func(t *testing.T) {
-		// A cancelled build context must fail the build, not be mistaken for an
-		// unreachable registry and skipped.
+		// A cancelled context is not an unreachable registry.
 		host := unreachableHost(t)
-		dir := writeDockerConfig(t, host)
+		dir := writeDockerConfigFor(t, host)
 
 		err := Verify(cancelledContext(), logr.Discard(), dir, nil, []string{"test"}, []string{host + "/org/app:latest"})
 		assert.ErrorIs(t, err, context.Canceled)
 	})
 
-	t.Run("unused_registry_is_not_checked", func(t *testing.T) {
-		// The build pushes to another registry, so this credential must be
-		// skipped before any check. With a cancelled context a check would
-		// return context.Canceled, so nil proves no check happened.
-		dir := writeDockerConfig(t, "unused.example.com")
+	t.Run("non_target_registry_is_not_checked", func(t *testing.T) {
+		// Not a target, so never checked. nil proves it, since a check would
+		// return context.Canceled.
+		dir := writeDockerConfigFor(t, "unused.example.com")
 
 		err := Verify(cancelledContext(), logr.Discard(), dir, nil, []string{"test"}, []string{"used.example.com/org/app:latest"})
 		assert.NoError(t, err)
 	})
 
 	t.Run("docker_hub_alias_matches", func(t *testing.T) {
-		// A legacy Docker Hub server key must match an image ref that
-		// normalizes to docker.io, so this credential is checked.
-		dir := writeDockerConfig(t, "https://index.docker.io/v1/")
+		// Legacy hub key must match a ref that normalizes to docker.io.
+		dir := writeDockerConfigFor(t, "https://index.docker.io/v1/")
 
 		err := Verify(cancelledContext(), logr.Discard(), dir, nil, []string{"test"}, []string{"org/app:latest"})
 		assert.ErrorIs(t, err, context.Canceled)
 	})
 
 	t.Run("no_refs_checks_all", func(t *testing.T) {
-		// Without a reference list Verify falls back to checking every
-		// credential, so the check runs and reports the cancelled context.
-		dir := writeDockerConfig(t, "unused.example.com")
+		dir := writeDockerConfigFor(t, "unused.example.com")
 
 		err := Verify(cancelledContext(), logr.Discard(), dir, nil, []string{"test"}, nil)
 		assert.ErrorIs(t, err, context.Canceled)
 	})
 
 	t.Run("host_case_is_ignored", func(t *testing.T) {
-		// A server key and an image ref that differ only in case name the same
-		// registry, so the credential must still be checked.
-		dir := writeDockerConfig(t, "MyReg.Example.com")
+		// Case-only difference is the same registry.
+		dir := writeDockerConfigFor(t, "MyReg.Example.com")
 
 		err := Verify(cancelledContext(), logr.Discard(), dir, nil, []string{"test"}, []string{"myreg.example.com/org/app:latest"})
 		assert.ErrorIs(t, err, context.Canceled)
 	})
 
 	t.Run("server_key_userinfo_is_stripped", func(t *testing.T) {
-		// Credentials embedded in a server key must not stop it matching the
-		// registry it names.
-		dir := writeDockerConfig(t, "https://alice:s3cr3t@myreg.example.com/v1/")
+		// Creds embedded in a key must not stop it matching.
+		dir := writeDockerConfigFor(t, "https://alice:s3cr3t@myreg.example.com/v1/")
 
 		err := Verify(cancelledContext(), logr.Discard(), dir, nil, []string{"test"}, []string{"myreg.example.com/org/app:latest"})
 		assert.ErrorIs(t, err, context.Canceled)
 	})
 
 	t.Run("cache_import_registry_is_checked", func(t *testing.T) {
-		// Remote build caches are pulled with these credentials, so a cache-only
-		// registry counts as used.
-		dir := writeDockerConfig(t, "cache.example.com")
+		// Cache imports are pulls, so a cache-only registry is still checked.
+		dir := writeDockerConfigFor(t, "cache.example.com")
 
 		//nolint:lll
 		err := Verify(cancelledContext(), logr.Discard(), dir, nil, []string{"test"}, []string{"push.example.com/org/app:latest", "cache.example.com/org/app-cache:latest"})
@@ -330,9 +294,7 @@ func TestVerify(t *testing.T) {
 	})
 
 	t.Run("unparseable_ref_checks_all", func(t *testing.T) {
-		// A reference we cannot resolve to a host could name any registry, so
-		// narrowing the check would be unsound: check everything instead.
-		dir := writeDockerConfig(t, "unused.example.com")
+		dir := writeDockerConfigFor(t, "unused.example.com")
 		badRef := "aaaabbbbccccddddeeeeffff0000111122223333444455556666777788889999"
 
 		err := Verify(cancelledContext(), logr.Discard(), dir, nil, []string{"test"}, []string{badRef})
@@ -340,9 +302,8 @@ func TestVerify(t *testing.T) {
 	})
 
 	t.Run("port_is_part_of_the_host", func(t *testing.T) {
-		// A registry on a non-default port is a distinct host, matched with its
-		// port on both sides.
-		dir := writeDockerConfig(t, "myreg.example.com:5000")
+		// A non-default port is a distinct host.
+		dir := writeDockerConfigFor(t, "myreg.example.com:5000")
 
 		err := Verify(cancelledContext(), logr.Discard(), dir, nil, []string{"test"}, []string{"myreg.example.com:5000/org/app:latest"})
 		assert.ErrorIs(t, err, context.Canceled)

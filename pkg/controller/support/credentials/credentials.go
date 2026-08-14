@@ -136,10 +136,9 @@ func Persist(
 	return dir, helpMessage, err
 }
 
-// normalizeRegistryHost reduces a docker config server key or an image ref
-// domain to a plain hostname so the two can be compared. Config keys may carry
-// a scheme, a path and even userinfo; hosts are compared case-insensitively.
-// Docker Hub goes by several names, so they all collapse to "docker.io".
+// normalizeRegistryHost reduces a docker config server key or a ref domain to a
+// bare host so the two compare. Keys can carry a scheme, a path and userinfo.
+// Docker Hub answers to several names, so they all collapse to docker.io.
 func normalizeRegistryHost(server string) string {
 	host := strings.ToLower(registry.ConvertToHostname(server))
 	if at := strings.LastIndex(host, "@"); at != -1 {
@@ -153,14 +152,14 @@ func normalizeRegistryHost(server string) string {
 	return host
 }
 
-// usedRegistryHosts returns the set of registry hostnames the build is known to
-// use, taken from the refs it pushes and the remote caches it imports. Base
-// images are not included: they live in the Dockerfile, and resolving them means
-// parsing it, so buildkit is left to fail the build if a base image cred is bad.
+// targetedRegistryHosts returns the hosts a build pushes to or pulls cache from.
+// Narrower than "hosts the build uses": a base image pull is a use and is not
+// included, because base images live in the Dockerfile and we never parse it.
+// Buildkit authenticates those itself.
 //
-// A nil result means "unknown, check everything". A ref that does not parse
-// could name any registry, so narrowing the check on it would be unsound.
-func usedRegistryHosts(refs []string) map[string]bool {
+// nil or empty both mean "check everything": a ref we cannot parse could name
+// any host, and no refs at all tells us nothing.
+func targetedRegistryHosts(refs []string) map[string]bool {
 	hosts := map[string]bool{}
 	for _, ref := range refs {
 		named, err := reference.ParseNormalizedNamed(ref)
@@ -174,16 +173,14 @@ func usedRegistryHosts(refs []string) map[string]bool {
 	return hosts
 }
 
-// unreachable reports whether an auth attempt failed because the registry never
-// answered, rather than answering with a credential rejection.
+// unreachable reports whether the registry never answered, rather than answering
+// with a rejection.
 //
-// It deliberately does not test the error as returned. http.Client wraps every
-// failure in *url.Error, which satisfies net.Error whatever the cause, and
-// docker's bearer token transport surfaces registry status errors through it. So
-// testing the returned error reads a bearer 401 or 403 — quay.io, ECR, GCR,
-// Docker Hub and GHCR all speak bearer — as an outage, and lets a bad credential
-// through to a leased worker. Only the transport error underneath answers the
-// question, so that is what gets tested.
+// Don't test the top-level error's type. http.Client wraps every failure in
+// *url.Error, which satisfies net.Error whatever the cause, and docker's bearer
+// transport returns registry status errors through it. Gating on that reads a
+// bearer 401 as an outage and lets a typo'd password reach a leased worker.
+// Every registry we care about speaks bearer.
 func unreachable(err error) bool {
 	if err == nil {
 		return false
@@ -227,8 +224,8 @@ func Verify(
 		return err
 	}
 
-	usedHosts := usedRegistryHosts(refs)
-	if usedHosts == nil {
+	targetedHosts := targetedRegistryHosts(refs)
+	if targetedHosts == nil {
 		logger.Info("Checking every credential: a build reference could not be parsed", "references", refs)
 	}
 
@@ -236,11 +233,10 @@ func Verify(
 	for server, auth := range configJSON.Auths {
 		host := normalizeRegistryHost(server)
 
-		// Only check credentials for registries this build is known to use. A
-		// cred for any other registry cannot fail the build here, no matter its
-		// state. With no known hosts, check everything.
-		if len(usedHosts) > 0 && !usedHosts[host] {
-			logger.Info("Skipping credential check for registry not used by this build", "registry", host)
+		// A cred for any other registry cannot fail the build, whatever state it
+		// is in. Base image registries land here too.
+		if len(targetedHosts) > 0 && !targetedHosts[host] {
+			logger.Info("Skipping credential check: registry is not a build target or cache ref", "registry", host)
 			continue
 		}
 
@@ -261,18 +257,16 @@ func Verify(
 			continue
 		}
 
-		// A cancelled or expired build context is fatal. It is not a registry
-		// being unreachable, so do not skip it, and do not discard credential
-		// failures already proven for other registries.
+		// A dead build context is fatal. It is not an unreachable registry, and it
+		// must not discard cred failures already found for other registries.
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return multierr.Append(multierr.Combine(errs...), err)
 		}
 
-		// A registry we could not reach at all must not fail the build: it may be
-		// down for reasons that have nothing to do with these creds, and buildkit
-		// still fails the build later if it truly needs this registry. Anything
-		// the registry did answer, 401 and 403 alike, is a credential problem, so
-		// fail now while the error is clear and no worker time has been spent.
+		// A registry that never answered must not fail the build. It may be down
+		// for reasons unrelated to these creds, and buildkit fails later if the
+		// build really needs it. Anything it did answer, 401 and 403 alike, is a
+		// cred problem, so fail now before any worker time is spent.
 		if unreachable(authErr) {
 			logger.Info("Skipping credential check for unreachable registry", "registry", host, "reason", authErr.Error())
 			continue
