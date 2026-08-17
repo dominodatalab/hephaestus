@@ -197,17 +197,6 @@ Return the buildkit image name.
 {{- end }}
 
 {{/*
-Return the buildkit service account name.
-*/}}
-{{- define "hephaestus.buildkit.serviceAccountName" -}}
-{{- if .Values.buildkit.serviceAccount.create }}
-{{- default (include "hephaestus.buildkit.fullname" .) .Values.buildkit.serviceAccount.name }}
-{{- else }}
-{{- default "default" .Values.buildkit.serviceAccount.name }}
-{{- end }}
-{{- end }}
-
-{{/*
 Return the binfmt (QEMU emulation registration) image name.
 */}}
 {{- define "hephaestus.buildkit.binfmt.image" -}}
@@ -223,38 +212,59 @@ Return a platform pool's fully-qualified app name. Expects (dict "root" $ "pool"
 
 {{/*
 Return a platform pool's namespace, defaulting to the release namespace. Expects
-(dict "root" $ "pool" poolValuesEntry).
+(dict "root" $ "pool" poolValuesEntry). The implicit pool (see "hephaestus.buildkit.pools" below)
+returns empty - it has no per-pool namespace concept, so its resources omit metadata.namespace
+entirely and rely on the release namespace like every other non-pool-aware resource in this chart.
 */}}
 {{- define "hephaestus.buildkit.pool.namespace" -}}
+{{- if not .pool.implicit }}
 {{- .pool.namespace | default .root.Release.Namespace }}
+{{- end }}
 {{- end }}
 
 {{/*
 Return a platform pool's standard labels - the same as hephaestus.buildkit.labels.standard plus a
-pool-identifying label, since every pool otherwise shares identical standard labels. Expects
-(dict "root" $ "pool" poolValuesEntry).
+pool-identifying label, since every *explicit* pool otherwise shares identical standard labels. The
+implicit pool (see "hephaestus.buildkit.pools" below) omits the platform-pool label entirely, since
+it's the only pool and never needed one to stay distinguishable - matching this chart's pre-pool-
+support labels exactly. Expects (dict "root" $ "pool" poolValuesEntry).
 */}}
 {{- define "hephaestus.buildkit.pool.labels.standard" -}}
 {{- include "hephaestus.buildkit.labels.standard" .root }}
+{{- if not .pool.implicit }}
 hephaestus.dominodatalab.com/platform-pool: {{ .pool.name }}
+{{- end }}
 {{- end }}
 
 {{/*
-Return a platform pool's selector labels. The platform-pool label is load-bearing here, not just
-informational: without it every pool's StatefulSet/Service/NetworkPolicy selector would be
-identical and collide. Expects (dict "root" $ "pool" poolValuesEntry).
+Return a platform pool's selector labels. The platform-pool label is load-bearing for every
+*explicit* pool, not just informational: without it every explicit pool's StatefulSet/Service/
+NetworkPolicy selector would be identical and collide. The implicit pool is the only pool, so its
+selector never needed disambiguating, and - since StatefulSet/Service selectors are immutable -
+omitting the label here is required for byte-identical output, not just cosmetic parity. Expects
+(dict "root" $ "pool" poolValuesEntry).
 */}}
 {{- define "hephaestus.buildkit.pool.labels.matchLabels" -}}
 {{- include "hephaestus.buildkit.labels.matchLabels" .root }}
+{{- if not .pool.implicit }}
 hephaestus.dominodatalab.com/platform-pool: {{ .pool.name }}
+{{- end }}
 {{- end }}
 
 {{/*
-Return a platform pool's service account name. Expects (dict "root" $ "pool" poolValuesEntry).
+Return a platform pool's service account name. Expects (dict "root" $ "pool" poolValuesEntry). The
+implicit pool respects a custom buildkit.serviceAccount.name override when create=true (matching this
+chart's pre-pool-support behavior); every explicit pool ignores it and always uses its own
+pool.fullname, since per-pool custom service account names were deliberately never exposed (see
+"Computed names, not user-supplied ones" in docs/multi-arch-image-builds-design.md).
 */}}
 {{- define "hephaestus.buildkit.pool.serviceAccountName" -}}
 {{- if .root.Values.buildkit.serviceAccount.create }}
+{{- if .pool.implicit }}
+{{- default (include "hephaestus.buildkit.pool.fullname" .) .root.Values.buildkit.serviceAccount.name }}
+{{- else }}
 {{- include "hephaestus.buildkit.pool.fullname" . }}
+{{- end }}
 {{- else }}
 {{- default "default" .root.Values.buildkit.serviceAccount.name }}
 {{- end }}

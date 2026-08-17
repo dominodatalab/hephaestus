@@ -1,0 +1,55 @@
+{{/*
+Renders a full buildkit NetworkPolicy manifest, shared by networkpolicy.yaml (legacy path) and
+pool-networkpolicy.yaml (platformPools path). Rendered as a full top-level document so callers never
+need to nindent this template's own output.
+
+The ingress `from` peer genuinely differs between the two paths, not just cosmetically: a bare
+podSelector only matches peers in the *same* namespace as the policy, so a pool namespaced
+differently than the controller needs a namespaceSelector alongside it (see
+docs/multi-arch-image-builds-design.md, "Per-pool namespace is real"). The legacy path has no
+per-pool namespace concept and never needed one, so it's kept selector-only rather than adding a
+namespaceSelector matching its own (always-co-located) namespace.
+
+Expects a dict with: root, name, namespace ("" to omit), standardLabels (raw), matchLabels (raw),
+controllerNamespace ("" to omit the namespaceSelector, otherwise the namespace to match).
+*/}}
+{{- define "hephaestus.buildkit.networkpolicy.render" -}}
+{{- $ctx := . -}}
+{{- $root := $ctx.root -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $ctx.name }}
+  {{- if $ctx.namespace }}
+  namespace: {{ $ctx.namespace }}
+  {{- end }}
+  labels:
+    {{- $ctx.standardLabels | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- $ctx.matchLabels | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: {{ $root.Values.buildkit.service.port }}
+          protocol: TCP
+        {{- if $root.Values.istio.ambient }}
+        - port: 15008 # Allow Istio Ambient mode's HBONE traffic
+          protocol: TCP
+        {{- end }}
+      from:
+        {{- if $ctx.controllerNamespace }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $ctx.controllerNamespace }}
+          podSelector:
+            matchLabels:
+              {{- include "hephaestus.controller.labels.matchLabels" $root | nindent 14 }}
+        {{- else }}
+        - podSelector:
+            matchLabels:
+              {{- include "hephaestus.controller.labels.matchLabels" $root | nindent 14 }}
+        {{- end }}
+{{- end }}

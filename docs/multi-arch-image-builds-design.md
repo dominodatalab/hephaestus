@@ -423,3 +423,157 @@ between `configmap.yaml` and `pool-configmap.yaml` — recorded here so a future
   `config.PlatformPool` schema expectations (field names, that `secret.yaml`'s computed
   `statefulSetName`/`serviceName`/`podLabels` match what the corresponding `pool-*.yaml` templates
   actually name/label those resources as) rather than just checking that the YAML parses.
+
+## Addendum: deduplicating the legacy/pool template pairs
+
+A later review of the Helm follow-up flagged the literal duplication between each
+`<resource>.yaml`/`pool-<resource>.yaml` pair as worth revisiting, given how large the `StatefulSet`
+pair in particular had grown (~150 duplicated lines of container/probe/volume spec). This section
+covers that pass, including the `ConfigMap` case the original follow-up had already tried and
+abandoned.
+
+### Why nindent was the actual bug, not sharing per se
+
+The abandoned `ConfigMap` attempt (above) called the shared template with `| nindent 2` at the call
+site. That's the standard Helm idiom for inserting a block at a given indent, but it was unnecessary
+here: both callers need the shared content at the *exact same* indentation (both are a `data:` key's
+direct children), because both are top-level manifests with the same shape. Since the indentation was
+already identical at both call sites, the shared template's own literal source can simply carry that
+indentation baked in, and the caller can `include` it with no `nindent` at all. No reindenting means
+no blank line ever gets turned into a trailing-whitespace line, which was the entire root cause of the
+original trap - so it sidesteps the bug rather than working around it. Verified this reasoning by
+successfully re-extracting `buildkitd.toml` generation into `_configmap.tpl` and getting a truly
+byte-identical default-values render, unlike the first attempt.
+
+The same principle applies more broadly: any resource rendered as a full top-level YAML document
+(`StatefulSet`, `Service`, `ServiceAccount`, `NetworkPolicy`) starts at column 0, so a shared template
+producing the *entire* document never needs nindent at its call site either. Each of those four
+resource pairs was consolidated into a `_<resource>.tpl` file holding a
+`hephaestus.buildkit.<resource>.render` define that takes a `dict` of whichever fields legitimately
+differ between the legacy and pool paths (name, namespace, pre-rendered labels, checksum, per-pool
+overrides); both `<resource>.yaml` and `pool-<resource>.yaml` became thin callers that resolve those
+fields and `include` the shared render. The `NetworkPolicy` case keeps its genuine behavioral
+difference (the pool path's ingress rule needs a `namespaceSelector` the legacy path doesn't) as an
+explicit `controllerNamespace` parameter rather than papering over it.
+
+### A second, sharper trap: `{{-` eating the `---` document separator
+
+Extracting `pool-statefulset.yaml`'s body to `{{- include "hephaestus.buildkit.statefulset.render" ... }}`
+initially merged the preceding literal `---` line with the included content's first line
+(`---apiVersion: apps/v1`), because the leading `{{-` trims the newline right after `---`, not just
+insignificant whitespace. `helm template`'s own byte-diff against baseline did *not* catch this -
+Helm auto-inserts a `# Source: <path>` comment between the `---` and each file's content in its
+concatenated output, which happened to reintroduce the missing newline and mask the bug. `helm lint`
+caught it immediately (`invalid Yaml document separator: apiVersion: apps/v1`), because it validates
+each template file's own rendered output in isolation, without that auto-inserted comment. Fixed by
+dropping the `-` on the include immediately following a literal `---` (`{{ include ...` instead of
+`{{- include ...`) in every `pool-*.yaml` wrapper. Lesson: a byte-diff against `helm template` output
+is necessary but not sufficient for verifying a multi-document template change - `helm lint` (which
+parses each file's raw output) catches a class of bugs the former can hide.
+
+### A real pre-existing bug this pass surfaced: `pool-serviceaccount.yaml`
+
+While reworking `pool-serviceaccount.yaml`, discovered that the original (from the earlier follow-up)
+never had a `---` document separator between iterations at all - unlike every other `pool-*.yaml`
+template. With `platformPools` set to more than one entry and `buildkit.serviceAccount.create: true`
+(the default), it rendered N `ServiceAccount` manifests concatenated with no separator, i.e. one
+malformed YAML document with duplicate `apiVersion`/`kind`/`metadata` keys. `helm lint` did not flag
+this (YAML parsers commonly tolerate duplicate mapping keys by keeping the last one rather than
+erroring), so it shipped unnoticed - only the last pool's `ServiceAccount` would actually end up
+applied. Fixed by adding the missing `---` in the same change that deduplicated this template.
+Verified by rendering the two-pool scenario and confirming both `test-hephaestus-buildkit-amd64` and
+`test-hephaestus-buildkit-arm64` `ServiceAccount` manifests now appear as separate documents.
+
+### Verification for this pass
+
+- Same four scenarios as the original follow-up, plus two more: `buildkit.serviceAccount.create:
+  false` with two pools (confirms no pool `ServiceAccount` renders), and a minimal single-entry
+  `platformPools` with no per-pool overrides at all (confirms every `default` fallback chain still
+  resolves to the shared `buildkit.*` value).
+- `helm lint` clean across all six scenarios - this is what caught both traps above; a byte-diff alone
+  would have missed them.
+- Default-values `helm template` output re-diffed byte-for-byte against pre-pass baseline and found
+  identical.
+- Each pool scenario's `helm template` output diffed against its pre-pass baseline: identical except
+  for the `pool-serviceaccount.yaml` fix (the previously-missing `---`/`# Source:` boundary now
+  appears between pool ServiceAccounts), confirming the dedup itself changed no behavior.
+
+## Addendum: unifying the legacy/pool templates into one file each
+
+A further review asked whether the legacy/pool file pairs could be combined at a higher level -
+making the no-`platformPools` case an implicit default pool - rather than stopping at "both files
+call the same shared render." They can: `.Values.buildkit.platformPools` is normalized to a single
+synthetic pool (`dict "name" "" "implicit" true`) when the user declares none, and every
+`buildkit/*.yaml` template now ranges over that normalized list instead of branching between "no
+pools" and "pools" as two separate files. This dropped the 10 `<resource>.yaml`/`pool-<resource>.yaml`
+files down to 5, one per resource, each just a `range` plus a call into its existing
+`hephaestus.buildkit.<resource>.render` define.
+
+### Where the implicit pool must diverge from a real one, and why
+
+Three helpers (`hephaestus.buildkit.pool.namespace`, `.labels.standard`/`.labels.matchLabels`, and
+`.serviceAccountName`) now branch on `.pool.implicit`, because naively treating the implicit pool as
+just another entry would change what actually gets deployed for existing non-adopters:
+
+- **matchLabels**: every explicit pool gets a `hephaestus.dominodatalab.com/platform-pool` label added
+  to its selector, to keep pools' `StatefulSet`/`Service`/`NetworkPolicy` selectors from colliding (see
+  "A load-bearing new label" above). The implicit pool is the only pool, so it never needed
+  disambiguating - and `StatefulSet`/`Service` selectors are immutable, so adding that label to an
+  existing legacy install's selector wouldn't just look different, it would make `helm upgrade` fail
+  outright. The label is omitted entirely (not merely empty-valued) for `.pool.implicit`.
+- **namespace**: every explicit pool gets an explicit `metadata.namespace` (defaulting to the release
+  namespace) for parity with `config.PlatformPool.Namespace`. The implicit pool has no per-pool
+  namespace concept and never emitted one, so `hephaestus.buildkit.pool.namespace` returns empty for
+  it, and callers omit the field - avoiding an inert but visible diff against pre-pool-support output.
+- **serviceAccountName**: explicit pools always use `<fullname>-<pool>` and ignore a custom
+  `buildkit.serviceAccount.name` override (per "Computed names, not user-supplied ones" above); the
+  legacy path always respected that override. The implicit pool preserves the legacy behavior
+  (`default (pool.fullname) serviceAccount.name`) rather than silently dropping a value some
+  installs may already set.
+
+`hephaestus.buildkit.pool.fullname` needed no such branching: `printf "%s-%s" fullname pool.name` with
+an empty `pool.name`, followed by `trimSuffix "-"`, already collapses to plain `fullname` - exactly the
+legacy name - so it was reused as-is. The now-fully-superseded `hephaestus.buildkit.serviceAccountName`
+helper (the pre-pool-support, non-pool-aware version) was deleted rather than left dead.
+`controller/secret.yaml`, which also calls the `pool.*` helpers directly for its `platformPools:`
+passthrough, needed no changes - it only ever ranges over the real `.Values.buildkit.platformPools`
+list, never the synthetic implicit entry, so the new `.implicit` branches are inert for it.
+
+### A third trap: the separator that only breaks between iterations
+
+Collapsing `range .Values.buildkit.platformPools` (always emitting `---` before every iteration,
+including the first) into `range $pools` (needing `---` before every iteration *except* the first, so
+the implicit-pool case stays byte-identical to its old separator-free single-document output)
+introduced a new trim bug distinct from the earlier `---`-merging one. The naive translation,
+`{{- if $i -}}---\n{{ include ... }}{{- else -}}...`, trims the whitespace on *both* sides of the `if`
+condition - which eats the newline the previous iteration's content needed on its trailing edge and
+the newline this iteration's `---` needed on its leading edge simultaneously, splicing one document's
+last line directly onto the next document's `---` and then directly onto `apiVersion` with no
+separator at all (`...controller---apiVersion: networking.k8s.io/v1`). Every one of the 5 unified
+templates had this exact bug on first pass. `helm lint` did not catch it: the corrupted text is still
+syntactically valid YAML (the stray value just becomes part of the previous line's scalar and the
+following keys become bogus siblings under the wrong parent), so lint reports success while quietly
+producing wrong data - the same blind spot as the `pool-serviceaccount.yaml` bug, but subtler, since
+that one omitted a separator entirely rather than merging text across one. Fixed by changing
+`{{- if $i -}}` to `{{- if $i }}` (dropping the trailing trim), so the true branch's leading newline -
+which is what actually separates one document's last line from `---` - survives. Caught this time by
+manually inspecting the two-pool render's `NetworkPolicy` boundary line-by-line after the byte-diff
+against the previous (pre-unification) pass showed unexpected content changes beyond the expected
+`# Source:` path renames - the lesson from the prior trap (verify with more than one method) held.
+
+### Verification for this pass
+
+- Same six scenarios as the prior pass.
+- `helm lint` clean across all six - though, per above, lint alone was not sufficient this time either.
+- Default-values `helm template` output re-diffed byte-for-byte against the *original*, pre-any-dedup
+  baseline (not just the previous pass) and found identical.
+- Each pool scenario diffed against the previous (already-verified-correct) pass with `# Source:`
+  lines stripped from both sides first (since every source file was renamed): identical except for the
+  `checksum/config` annotation, which is expected to change - it's computed from `configmap.yaml`'s own
+  rendered bytes, and that file's internal document-boundary formatting genuinely changed (correctly)
+  as part of this unification. Manually inspected the rendered `ConfigMap` boundary between pools to
+  confirm the new checksum reflects correctly-separated documents, not a lingering corruption.
+- Spot-checked semantic correctness directly (not just structural validity): default render has no
+  `platform-pool` label and no `namespace` field anywhere; two-pool render has both pools' labels,
+  names, and `replicaCount` overrides correct; `serviceAccount.create: false` with two pools renders no
+  buildkit `ServiceAccount` at all.
