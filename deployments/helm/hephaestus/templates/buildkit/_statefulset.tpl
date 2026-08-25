@@ -99,6 +99,10 @@ spec:
           image: {{ include "hephaestus.buildkit.binfmt.image" $root }}
           imagePullPolicy: {{ $root.Values.buildkit.binfmt.image.pullPolicy }}
           args: ["--install", "all"]
+          {{- with $root.Values.podEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           securityContext:
             privileged: true
       {{- end }}
