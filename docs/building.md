@@ -44,8 +44,9 @@ just:
 2. For any platform that isn't the pool's native architecture, that pool's nodes need QEMU
    user-mode emulation registered (`binfmt_misc`) - the same mechanism `docker buildx` relies on for
    single-node multi-arch builds. The chart can deploy this for you: set
-   `buildkit.binfmt.enabled: true` to run a privileged DaemonSet (based on `tonistiigi/binfmt`) that
-   registers the emulation handlers on the buildkit pool's nodes.
+   `buildkit.binfmt.enabled: true` to run a privileged initContainer (based on `tonistiigi/binfmt` by
+   default - override `buildkit.binfmt.image` to use your own) on every buildkit pod that registers
+   the emulation handlers on that pod's node before `buildkitd` starts.
 
    **Declaring a platform in `platformPools` without either native hardware or working emulation
    registered on that pool's nodes will make builds fail at solve time, not at admission time** -

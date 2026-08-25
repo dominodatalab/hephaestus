@@ -88,6 +88,20 @@ spec:
         fsGroupChangePolicy: "OnRootMismatch"
         seLinuxOptions:
           type: spc_t
+      {{- if $root.Values.buildkit.binfmt.enabled }}
+      initContainers:
+        # Registers QEMU user-mode emulation handlers on this pod's node so buildkitd can solve
+        # non-native platforms. Writes to /proc/sys/fs/binfmt_misc, which is not mount-namespaced -
+        # a privileged container's registration is visible to the host kernel without any special
+        # volume mounts or host namespace sharing, so this only needs to run here, in the same pod
+        # as buildkitd, rather than as a separate cluster-wide DaemonSet.
+        - name: binfmt
+          image: {{ include "hephaestus.buildkit.binfmt.image" $root }}
+          imagePullPolicy: {{ $root.Values.buildkit.binfmt.image.pullPolicy }}
+          args: ["--install", "all"]
+          securityContext:
+            privileged: true
+      {{- end }}
       containers:
         - name: buildkitd
           securityContext:
