@@ -41,12 +41,34 @@ just:
    Via the Helm chart, set `buildkit.platformPools` in `values.yaml` (see the chart's inline
    documentation for the exact shape).
 
-2. For any platform that isn't the pool's native architecture, that pool's nodes need QEMU
-   user-mode emulation registered (`binfmt_misc`) - the same mechanism `docker buildx` relies on for
-   single-node multi-arch builds. The chart can deploy this for you: set
-   `buildkit.binfmt.enabled: true` to run a privileged initContainer (based on `tonistiigi/binfmt` by
-   default - override `buildkit.binfmt.image` to use your own) on every buildkit pod that registers
-   the emulation handlers on that pod's node before `buildkitd` starts.
+2. For any platform that isn't the pool's native architecture, `buildkitd` needs a way to run
+   binaries built for that platform. Set `buildkit.binfmt.enabled: true` to have the chart handle
+   this: a privileged initContainer (based on `tonistiigi/binfmt` by default - override
+   `buildkit.binfmt.image` to use your own) registers `/proc/sys/fs/binfmt_misc` QEMU handlers on
+   that pod's node - the same registration `docker buildx` relies on for single-node multi-arch
+   builds - and a second, unprivileged initContainer stages `buildkitd`'s own QEMU emulator
+   binaries (named `buildkit-qemu-<arch>`, e.g. `buildkit-qemu-aarch64`) into a volume shared with
+   the `buildkitd` container, on a `PATH` entry added just for this purpose.
+
+   That second step exists because `buildkitd` doesn't actually use the `binfmt_misc` registration
+   to run non-native `RUN` steps in a Dockerfile - Kubernetes gives every container in a pod its
+   own private mount namespace, so a `binfmt_misc` registration made by one container's initContainer
+   never becomes visible under a sibling container's own `/proc/sys/fs/binfmt_misc` (there's no
+   shared-mount-namespace equivalent of `hostNetwork`/`hostPID` for this). Instead, `buildkitd` does
+   a plain `$PATH` lookup for `buildkit-qemu-<arch>` and execs it directly, entirely inside its own
+   container - see upstream's
+   [`solver/llbsolver/ops/exec_binfmt.go`](https://github.com/moby/buildkit/blob/master/solver/llbsolver/ops/exec_binfmt.go)
+   and the ["exec format error" troubleshooting section](https://github.com/moby/buildkit/blob/master/docs/multi-platform.md#error-exec-user-process-caused-exec-format-error)
+   of BuildKit's own multi-platform docs. Upstream `moby/buildkit` images bundle these binaries
+   under `/usr/bin` by default, which is why this can look like it "just works" without the shared
+   volume - but that's an implicit assumption about whatever `buildkitd` image tag happens to be
+   deployed. Losing access to that binary (an older/custom/mirrored image build that doesn't bundle
+   it, for example) doesn't fail loudly and consistently: depending on which `RUN` step trips it,
+   the build can either fail outright with `exec format error`, or - for a step BuildKit can quietly
+   skip or fall back on - **succeed while silently running amd64 content inside an image labeled and
+   pushed as the requested non-native platform**. The chart's shared-volume initContainer makes the
+   dependency explicit and self-contained instead of relying on whatever the deployed `buildkitd`
+   image happens to bundle.
 
    **Declaring a platform in `platformPools` without either native hardware or working emulation
    registered on that pool's nodes will make builds fail at solve time, not at admission time** -

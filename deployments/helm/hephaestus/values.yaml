@@ -455,11 +455,10 @@ buildkit:
   # request will fail at solve time even though admission validation allowed it (validation only
   # checks that some pool *declares* the platform, it can't verify emulation is actually registered).
   #
-  # Runs as a privileged initContainer on each buildkit pod rather than a separate DaemonSet:
-  # registration writes to /proc/sys/fs/binfmt_misc, which is not mount-namespaced, so a privileged
-  # container's registration is visible to the host kernel without needing to run anywhere but here.
-  # This also means it always lands on the same nodes buildkit itself does, with no separate
-  # nodeSelector/tolerations to keep in sync.
+  # Runs as a privileged initContainer on each buildkit pod rather than a separate DaemonSet, so it
+  # always lands on the same nodes buildkit itself does. Its binfmt_misc registration alone doesn't
+  # let buildkitd solve non-native platforms - see the statefulset template and docs/building.md
+  # for the buildkit-qemu-bin/qemuBinPath mechanism that actually does.
   binfmt:
     enabled: false
     image:
@@ -467,6 +466,9 @@ buildkit:
       repository: tonistiigi/binfmt
       tag: latest
       pullPolicy: IfNotPresent
+    # Path inside buildkitd for staged buildkit-qemu-* binaries, added to its PATH. Must be a
+    # dedicated path - never /usr/bin or another path the image already populates.
+    qemuBinPath: /opt/qemu-bin
 
 # waitForNetworking starts an initContainer that requires a curl_image
 # Set this to true in istio ambient mode to cause Hephaestus Manager to start up
