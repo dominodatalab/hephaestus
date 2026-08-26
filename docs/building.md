@@ -74,7 +74,7 @@ just:
    registered on that pool's nodes will make builds fail at solve time, not at admission time** -
    admission only checks that *some* pool claims the platform, it can't verify the claim is true.
 
-Emulated builds are correct but slow (QEMU is not free); prefer native hardware when you have it.
+Emulated builds are slow; prefer native hardware when it is available.
 
 ## Native multi-pool builds (fan-out)
 
