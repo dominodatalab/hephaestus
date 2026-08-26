@@ -4,10 +4,20 @@
 (e.g. `linux/amd64`, `linux/arm64`, `linux/arm/v7`). Leaving it empty builds on whatever platform
 the leased buildkit worker natively runs, exactly as before this field existed.
 
-A requested platform must be served by at least one buildkit pool declared in the controller's
-`buildkit.platformPools` config, or the `ImageBuild`/`ImageCache` is rejected at admission time with
-a list of the platforms that are actually available. This check is against static configuration,
-not live cluster state, so a request can never hang waiting on a pod that can never be scheduled.
+A requested platform must be served by at least one configured buildkit pool, or the
+`ImageBuild`/`ImageCache` is rejected at admission time with a list of the platforms that are
+actually available. This check is against static configuration, not live cluster state, so a
+request can never hang waiting on a pod that can never be scheduled.
+
+**If `buildkit.platformPools` is unset** (every deployment that hasn't opted into multi-arch),
+the controller synthesizes a single `"default"` pool from the legacy flat `buildkit.namespace`/
+`podLabels`/`statefulSetName`/`serviceName` fields, and that pool only ever declares
+`linux/amd64` - the platform every such deployment's buildkit pods actually run on. Requesting
+`linux/amd64` (or leaving `spec.platforms` empty) works with zero config changes; requesting any
+other platform - including an emulated one, even with `buildkit.binfmt.enabled: true` - is
+rejected at admission, because the manager has no config field to tell it the legacy pool has
+emulation registered. Declaring any additional platform, native or emulated, requires migrating
+to `buildkit.platformPools` (below), even if you only need one pool.
 
 ## Single-pool multi-platform builds (works today, out of the box)
 

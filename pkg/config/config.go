@@ -178,6 +178,11 @@ type PlatformPool struct {
 // Namespace/PodLabels/StatefulSetName/ServiceName fields when PlatformPools is unset.
 const defaultPlatformPoolName = "default"
 
+// defaultPlatformPoolPlatform is the platform declared for the synthesized default pool: the
+// native architecture every pre-multi-arch deployment already runs on. Additional platforms,
+// native or emulated, require migrating to PlatformPools (see docs/building.md).
+const defaultPlatformPoolPlatform = "linux/amd64"
+
 // Pools returns the configured platform pools, synthesizing a single "default" pool from the legacy
 // flat fields when PlatformPools is empty. This is what guarantees an upgrade with no values changes
 // behaves identically to the pre-multi-arch single-pool topology.
@@ -193,6 +198,7 @@ func (b Buildkit) Pools() []PlatformPool {
 			PodLabels:       b.PodLabels,
 			StatefulSetName: b.StatefulSetName,
 			ServiceName:     b.ServiceName,
+			Platforms:       []string{defaultPlatformPoolPlatform},
 		},
 	}
 }

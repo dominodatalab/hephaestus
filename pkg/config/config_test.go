@@ -204,6 +204,7 @@ func TestBuildkitPools(t *testing.T) {
 		assert.Equal(t, buildkit.PodLabels, pools[0].PodLabels)
 		assert.Equal(t, buildkit.StatefulSetName, pools[0].StatefulSetName)
 		assert.Equal(t, buildkit.ServiceName, pools[0].ServiceName)
+		assert.Equal(t, []string{"linux/amd64"}, pools[0].Platforms)
 	})
 
 	t.Run("returns configured pools verbatim when present", func(t *testing.T) {
@@ -221,11 +222,12 @@ func TestBuildkitPools(t *testing.T) {
 }
 
 func TestBuildkitPlatformCapabilities(t *testing.T) {
-	t.Run("no capabilities when unconfigured", func(t *testing.T) {
+	t.Run("legacy default pool serves native linux/amd64 only", func(t *testing.T) {
 		buildkit := Buildkit{Namespace: "test-ns", PodLabels: map[string]string{"app": "buildkit"}}
 
 		caps := buildkit.PlatformCapabilities()
-		assert.False(t, caps.Supports("linux/amd64"))
+		assert.True(t, caps.Supports("linux/amd64"))
+		assert.False(t, caps.Supports("linux/arm64"))
 	})
 
 	t.Run("reflects configured pools", func(t *testing.T) {
