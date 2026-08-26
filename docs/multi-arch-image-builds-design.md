@@ -119,6 +119,20 @@ This is also why the default-values `helm template` render is verified byte-for-
 before and after this feature (see "Verification" below): the synthesized pool produces the exact
 same `buildkit:` config block the old flat fields did.
 
+The synthesized pool declares exactly one platform, `linux/amd64` (`defaultPlatformPoolPlatform` in
+`pkg/config/config.go`) - the architecture every pre-multi-arch deployment's buildkit pods actually
+run on. This is required for the backward-compatibility guarantee above to hold: `PlatformCapabilities`
+has no "unset means unrestricted" fallback, so a pool with no declared platforms serves none, and a
+legacy deployment's own native platform must be declared explicitly or requesting it in
+`spec.platforms` would be rejected at admission.
+
+There is deliberately no equivalent flat `buildkit.platforms` field for declaring additional (e.g.
+emulated) platforms on the legacy pool: `PlatformPools` already expresses a single pool's platforms
+just as well with one entry (see `docs/building.md`), so a second flat field would just be a
+redundant way to say the same thing. A deployment that wants more than native `linux/amd64` -
+including turning on `buildkit.binfmt.enabled` for the one pool it already has - migrates to
+`platformPools`, even for a single-pool config.
+
 ### 4. `worker.PoolSet` wraps N `worker.Pool`s instead of changing `worker.Pool`'s interface
 
 Considered adding a `platform` parameter to the existing `AutoscalingPool.Get`/`Release` methods
