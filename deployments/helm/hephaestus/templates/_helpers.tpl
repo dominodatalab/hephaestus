@@ -206,10 +206,3 @@ Return the buildkit service account name.
 {{- default "default" .Values.buildkit.serviceAccount.name }}
 {{- end }}
 {{- end }}
-
-{{/*
-Return the binfmt (QEMU emulation registration) image name.
-*/}}
-{{- define "hephaestus.buildkit.binfmt.image" -}}
-{{- include "common.images.image" (dict "imageRoot" .Values.buildkit.binfmt.image "global" $) }}
-{{- end }}

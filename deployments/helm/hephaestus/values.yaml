@@ -428,7 +428,8 @@ buildkit:
             topologyKey: "kubernetes.io/hostname"
 
   # Declares one or more named buildkit pools and the platforms each can serve (natively or via
-  # emulation - see binfmt below), passed through verbatim into the controller's
+  # emulation - see docs/building.md for what buildkit.image needs to support an emulated
+  # platform), passed through verbatim into the controller's
   # buildkit.platformPools config. Leave empty to keep the single StatefulSet deployed by this
   # chart as an implicit, un-platform-aware "default" pool (the pre-multi-arch behavior).
   #
@@ -447,28 +448,6 @@ buildkit:
   #       app.kubernetes.io/component: buildkit
   #     platforms: ["linux/amd64", "linux/arm64"]
   platformPools: []
-
-  # Registers QEMU user-mode emulation handlers (via tonistiigi/binfmt, by default) in every buildkit
-  # pod, letting a single buildkit pool solve for non-native platforms (e.g. requesting linux/arm64
-  # on an amd64 node). This is what makes a platformPools entry listing more than one platform
-  # actually work when there's no natively-matching hardware - without it, a non-native platform
-  # request will fail at solve time even though admission validation allowed it (validation only
-  # checks that some pool *declares* the platform, it can't verify emulation is actually registered).
-  #
-  # Runs as a privileged initContainer on each buildkit pod rather than a separate DaemonSet, so it
-  # always lands on the same nodes buildkit itself does. Its binfmt_misc registration alone doesn't
-  # let buildkitd solve non-native platforms - see the statefulset template and docs/building.md
-  # for the buildkit-qemu-bin/qemuBinPath mechanism that actually does.
-  binfmt:
-    enabled: false
-    image:
-      registry: ""
-      repository: tonistiigi/binfmt
-      tag: latest
-      pullPolicy: IfNotPresent
-    # Path inside buildkitd for staged buildkit-qemu-* binaries, added to its PATH. Must be a
-    # dedicated path - never /usr/bin or another path the image already populates.
-    qemuBinPath: /opt/qemu-bin
 
 # waitForNetworking starts an initContainer that requires a curl_image
 # Set this to true in istio ambient mode to cause Hephaestus Manager to start up

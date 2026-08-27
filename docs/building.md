@@ -14,9 +14,8 @@ the controller synthesizes a single `"default"` pool from the legacy flat `build
 `podLabels`/`statefulSetName`/`serviceName` fields, and that pool only ever declares
 `linux/amd64` - the platform every such deployment's buildkit pods actually run on. Requesting
 `linux/amd64` (or leaving `spec.platforms` empty) works with zero config changes; requesting any
-other platform - including an emulated one, even with `buildkit.binfmt.enabled: true` - is
-rejected at admission, because the manager has no config field to tell it the legacy pool has
-emulation registered. Declaring any additional platform, native or emulated, requires migrating
+other platform - including an emulated one - is rejected at admission, because the manager has no
+config field to tell it the legacy pool can serve anything else. Declaring any additional platform, native or emulated, requires migrating
 to `buildkit.platformPools` (below), even if you only need one pool.
 
 ## Single-pool multi-platform builds (works today, out of the box)
@@ -41,38 +40,60 @@ just:
    Via the Helm chart, set `buildkit.platformPools` in `values.yaml` (see the chart's inline
    documentation for the exact shape).
 
-2. For any platform that isn't the pool's native architecture, `buildkitd` needs a way to run
-   binaries built for that platform. Set `buildkit.binfmt.enabled: true` to have the chart handle
-   this: a privileged initContainer (based on `tonistiigi/binfmt` by default - override
-   `buildkit.binfmt.image` to use your own) registers `/proc/sys/fs/binfmt_misc` QEMU handlers on
-   that pod's node - the same registration `docker buildx` relies on for single-node multi-arch
-   builds - and a second, unprivileged initContainer stages `buildkitd`'s own QEMU emulator
-   binaries (named `buildkit-qemu-<arch>`, e.g. `buildkit-qemu-aarch64`) into a volume shared with
-   the `buildkitd` container, on a `PATH` entry added just for this purpose.
-
-   That second step exists because `buildkitd` doesn't actually use the `binfmt_misc` registration
-   to run non-native `RUN` steps in a Dockerfile - Kubernetes gives every container in a pod its
-   own private mount namespace, so a `binfmt_misc` registration made by one container's initContainer
-   never becomes visible under a sibling container's own `/proc/sys/fs/binfmt_misc` (there's no
-   shared-mount-namespace equivalent of `hostNetwork`/`hostPID` for this). Instead, `buildkitd` does
-   a plain `$PATH` lookup for `buildkit-qemu-<arch>` and execs it directly, entirely inside its own
-   container - see upstream's
+2. For any platform that isn't the pool's native architecture, `buildkitd` needs a QEMU emulator
+   binary to run that platform's `RUN` steps. It finds this with a plain `$PATH` lookup for a binary
+   named `buildkit-qemu-<arch>` (e.g. `buildkit-qemu-aarch64`), which it bind-mounts into the build
+   container and execs directly - entirely inside its own container, independent of any kernel
+   configuration. See upstream's
    [`solver/llbsolver/ops/exec_binfmt.go`](https://github.com/moby/buildkit/blob/master/solver/llbsolver/ops/exec_binfmt.go)
    and the ["exec format error" troubleshooting section](https://github.com/moby/buildkit/blob/master/docs/multi-platform.md#error-exec-user-process-caused-exec-format-error)
-   of BuildKit's own multi-platform docs. Upstream `moby/buildkit` images bundle these binaries
-   under `/usr/bin` by default, which is why this can look like it "just works" without the shared
-   volume - but that's an implicit assumption about whatever `buildkitd` image tag happens to be
-   deployed. Losing access to that binary (an older/custom/mirrored image build that doesn't bundle
-   it, for example) doesn't fail loudly and consistently: depending on which `RUN` step trips it,
-   the build can either fail outright with `exec format error`, or - for a step BuildKit can quietly
-   skip or fall back on - **succeed while silently running amd64 content inside an image labeled and
-   pushed as the requested non-native platform**. The chart's shared-volume initContainer makes the
-   dependency explicit and self-contained instead of relying on whatever the deployed `buildkitd`
-   image happens to bundle.
+   of BuildKit's own multi-platform docs.
 
-   **Declaring a platform in `platformPools` without either native hardware or working emulation
-   registered on that pool's nodes will make builds fail at solve time, not at admission time** -
-   admission only checks that *some* pool claims the platform, it can't verify the claim is true.
+   This means the classic `binfmt_misc` kernel registration (what `docker buildx` relies on for
+   single-node multi-arch builds) is irrelevant to `buildkitd` - it never consults it. Nothing
+   outside of `buildkit.image` itself (no privileged container, no DaemonSet, no host or node
+   configuration) is required, or sufficient, to make emulation work. The only thing that matters is
+   whether `buildkit-qemu-<arch>` exists somewhere on `buildkitd`'s `PATH` inside its own image.
+
+   > Do not set `platforms = [...]` in `buildkitd.toml` to declare an emulated platform as native.
+   > That makes BuildKit's `getEmulator` treat the platform as natively supported and skip the
+   > emulator bind-mount entirely, which breaks emulated builds. `$PATH` is the only supported lever
+   > for where BuildKit finds these binaries.
+
+   **With the chart's default `buildkit.image`, this already works with no configuration**:
+   upstream `moby/buildkit` images (both the normal and `-rootless` variants) ship
+   `buildkit-qemu-<arch>` binaries under `/usr/bin`, which is on `buildkitd`'s `PATH` by default.
+
+   **If you deploy a custom or rebuilt `buildkit.image`, it must bundle these binaries itself** -
+   this chart has no mechanism to supply them from outside the image. An image missing them fails
+   emulated builds at solve time with `exec format error` (or, for a `RUN` step BuildKit can quietly
+   skip or fall back on, can succeed while silently running native-arch content inside an image
+   labeled and pushed as the requested non-native platform). Add the binaries wherever your image is
+   built, for example:
+
+   - **Deriving from a Wolfi/Chainguard base**: install the `qemu-user` apk package - it ships
+     statically-linked `qemu-<arch>` binaries (no `binfmt_misc` involved) for `aarch64`, `x86_64`,
+     and `i386` - and symlink them to the names `buildkitd` looks up:
+
+     ```dockerfile
+     RUN apk add --no-cache qemu-user \
+       && for a in aarch64 x86_64 i386; do ln -s qemu-$a /usr/bin/buildkit-qemu-$a; done
+     ```
+
+   - **Deriving from any other base**: copy the prebuilt, pre-renamed binaries straight out of the
+     image upstream `moby/buildkit` itself sources them from:
+
+     ```dockerfile
+     COPY --link --from=tonistiigi/binfmt:buildkit-v10.2.3-66@sha256:6014c1e52b8e51a67fbf76f691ffbe20ac0204c31c2f086df3e8ef3ce134b488 / /usr/bin/
+     ```
+
+   Either way, the binaries must land somewhere on `buildkitd`'s `PATH` inside the final image -
+   `/usr/bin` is the simplest choice, since it's already there.
+
+   **Declaring a platform in `platformPools` without either native hardware or a `buildkit.image`
+   that carries a working emulator for it will make builds fail at solve time, not at admission
+   time** - admission only checks that *some* pool claims the platform, it can't verify the claim is
+   true.
 
 Emulated builds are slow; prefer native hardware when it is available.
 

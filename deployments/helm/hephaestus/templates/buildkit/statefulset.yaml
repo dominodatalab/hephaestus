@@ -49,37 +49,6 @@ spec:
         fsGroupChangePolicy: "OnRootMismatch"
         seLinuxOptions:
           type: spc_t
-      {{- if .Values.buildkit.binfmt.enabled }}
-      initContainers:
-        # Registers QEMU handlers in /proc/sys/fs/binfmt_misc for the host kernel - but each
-        # container gets its own mount namespace, so this never becomes visible inside buildkitd's
-        # own container. buildkitd instead looks up a "buildkit-qemu-<arch>" binary on its own
-        # $PATH (moby/buildkit's exec_binfmt.go); the buildkit-qemu-bin initContainer below stages
-        # that. See docs/building.md for the full explanation.
-        - name: binfmt
-          image: {{ include "hephaestus.buildkit.binfmt.image" . }}
-          imagePullPolicy: {{ .Values.buildkit.binfmt.image.pullPolicy }}
-          args: ["--install", "all"]
-          {{- with .Values.podEnv }}
-          env:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          securityContext:
-            privileged: true
-        - name: buildkit-qemu-bin
-          image: {{ include "hephaestus.buildkit.image" . }}
-          imagePullPolicy: {{ .Values.buildkit.image.pullPolicy }}
-          command: ["/bin/sh", "-c"]
-          args:
-            - cp -a /usr/bin/buildkit-qemu-* {{ .Values.buildkit.binfmt.qemuBinPath }}/ 2>/dev/null; true
-          {{- with .Values.podEnv }}
-          env:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          volumeMounts:
-            - name: qemu-bin
-              mountPath: {{ .Values.buildkit.binfmt.qemuBinPath }}
-      {{- end }}
       containers:
         - name: buildkitd
           securityContext:
@@ -108,17 +77,9 @@ spec:
             {{- with .Values.buildkit.args }}
               {{- toYaml . | nindent 12 }}
             {{- end }}
-          {{- if or .Values.buildkit.binfmt.enabled .Values.podEnv }}
+          {{- with .Values.podEnv }}
           env:
-            {{- if .Values.buildkit.binfmt.enabled }}
-            # Adds qemuBinPath so buildkitd's PATH lookup finds the binaries staged by
-            # buildkit-qemu-bin above. podEnv below can still override this.
-            - name: PATH
-              value: "{{ .Values.buildkit.binfmt.qemuBinPath }}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-            {{- end }}
-            {{- with .Values.podEnv }}
             {{- toYaml . | nindent 12 }}
-            {{- end }}
           {{- end }}
           ports:
             - name: {{ .Values.buildkit.service.portName }}
@@ -179,11 +140,6 @@ spec:
               mountPath: /var/lib/buildkit
               {{- end }}
             {{- end }}
-            {{- if .Values.buildkit.binfmt.enabled }}
-            - name: qemu-bin
-              readOnly: true
-              mountPath: {{ .Values.buildkit.binfmt.qemuBinPath }}
-            {{- end }}
       volumes:
         - name: config-vol
           configMap:
@@ -197,10 +153,6 @@ spec:
         - name: ca-bundle-vol
           configMap:
             name: {{ . }}
-        {{- end }}
-        {{- if .Values.buildkit.binfmt.enabled }}
-        - name: qemu-bin
-          emptyDir: {}
         {{- end }}
       {{- with .Values.buildkit.nodeSelector }}
       nodeSelector:
