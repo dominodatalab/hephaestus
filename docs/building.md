@@ -71,24 +71,26 @@ just:
    labeled and pushed as the requested non-native platform). Add the binaries wherever your image is
    built, for example:
 
-   - **Deriving from a Wolfi/Chainguard base**: install the `qemu-user` apk package - it ships
-     statically-linked `qemu-<arch>` binaries (no `binfmt_misc` involved) for `aarch64`, `x86_64`,
-     and `i386` - and symlink them to the names `buildkitd` looks up:
-
-     ```dockerfile
-     RUN apk add --no-cache qemu-user \
-       && for a in aarch64 x86_64 i386; do ln -s qemu-$a /usr/bin/buildkit-qemu-$a; done
-     ```
-
-   - **Deriving from any other base**: copy the prebuilt, pre-renamed binaries straight out of the
-     image upstream `moby/buildkit` itself sources them from:
+   - **Any base image, including Wolfi/Chainguard**: copy the prebuilt, statically-linked,
+     pre-renamed binaries straight out of the image upstream `moby/buildkit` itself sources them
+     from:
 
      ```dockerfile
      COPY --link --from=tonistiigi/binfmt:buildkit-v10.2.3-66@sha256:6014c1e52b8e51a67fbf76f691ffbe20ac0204c31c2f086df3e8ef3ce134b488 / /usr/bin/
      ```
 
-   Either way, the binaries must land somewhere on `buildkitd`'s `PATH` inside the final image -
-   `/usr/bin` is the simplest choice, since it's already there.
+     > **Do not install the Wolfi/Chainguard `qemu-user` apk package** (e.g. `apk add --no-cache
+     > qemu-user`) as a source for these binaries. It resolves to a **dynamically-linked**
+     > `qemu-<arch>` (linked against glibc's `ld-linux-x86-64.so.2` / `libc.so.6`), not the static
+     > binary this used to say it produced. BuildKit bind-mounts and execs this binary directly
+     > inside whatever rootfs the build container happens to use, which won't necessarily provide
+     > (or provide an ABI-compatible version of) those shared libraries - so every emulated build
+     > fails immediately, even a no-op `RUN true`, regardless of the build's own base image. The
+     > `COPY --from=tonistiigi/binfmt` binaries above have no dynamic-linker dependencies at all and
+     > are unaffected by this.
+
+   The binaries must land somewhere on `buildkitd`'s `PATH` inside the final image - `/usr/bin` is
+   the simplest choice, since it's already there.
 
    **Declaring a platform in `platformPools` without either native hardware or a `buildkit.image`
    that carries a working emulator for it will make builds fail at solve time, not at admission
