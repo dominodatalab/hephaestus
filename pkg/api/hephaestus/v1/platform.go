@@ -213,13 +213,23 @@ func normalizePlatforms(platforms []string) []string {
 	out := make([]string, 0, len(platforms))
 
 	for _, platform := range platforms {
-		key := strings.ToLower(strings.TrimSpace(platform))
+		// The dedup key must be the same canonical form written to out, or an entry that's only a
+		// duplicate once aliased (e.g. "linux/x86_64" vs "linux/amd64") survives dedup here as two
+		// distinct-looking entries that both resolve to the same platform, and fails validation's own
+		// (alias-aware) duplicate check right after - instead of being silently deduped like same-form
+		// duplicates already are.
+		norm, err := NormalizePlatform(platform)
+		key := norm
+		if err != nil {
+			key = strings.ToLower(strings.TrimSpace(platform))
+		}
+
 		if seen[key] {
 			continue
 		}
 		seen[key] = true
 
-		if norm, err := NormalizePlatform(platform); err == nil {
+		if err == nil {
 			out = append(out, norm)
 		} else {
 			out = append(out, platform)

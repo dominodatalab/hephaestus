@@ -197,4 +197,9 @@ func TestNormalizePlatforms(t *testing.T) {
 		result := normalizePlatforms([]string{"not-a-platform"})
 		assert.Equal(t, []string{"not-a-platform"}, result)
 	})
+
+	t.Run("dedupes an entry that's only a duplicate once aliased", func(t *testing.T) {
+		result := normalizePlatforms([]string{"LINUX/AMD64", "linux/x86_64", "linux/arm64"})
+		assert.Equal(t, []string{"linux/amd64", "linux/arm64"}, result)
+	})
 }
