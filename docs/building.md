@@ -81,13 +81,12 @@ just:
 
      > **Do not install the Wolfi/Chainguard `qemu-user` apk package** (e.g. `apk add --no-cache
      > qemu-user`) as a source for these binaries. It resolves to a **dynamically-linked**
-     > `qemu-<arch>` (linked against glibc's `ld-linux-x86-64.so.2` / `libc.so.6`), not the static
-     > binary this used to say it produced. BuildKit bind-mounts and execs this binary directly
-     > inside whatever rootfs the build container happens to use, which won't necessarily provide
-     > (or provide an ABI-compatible version of) those shared libraries - so every emulated build
-     > fails immediately, even a no-op `RUN true`, regardless of the build's own base image. The
-     > `COPY --from=tonistiigi/binfmt` binaries above have no dynamic-linker dependencies at all and
-     > are unaffected by this.
+     > `qemu-<arch>` (linked against glibc's `ld-linux-x86-64.so.2` / `libc.so.6`). BuildKit
+     > bind-mounts and execs this binary directly inside whatever rootfs the build container happens
+     > to use, which won't necessarily provide (or provide an ABI-compatible version of) those shared
+     > libraries - so every emulated build fails immediately, even a no-op `RUN true`, regardless of
+     > the build's own base image. The `COPY --from=tonistiigi/binfmt` binaries above have no
+     > dynamic-linker dependencies at all and are unaffected by this.
 
    The binaries must land somewhere on `buildkitd`'s `PATH` inside the final image - `/usr/bin` is
    the simplest choice, since it's already there.
