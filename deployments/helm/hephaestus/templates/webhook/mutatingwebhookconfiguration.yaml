@@ -21,3 +21,17 @@ webhooks:
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE"]
         resources: ["imagebuilds"]
+  - name: mutate-imagecache.hephaestus.dominodatalab.com
+    admissionReviewVersions: ["v1"]
+    failurePolicy: Fail
+    sideEffects: None
+    clientConfig:
+      service:
+        name: {{ include "hephaestus.webhook.service" . }}
+        namespace: {{ .Release.Namespace }}
+        path: /mutate-hephaestus-dominodatalab-com-v1-imagecache
+    rules:
+      - apiGroups: ["hephaestus.dominodatalab.com"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["imagecaches"]

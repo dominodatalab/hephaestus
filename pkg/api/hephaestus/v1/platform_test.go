@@ -16,6 +16,8 @@ func TestNormalizePlatform(t *testing.T) {
 			{"linux/amd64", "linux/amd64"},
 			{"Linux/AMD64", "linux/amd64"},
 			{" linux/arm64/v8 ", "linux/arm64/v8"},
+			{"linux/x86_64", "linux/amd64"},
+			{"linux/aarch64", "linux/arm64"},
 		} {
 			actual, err := NormalizePlatform(tt.in)
 			assert.NoError(t, err)
@@ -100,6 +102,33 @@ func TestPlatformCapabilitiesResolvePools(t *testing.T) {
 		assert.Error(t, err)
 	})
 
+	t.Run("does not fragment a request a single pool could serve", func(t *testing.T) {
+		// amd64-native alone serves linux/amd64, and would win a per-platform match for it (smaller
+		// poolSize than emulated), but emulated alone can serve the whole request; it should be
+		// preferred over splitting the request across both pools.
+		caps := NewPlatformCapabilities(map[string][]string{
+			"amd64-native": {"linux/amd64"},
+			"emulated":     {"linux/amd64", "linux/arm64"},
+		})
+
+		groups, err := caps.ResolvePools([]string{"linux/amd64", "linux/arm64"})
+		assert.NoError(t, err)
+		assert.Equal(t, map[string][]string{"emulated": {"linux/amd64", "linux/arm64"}}, groups)
+	})
+
+	t.Run("tie-break between equally-sized pools is deterministic", func(t *testing.T) {
+		caps := NewPlatformCapabilities(map[string][]string{
+			"z-pool": {"linux/amd64"},
+			"a-pool": {"linux/amd64"},
+		})
+
+		for range 20 {
+			groups, err := caps.ResolvePools([]string{"linux/amd64"})
+			assert.NoError(t, err)
+			assert.Equal(t, map[string][]string{"a-pool": {"linux/amd64"}}, groups)
+		}
+	})
+
 	t.Run("empty input resolves to no groups", func(t *testing.T) {
 		caps := NewPlatformCapabilities(map[string][]string{"amd64": {"linux/amd64"}})
 
@@ -157,5 +186,15 @@ func TestNormalizePlatforms(t *testing.T) {
 	t.Run("dedupes by normalized form, keeps first spelling", func(t *testing.T) {
 		result := normalizePlatforms([]string{"linux/amd64", "LINUX/AMD64", "linux/arm64"})
 		assert.Equal(t, []string{"linux/amd64", "linux/arm64"}, result)
+	})
+
+	t.Run("rewrites well-formed entries to their canonical form", func(t *testing.T) {
+		result := normalizePlatforms([]string{" LINUX/ARM64 ", "linux/x86_64"})
+		assert.Equal(t, []string{"linux/arm64", "linux/amd64"}, result)
+	})
+
+	t.Run("keeps a malformed entry as-written", func(t *testing.T) {
+		result := normalizePlatforms([]string{"not-a-platform"})
+		assert.Equal(t, []string{"not-a-platform"}, result)
 	})
 }

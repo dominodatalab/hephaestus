@@ -11,6 +11,17 @@ import (
 
 var imagecachelog = logf.Log.WithName("webhook").WithName("imagecache")
 
+var _ admission.Defaulter[*ImageCache] = &ImageCache{}
+
+func (in *ImageCache) Default(context.Context, *ImageCache) error {
+	log := imagecachelog.WithName("defaulter").WithValues("imagecache", client.ObjectKeyFromObject(in))
+	log.V(1).Info("Applying default values")
+
+	in.Spec.Platforms = normalizePlatforms(in.Spec.Platforms)
+
+	return nil
+}
+
 var _ admission.Validator[*ImageCache] = &ImageCache{}
 
 func (in *ImageCache) ValidateCreate(context.Context, *ImageCache) (admission.Warnings, error) {

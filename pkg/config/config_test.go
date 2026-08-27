@@ -168,6 +168,10 @@ func TestControllerValidate(t *testing.T) {
 			"blank_stateful_set_name": func(p *PlatformPool) { p.StatefulSetName = "" },
 			"blank_service_name":      func(p *PlatformPool) { p.ServiceName = "" },
 			"no_platforms":            func(p *PlatformPool) { p.Platforms = nil },
+			"malformed_platform":      func(p *PlatformPool) { p.Platforms = []string{"not-a-platform"} },
+			"duplicate_platform": func(p *PlatformPool) {
+				p.Platforms = []string{"linux/amd64", "LINUX/AMD64"}
+			},
 		}
 
 		for name, mutate := range mutations {

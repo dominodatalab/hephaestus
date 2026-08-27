@@ -84,6 +84,22 @@ func (c Controller) Validate() error {
 		if len(pool.Platforms) == 0 {
 			errs = append(errs, prefix+".platforms must contain at least 1 entry")
 		}
+
+		seenPlatforms := make(map[string]bool, len(pool.Platforms))
+		for pIdx, platform := range pool.Platforms {
+			pprefix := fmt.Sprintf("%s.platforms[%d]", prefix, pIdx)
+
+			norm, err := hephv1.NormalizePlatform(platform)
+			if err != nil {
+				errs = append(errs, fmt.Sprintf("%s %q is invalid: %s", pprefix, platform, err.Error()))
+				continue
+			}
+			if seenPlatforms[norm] {
+				errs = append(errs, fmt.Sprintf("%s %q is duplicated", pprefix, platform))
+				continue
+			}
+			seenPlatforms[norm] = true
+		}
 	}
 
 	if c.NewRelic.Enabled && c.NewRelic.LicenseKey == "" {

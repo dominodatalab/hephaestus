@@ -33,6 +33,7 @@ var errNotRunning = errors.New("build not running")
 
 type BuildDispatcherComponent struct {
 	cfg      config.Buildkit
+	caps     hephv1.PlatformCapabilities
 	pool     worker.Pool
 	phase    *phase.TransitionHelper
 	newRelic *newrelic.Application
@@ -49,6 +50,7 @@ func BuildDispatcher(
 ) *BuildDispatcherComponent {
 	return &BuildDispatcherComponent{
 		cfg:      cfg,
+		caps:     cfg.PlatformCapabilities(),
 		pool:     pool,
 		delete:   ch,
 		newRelic: nr,
@@ -327,7 +329,7 @@ func (c *BuildDispatcherComponent) checkSinglePoolServesPlatforms(platforms []st
 		return nil
 	}
 
-	groups, err := c.cfg.PlatformCapabilities().ResolvePools(platforms)
+	groups, err := c.caps.ResolvePools(platforms)
 	if err != nil {
 		return fmt.Errorf("platform resolution failed: %w", err)
 	}

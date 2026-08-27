@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/containerd/platforms"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
@@ -76,41 +77,90 @@ func (c PlatformCapabilities) PoolsFor(platform string) []string {
 	return c.platforms[norm]
 }
 
-// ResolvePools assigns each of the given platforms to a single serving pool, preferring whichever
-// pool declares the fewest total platforms (more likely native) over one declaring several (more
-// likely emulated) when a platform is covered by more than one pool. It returns a pool name ->
-// assigned platforms grouping. Callers dispatch a single solve per group; a result with exactly one
-// group means every requested platform can be served by one pool (a single multi-platform solve
-// suffices), while more than one group means the request must fan out across pools.
+// ResolvePools assigns the given platforms to the serving pool(s) needed to build all of them. If
+// any single configured pool serves every one of them, that one pool is preferred over splitting
+// the request, even if a per-platform match would otherwise favor a different (smaller) pool for
+// some of them - this is what keeps a request that doesn't need to fan out from being fragmented
+// across pools it doesn't have to touch. Otherwise, each platform is assigned independently to
+// whichever of its serving pools declares the fewest total platforms (more likely native, over one
+// declaring several, more likely emulated). It returns a pool name -> assigned platforms grouping.
+// Callers dispatch a single solve per group; a result with exactly one group means a single
+// multi-platform solve suffices, while more than one group means the request must fan out across
+// pools. Ties (equal candidate pool sizes) break on pool name, so the choice is stable across
+// process restarts regardless of map iteration order.
 //
 // Every platform is guaranteed to resolve to some pool by the time this is called in the dispatcher,
 // since the validating webhook already rejected any platform unsupported by every configured pool
 // (see validatePlatforms) - the error return here is a defensive backstop, not an expected path.
 func (c PlatformCapabilities) ResolvePools(platforms []string) (map[string][]string, error) {
-	groups := make(map[string][]string)
-
-	for _, platform := range platforms {
-		norm, err := NormalizePlatform(platform)
+	norm := make([]string, len(platforms))
+	for i, platform := range platforms {
+		n, err := NormalizePlatform(platform)
 		if err != nil {
 			return nil, fmt.Errorf("platform %q is malformed: %w", platform, err)
 		}
-
-		pools := c.platforms[norm]
-		if len(pools) == 0 {
+		if len(c.platforms[n]) == 0 {
 			return nil, fmt.Errorf("platform %q is not served by any configured pool", platform)
 		}
+		norm[i] = n
+	}
 
-		best := pools[0]
-		for _, pool := range pools[1:] {
-			if c.poolSize[pool] < c.poolSize[best] {
-				best = pool
-			}
-		}
+	if pool, ok := c.singlePoolServing(norm); ok {
+		return map[string][]string{pool: norm}, nil
+	}
 
-		groups[best] = append(groups[best], norm)
+	groups := make(map[string][]string)
+	for _, platform := range norm {
+		pool := c.bestPool(c.platforms[platform])
+		groups[pool] = append(groups[pool], platform)
 	}
 
 	return groups, nil
+}
+
+// singlePoolServing returns the preferred pool that alone serves every one of the given
+// (already normalized, possibly duplicated) platforms, if one exists.
+func (c PlatformCapabilities) singlePoolServing(platforms []string) (string, bool) {
+	unique := make(map[string]bool, len(platforms))
+	for _, platform := range platforms {
+		unique[platform] = true
+	}
+	if len(unique) == 0 {
+		return "", false
+	}
+
+	served := make(map[string]int)
+	for platform := range unique {
+		for _, pool := range c.platforms[platform] {
+			served[pool]++
+		}
+	}
+
+	var candidates []string
+	for pool, count := range served {
+		if count == len(unique) {
+			candidates = append(candidates, pool)
+		}
+	}
+	if len(candidates) == 0 {
+		return "", false
+	}
+
+	return c.bestPool(candidates), true
+}
+
+// bestPool returns the preferred pool among candidates: the one declaring the fewest total
+// platforms (more likely native, over one declaring several, more likely emulated), breaking ties
+// by name so the pick is deterministic across process restarts rather than depending on map
+// iteration order.
+func (c PlatformCapabilities) bestPool(candidates []string) string {
+	best := candidates[0]
+	for _, pool := range candidates[1:] {
+		if c.poolSize[pool] < c.poolSize[best] || (c.poolSize[pool] == c.poolSize[best] && pool < best) {
+			best = pool
+		}
+	}
+	return best
 }
 
 // platformCapabilities is populated once at manager startup via SetPlatformCapabilities, before
@@ -124,9 +174,12 @@ func SetPlatformCapabilities(c PlatformCapabilities) {
 	platformCapabilities = c
 }
 
-// NormalizePlatform lowercases and validates a platform string of the form "os/arch[/variant]".
+// NormalizePlatform validates a platform string of the form "os/arch[/variant]" and returns its
+// canonical form, applying the same OS/arch aliasing (e.g. "x86_64" -> "amd64", "aarch64" ->
+// "arm64") that BuildKit's own solver applies via containerd/platforms to these same strings, so a
+// platform string accepted here parses identically once it reaches BuildKit.
 func NormalizePlatform(platform string) (string, error) {
-	trimmed := strings.ToLower(strings.TrimSpace(platform))
+	trimmed := strings.TrimSpace(platform)
 	parts := strings.Split(trimmed, "/")
 
 	if len(parts) < 2 || len(parts) > 3 {
@@ -136,13 +189,21 @@ func NormalizePlatform(platform string) (string, error) {
 		return "", fmt.Errorf("must not contain empty segments")
 	}
 
-	return trimmed, nil
+	p, err := platforms.Parse(trimmed)
+	if err != nil {
+		return "", fmt.Errorf("must use \"os/arch\" or \"os/arch/variant\" syntax, e.g. \"linux/amd64\": %w", err)
+	}
+
+	return platforms.Format(p), nil
 }
 
-// normalizePlatforms lowercases/trims each entry and drops duplicates (by normalized form),
-// preserving the first occurrence's original casing/spelling so malformed entries still surface
-// exactly as the user wrote them in validation errors. A nil/empty input is returned unchanged,
-// so builds that don't request any platform keep taking the pre-multi-arch code path untouched.
+// normalizePlatforms drops duplicates (by normalized form, keeping the first occurrence) and
+// rewrites every well-formed entry to its canonical "os/arch[/variant]" form via NormalizePlatform,
+// so a value with stray whitespace, mixed case, or an alias like "x86_64" doesn't survive into the
+// persisted spec and reach BuildKit's solver un-normalized. A malformed entry is kept as-written so
+// it still surfaces exactly as the user typed it in the validation error that follows defaulting. A
+// nil/empty input is returned unchanged, so builds that don't request any platform keep taking the
+// pre-multi-arch code path untouched.
 func normalizePlatforms(platforms []string) []string {
 	if len(platforms) == 0 {
 		return platforms
@@ -157,7 +218,12 @@ func normalizePlatforms(platforms []string) []string {
 			continue
 		}
 		seen[key] = true
-		out = append(out, platform)
+
+		if norm, err := NormalizePlatform(platform); err == nil {
+			out = append(out, norm)
+		} else {
+			out = append(out, platform)
+		}
 	}
 
 	return out
