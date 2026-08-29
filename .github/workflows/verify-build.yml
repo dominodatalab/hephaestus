@@ -98,8 +98,8 @@ jobs:
           IMAGE="ghcr.io/dominodatalab/hephaestus:${{ steps.tag.outputs.tag }}"
 
           echo "Testing container startup..."
-          # The controller expects certain env vars, so just verify it's a valid executable
-          docker run --rm --entrypoint /bin/sh "$IMAGE" -c "test -x /usr/bin/hephaestus-controller && echo 'Binary is executable'"
+          # distroless/static ships no shell, so exercise the entrypoint itself
+          docker run --rm --platform linux/amd64 "$IMAGE" --help
 
           echo "✓ Container execution test passed"
 
@@ -150,7 +150,8 @@ jobs:
           IMAGE="ghcr.io/dominodatalab/hephaestus:${{ steps.tag.outputs.tag }}"
 
           echo "Testing container startup..."
-          docker run --rm --entrypoint /bin/sh "$IMAGE" -c "test -x /usr/bin/hephaestus-controller && echo 'Binary is executable'"
+          # distroless/static ships no shell, so exercise the entrypoint itself
+          docker run --rm --platform linux/arm64 "$IMAGE" --help
 
           echo "✓ Container execution test passed"
 
@@ -207,8 +208,8 @@ jobs:
           docker pull --platform linux/amd64 "$IMAGE"
 
           echo "Checking for debug tools..."
-          # Debug image should be based on Ubuntu and have a shell
-          docker run --rm "$IMAGE" bash -c "echo 'Shell is available'"
+          # the debug image entrypoint is the controller, so override it to reach bash
+          docker run --rm --platform linux/amd64 --entrypoint bash "$IMAGE" -c "echo 'Shell is available'"
 
           echo "✓ Debug image verified"
 
