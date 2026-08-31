@@ -216,38 +216,55 @@ Return a platform pool's fully-qualified app name. Expects (dict "root" $ "pool"
 
 {{/*
 Return a platform pool's namespace, defaulting to the release namespace. Expects
-(dict "root" $ "pool" poolValuesEntry).
+(dict "root" $ "pool" poolValuesEntry). Empty for the implicit pool (used when platformPools is
+empty), so its resources omit metadata.namespace entirely instead of resolving to the release
+namespace.
 */}}
 {{- define "hephaestus.buildkit.pool.namespace" -}}
+{{- if not .pool.implicit }}
 {{- .pool.namespace | default .root.Release.Namespace }}
+{{- end }}
 {{- end }}
 
 {{/*
 Return a platform pool's standard labels - the same as hephaestus.buildkit.labels.standard plus a
-pool-identifying label, since every pool otherwise shares identical standard labels. Expects
-(dict "root" $ "pool" poolValuesEntry).
+pool-identifying label, since every *explicit* pool otherwise shares identical standard labels. The
+implicit pool (used when platformPools is empty) omits the platform-pool label entirely, matching
+this chart's pre-pool-support labels exactly. Expects (dict "root" $ "pool" poolValuesEntry).
 */}}
 {{- define "hephaestus.buildkit.pool.labels.standard" -}}
 {{- include "hephaestus.buildkit.labels.standard" .root }}
+{{- if not .pool.implicit }}
 hephaestus.dominodatalab.com/platform-pool: {{ .pool.name }}
+{{- end }}
 {{- end }}
 
 {{/*
-Return a platform pool's selector labels. The platform-pool label is load-bearing here, not just
-informational: without it every pool's StatefulSet/Service/NetworkPolicy selector would be
-identical and collide. Expects (dict "root" $ "pool" poolValuesEntry).
+Return a platform pool's selector labels. Load-bearing, not just informational: without the
+platform-pool label, every explicit pool's StatefulSet/Service/NetworkPolicy selector would be
+identical and collide - and since selectors are immutable, the implicit pool must omit it to stay
+byte-identical with pre-pool-support output. Expects (dict "root" $ "pool" poolValuesEntry).
 */}}
 {{- define "hephaestus.buildkit.pool.labels.matchLabels" -}}
 {{- include "hephaestus.buildkit.labels.matchLabels" .root }}
+{{- if not .pool.implicit }}
 hephaestus.dominodatalab.com/platform-pool: {{ .pool.name }}
+{{- end }}
 {{- end }}
 
 {{/*
-Return a platform pool's service account name. Expects (dict "root" $ "pool" poolValuesEntry).
+Return a platform pool's service account name. Expects (dict "root" $ "pool" poolValuesEntry). The
+implicit pool respects a custom buildkit.serviceAccount.name override when create=true; every
+explicit pool ignores it and uses its own pool.fullname - per-pool custom names were deliberately
+never exposed.
 */}}
 {{- define "hephaestus.buildkit.pool.serviceAccountName" -}}
 {{- if .root.Values.buildkit.serviceAccount.create }}
+{{- if .pool.implicit }}
+{{- default (include "hephaestus.buildkit.pool.fullname" .) .root.Values.buildkit.serviceAccount.name }}
+{{- else }}
 {{- include "hephaestus.buildkit.pool.fullname" . }}
+{{- end }}
 {{- else }}
 {{- default "default" .root.Values.buildkit.serviceAccount.name }}
 {{- end }}

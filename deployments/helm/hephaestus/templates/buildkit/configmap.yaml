@@ -1,48 +1,19 @@
-{{- if not .Values.buildkit.platformPools -}}
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: {{ include "hephaestus.buildkit.fullname" . }}
-  labels:
-    {{- include "hephaestus.buildkit.labels.standard" . | nindent 4 }}
-data:
-  {{- with .Values.buildkit }}
-  buildkitd.toml: |
-    [grpc]
-      address = [ "tcp://0.0.0.0:{{ .service.port }}", "{{ .rootless | ternary (printf "unix:///run/user/%v/buildkit/buildkitd.sock" .rootlessUser) "unix:///run/buildkit/buildkitd.sock" }}" ]
-
-      {{- if .mtls.enabled }}
-      [grpc.tls]
-        cert = "/etc/buildkit/x509/tls.crt"
-        key = "/etc/buildkit/x509/tls.key"
-        ca = "/etc/buildkit/x509/ca.crt"
-      {{- end }}
-
-    [worker.oci]
-      {{- if .rootless }}
-      noProcessSandbox = true
-      {{- end }}
-      {{- if .persistence.enabled }}
-      [[worker.oci.gcpolicy]]
-        all = true
-        keepBytes = {{ .gcKeepStorage | int64 }}
-      {{- end }}
-
-    {{- range $domain, $opts := $.Values.registries }}
-    [registry."{{ $domain }}"]
-      {{- with $opts.http }}
-      http = {{ . }}
-      {{- end }}
-
-      {{- with $opts.insecure }}
-      insecure = {{ . }}
-      {{- end }}
-    {{- end }}
-  {{- if .rootless }}
-  subgid: |
-    user:100000:65536
-  subuid: |
-    user:100000:65536
-  {{- end -}}
-  {{- end }}
+{{- $pools := .Values.buildkit.platformPools }}
+{{- if not $pools }}
+{{- $pools = list (dict "name" "" "implicit" true) }}
+{{- end }}
+{{- range $i, $pool := $pools }}
+{{- $poolCtx := dict "root" $ "pool" $pool }}
+{{- $args := dict
+      "root" $
+      "name" (include "hephaestus.buildkit.pool.fullname" $poolCtx)
+      "namespace" (include "hephaestus.buildkit.pool.namespace" $poolCtx)
+      "standardLabels" (include "hephaestus.buildkit.pool.labels.standard" $poolCtx)
+-}}
+{{- if $i }}
+---
+{{ include "hephaestus.buildkit.configmap.render" $args }}
+{{- else -}}
+{{- include "hephaestus.buildkit.configmap.render" $args }}
+{{- end }}
 {{- end }}

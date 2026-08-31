@@ -428,21 +428,20 @@ buildkit:
             topologyKey: "kubernetes.io/hostname"
 
   # Declares one or more named buildkit pools and the platforms each can serve (natively or via
-  # emulation - see docs/building.md for what buildkit.image needs to support an emulated
-  # platform), passed through verbatim into the controller's buildkit.platformPools config. Leave
-  # empty (the default) to deploy the single buildkit StatefulSet/Service/ServiceAccount/
-  # ConfigMap/NetworkPolicy this chart has always deployed, as an implicit, un-platform-aware
-  # "default" pool - the pre-multi-arch behavior, byte-for-byte.
+  # emulation - see docs/building.md for what buildkit.image needs), passed through verbatim into
+  # the controller's buildkit.platformPools config.
   #
-  # Setting this deploys ONE StatefulSet/Service/ServiceAccount/ConfigMap/NetworkPolicy PER entry
-  # instead, each named "<release>-hephaestus-buildkit-<name>". Only placement/sizing can be
-  # overridden per pool (nodeSelector, tolerations, affinity, resources, replicaCount,
-  # priorityClassName, args, podLabels, podAnnotations) - every other buildkit.* setting (image,
-  # rootless mode, mTLS, service port, persistence) is shared across every pool. namespace defaults
-  # to this release's namespace but can be set independently per pool if that pool's StatefulSet
-  # should live elsewhere; the buildkit NetworkPolicy is generated to allow controller ingress
-  # either way. statefulSetName/serviceName are NOT set here - they're always derived from `name`,
-  # so there's no way for the values file and the actually-deployed object names to drift apart.
+  # Leave empty (the default) to keep the single buildkit StatefulSet/Service/ServiceAccount/
+  # ConfigMap/NetworkPolicy this chart has always deployed, as an implicit "default" pool - the
+  # pre-multi-arch behavior, byte-for-byte. Setting it deploys one of each PER entry instead, named
+  # "<release>-hephaestus-buildkit-<name>".
+  #
+  # Only placement/sizing can be overridden per pool (nodeSelector, tolerations, affinity,
+  # resources, replicaCount, priorityClassName, args, podLabels, podAnnotations); every other
+  # buildkit.* setting (image, rootless mode, mTLS, service port, persistence) is shared across
+  # every pool. namespace defaults to the release namespace but can be set per pool; the generated
+  # NetworkPolicy allows controller ingress either way. statefulSetName/serviceName aren't set here
+  # - they're always derived from `name`, so the values file and deployed objects can't drift apart.
   #
   # Example - two native pools, each pinned to nodes of the matching architecture:
   # platformPools:
