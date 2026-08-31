@@ -93,8 +93,10 @@ func TestFailBuildRecordsPlatformPhasesOnlyOnDurableTransition(t *testing.T) {
 		TypeMeta:   metav1.TypeMeta{Kind: ibGVK.Kind, APIVersion: hephv1.SchemeGroupVersion.String()},
 		ObjectMeta: metav1.ObjectMeta{Name: "b4", Namespace: "aloha"},
 		Status: hephv1.ImageBuildStatus{
-			Phase:     hephv1.PhaseRunning,
-			Platforms: []hephv1.PlatformResult{{Platform: "linux/amd64"}, {Platform: "linux/arm64"}},
+			Phase: hephv1.PhaseRunning,
+			Platforms: []hephv1.PlatformResult{
+				{Platform: "linux/amd64", Error: "boom"}, {Platform: "linux/arm64"},
+			},
 		},
 	}
 	base := fake.NewClientBuilder().WithScheme(scheme()).WithObjects(obj).WithStatusSubresource(obj).Build()

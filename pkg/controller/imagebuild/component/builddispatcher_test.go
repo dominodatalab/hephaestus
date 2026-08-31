@@ -2,6 +2,7 @@ package component
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/stretchr/testify/assert"
@@ -129,20 +130,23 @@ func TestSuffixImageRefs(t *testing.T) {
 	}, suffixed)
 }
 
-func TestFirstBuildError(t *testing.T) {
-	t.Run("nil when every build succeeded", func(t *testing.T) {
-		builds := []platformBuild{{platform: "linux/amd64"}, {platform: "linux/arm64"}}
-		assert.NoError(t, firstBuildError(builds))
-	})
+func TestJoinBuilderAddrs(t *testing.T) {
+	builds := []platformBuild{
+		{platform: "linux/amd64", addr: "10.0.0.1:1234"},
+		{platform: "linux/arm64", addr: "10.0.0.2:1234"},
+		{platform: "linux/arm64/v8", addr: "10.0.0.1:1234"},
+		{platform: "linux/riscv64", addr: ""},
+	}
 
-	t.Run("returns the first error in order", func(t *testing.T) {
-		wantErr := assert.AnError
-		builds := []platformBuild{
-			{platform: "linux/amd64"},
-			{platform: "linux/arm64", err: wantErr},
-			{platform: "linux/riscv64", err: assert.AnError},
-		}
+	assert.Equal(t, "10.0.0.1:1234,10.0.0.2:1234", joinBuilderAddrs(builds))
+}
 
-		assert.Equal(t, wantErr, firstBuildError(builds))
-	})
+func TestMaxAllocationTime(t *testing.T) {
+	builds := []platformBuild{
+		{platform: "linux/amd64", allocationTime: 2 * time.Second},
+		{platform: "linux/arm64", allocationTime: 5 * time.Second},
+		{platform: "linux/riscv64", allocationTime: time.Second},
+	}
+
+	assert.Equal(t, 5*time.Second, maxAllocationTime(builds))
 }

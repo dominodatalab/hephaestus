@@ -7,10 +7,17 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestAssembleManifestListRejectsEmptyRefs(t *testing.T) {
+func TestAssembleManifestListsRejectsEmptyRefs(t *testing.T) {
 	var c *Client
 
-	_, err := c.AssembleManifestList(context.Background(), nil, "registry.example.com/repo:v1", nil)
+	_, err := c.AssembleManifestLists(context.Background(), nil, []string{"registry.example.com/repo:v1"}, nil)
+	assert.Error(t, err)
+}
+
+func TestAssembleManifestListsRejectsEmptyFinalRefs(t *testing.T) {
+	var c *Client
+
+	_, err := c.AssembleManifestLists(context.Background(), nil, nil, []PlatformImageRef{{Platform: "linux/amd64", ImageRef: "registry.example.com/repo:v1"}})
 	assert.Error(t, err)
 }
 

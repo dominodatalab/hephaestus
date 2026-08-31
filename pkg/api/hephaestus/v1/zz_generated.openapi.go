@@ -548,7 +548,7 @@ func schema_pkg_api_hephaestus_v1_ImageBuildStatus(ref common.ReferenceCallback)
 					},
 					"compressedImageSizeBytes": {
 						SchemaProps: spec.SchemaProps{
-							Description: "CompressedImageSizeBytes is the total size of all the compressed layers in the image. For a multi-platform build spanning more than one buildkit pool, see Platforms instead.",
+							Description: "CompressedImageSizeBytes is the total size of all the compressed layers in the image. For a build spanning more than one requested platform, see Platforms instead.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -562,7 +562,7 @@ func schema_pkg_api_hephaestus_v1_ImageBuildStatus(ref common.ReferenceCallback)
 					},
 					"labels": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Map of string keys and values corresponding OCI image config labels. Labels contains arbitrary metadata for the container.",
+							Description: "Map of string keys and values corresponding OCI image config labels. Labels contains arbitrary metadata for the container. For a build spanning more than one requested platform, see Platforms instead.",
 							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,
@@ -577,7 +577,7 @@ func schema_pkg_api_hephaestus_v1_ImageBuildStatus(ref common.ReferenceCallback)
 					},
 					"platforms": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Platforms contains a per-platform breakdown, populated only when a build fans out across more than one buildkit pool to satisfy Spec.Platforms.",
+							Description: "Platforms contains a per-platform breakdown, populated whenever Spec.Platforms requests more than one platform - whether they were built by a single buildkit pool in one multi-platform solve, or fanned out across more than one pool.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -1011,7 +1011,7 @@ func schema_pkg_api_hephaestus_v1_PlatformResult(ref common.ReferenceCallback) c
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "PlatformResult records the outcome of building a single platform as part of a multi-pool fan-out build.",
+				Description: "PlatformResult records the outcome of building a single platform as part of a build spanning more than one requested platform, whether built by one buildkit pool in a single multi-platform solve or fanned out across more than one pool. Error is only ever set in the latter case, since a single-pool multi-platform solve either produces every platform or fails the build entirely.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"platform": {
@@ -1053,7 +1053,7 @@ func schema_pkg_api_hephaestus_v1_PlatformResult(ref common.ReferenceCallback) c
 					},
 					"error": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Error contains the failure reason when this platform failed to build.",
+							Description: "Error contains the failure reason when this platform failed to build. Only ever set for a build fanned out across more than one buildkit pool.",
 							Type:        []string{"string"},
 							Format:      "",
 						},

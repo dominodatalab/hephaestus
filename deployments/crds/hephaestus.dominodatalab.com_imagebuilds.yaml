@@ -173,7 +173,7 @@ spec:
               compressedImageSizeBytes:
                 description: |-
                   CompressedImageSizeBytes is the total size of all the compressed layers in the image.
-                  For a multi-platform build spanning more than one buildkit pool, see Platforms instead.
+                  For a build spanning more than one requested platform, see Platforms instead.
                 type: string
               conditions:
                 items:
@@ -241,18 +241,22 @@ spec:
                 description: |-
                   Map of string keys and values corresponding OCI image config labels.
                   Labels contains arbitrary metadata for the container.
+                  For a build spanning more than one requested platform, see Platforms instead.
                 type: object
               phase:
                 description: Phase represents a step in a resource processing lifecycle.
                 type: string
               platforms:
                 description: |-
-                  Platforms contains a per-platform breakdown, populated only when a build fans out across more
-                  than one buildkit pool to satisfy Spec.Platforms.
+                  Platforms contains a per-platform breakdown, populated whenever Spec.Platforms requests more
+                  than one platform - whether they were built by a single buildkit pool in one multi-platform
+                  solve, or fanned out across more than one pool.
                 items:
                   description: |-
-                    PlatformResult records the outcome of building a single platform as part of a multi-pool
-                    fan-out build.
+                    PlatformResult records the outcome of building a single platform as part of a build spanning more
+                    than one requested platform, whether built by one buildkit pool in a single multi-platform solve or
+                    fanned out across more than one pool. Error is only ever set in the latter case, since a
+                    single-pool multi-platform solve either produces every platform or fails the build entirely.
                   properties:
                     compressedImageSizeBytes:
                       description: CompressedImageSizeBytes is the total size of all
@@ -263,8 +267,9 @@ spec:
                         Empty if Error is set.
                       type: string
                     error:
-                      description: Error contains the failure reason when this platform
-                        failed to build.
+                      description: |-
+                        Error contains the failure reason when this platform failed to build. Only ever set for a
+                        build fanned out across more than one buildkit pool.
                       type: string
                     labels:
                       additionalProperties:

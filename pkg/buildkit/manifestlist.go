@@ -19,22 +19,29 @@ type PlatformImageRef struct {
 	ImageRef string
 }
 
-// AssembleManifestList resolves each per-platform image reference to its pushed image, combines
-// them into a single OCI image index (manifest list), and pushes the index to finalRef. It returns
-// the pushed index's digest.
+// AssembleManifestLists resolves each per-platform image reference exactly once, combines them into
+// a single OCI image index (manifest list), and pushes that same index to every finalRef. It returns
+// the last pushed index's digest; every finalRef's pushed index has identical content (and therefore
+// digest), since they all reference the same set of per-platform images, just under different tags.
+// Pushing content that's already present at a given finalRef (as it will be here, since each
+// platform's image was already pushed there directly during its own solve) is a cheap manifest-only
+// write - go-containerregistry checks blob existence per destination before uploading anything.
 //
 // This is the manual equivalent of what a single multi-platform Solve produces automatically within
 // one buildkit daemon (see BuildOptions.Platforms) - used when the requested platforms had to be
 // built across more than one buildkit pool, so each platform's image was pushed independently and
 // must be stitched into one manifest list here instead.
-func (c *Client) AssembleManifestList(
+func (c *Client) AssembleManifestLists(
 	ctx context.Context,
 	insecureRegistries []string,
-	finalRef string,
+	finalRefs []string,
 	refs []PlatformImageRef,
 ) (string, error) {
 	if len(refs) == 0 {
 		return "", errors.New("no platform image references provided")
+	}
+	if len(finalRefs) == 0 {
+		return "", errors.New("no final image references provided")
 	}
 
 	var idx v1.ImageIndex = empty.Index
@@ -56,18 +63,20 @@ func (c *Client) AssembleManifestList(
 		})
 	}
 
-	ref, err := ParseImageReference(finalRef, insecureRegistries)
-	if err != nil {
-		return "", fmt.Errorf("cannot parse final reference %q: %w", finalRef, err)
-	}
+	for _, finalRef := range finalRefs {
+		ref, err := ParseImageReference(finalRef, insecureRegistries)
+		if err != nil {
+			return "", fmt.Errorf("cannot parse final reference %q: %w", finalRef, err)
+		}
 
-	auth, err := c.ResolveAuth(ctx, ref.Context().RegistryStr())
-	if err != nil {
-		return "", fmt.Errorf("cannot resolve auth for %q: %w", ref.Context().RegistryStr(), err)
-	}
+		auth, err := c.ResolveAuth(ctx, ref.Context().RegistryStr())
+		if err != nil {
+			return "", fmt.Errorf("cannot resolve auth for %q: %w", ref.Context().RegistryStr(), err)
+		}
 
-	if err := remote.WriteIndex(ref, idx, remote.WithContext(ctx), remote.WithAuth(auth)); err != nil {
-		return "", fmt.Errorf("cannot push manifest list: %w", err)
+		if err := remote.WriteIndex(ref, idx, remote.WithContext(ctx), remote.WithAuth(auth)); err != nil {
+			return "", fmt.Errorf("cannot push manifest list to %q: %w", finalRef, err)
+		}
 	}
 
 	digest, err := idx.Digest()
