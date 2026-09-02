@@ -1,26 +1,27 @@
 {{- if .Values.enableNetworkPolicies }}
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: {{ include "hephaestus.buildkit.fullname" . }}
-  labels:
-    {{- include "hephaestus.buildkit.labels.standard" . | nindent 4 }}
-spec:
-  podSelector:
-    matchLabels:
-      {{- include "hephaestus.buildkit.labels.matchLabels" . | nindent 6 }}
-  policyTypes:
-    - Ingress
-  ingress:
-    - ports:
-        - port: {{ .Values.buildkit.service.port }}
-          protocol: TCP
-        {{- if .Values.istio.ambient }}
-        - port: 15008 # Allow Istio Ambient mode's HBONE traffic
-          protocol: TCP
-        {{- end }}
-      from:
-        - podSelector:
-            matchLabels:
-              {{- include "hephaestus.controller.labels.matchLabels" . | nindent 14 }}
+{{- $pools := .Values.buildkit.platformPools }}
+{{- if not $pools }}
+{{- $pools = list (dict "name" "" "implicit" true) }}
+{{- end }}
+{{- range $i, $pool := $pools }}
+{{- $poolCtx := dict "root" $ "pool" $pool }}
+{{- $controllerNamespace := "" }}
+{{- if not $pool.implicit }}
+{{- $controllerNamespace = $.Release.Namespace }}
+{{- end }}
+{{- $args := dict
+      "root" $
+      "name" (include "hephaestus.buildkit.pool.fullname" $poolCtx)
+      "namespace" (include "hephaestus.buildkit.pool.namespace" $poolCtx)
+      "standardLabels" (include "hephaestus.buildkit.pool.labels.standard" $poolCtx)
+      "matchLabels" (include "hephaestus.buildkit.pool.labels.matchLabels" $poolCtx)
+      "controllerNamespace" $controllerNamespace
+-}}
+{{- if $i }}
+---
+{{ include "hephaestus.buildkit.networkpolicy.render" $args }}
+{{- else -}}
+{{- include "hephaestus.buildkit.networkpolicy.render" $args }}
+{{- end }}
+{{- end }}
 {{- end }}

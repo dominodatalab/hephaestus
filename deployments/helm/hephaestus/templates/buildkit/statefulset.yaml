@@ -1,185 +1,31 @@
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: {{ include "hephaestus.buildkit.fullname" . }}
-  labels:
-    {{- include "hephaestus.buildkit.labels.standard" . | nindent 4 }}
-spec:
-  serviceName: {{ include "hephaestus.buildkit.fullname" . }}
-  podManagementPolicy: Parallel
-  replicas: {{ .Values.buildkit.replicaCount }}
-  {{- if semverCompare ">=1.32.0" .Capabilities.KubeVersion.Version }}
-  persistentVolumeClaimRetentionPolicy:
-    whenDeleted: {{ .Values.buildkit.persistence.pvcRetentionPolicy.whenDeleted  }}
-    whenScaled: {{ .Values.buildkit.persistence.pvcRetentionPolicy.whenScaled }}
-  {{- end }}
-  selector:
-    matchLabels:
-      {{- include "hephaestus.buildkit.labels.matchLabels" . | nindent 6 }}
-  template:
-    metadata:
-      annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/buildkit/configmap.yaml") . | sha256sum }}
-        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
-        {{- if .Values.buildkit.rootless }}
-        container.apparmor.security.beta.kubernetes.io/buildkitd: unconfined
-        {{- end }}
-        {{- with .Values.buildkit.podAnnotations }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
-        {{- with .Values.podAnnotations }}
-          {{- toYaml . | nindent 8 }}
-        {{- end }}
-      labels:
-        {{- include "hephaestus.buildkit.labels.matchLabels" . | nindent 8 }}
-        {{- with .Values.buildkit.podLabels }}
-        {{- toYaml . | trimSuffix "\n" | nindent 8 }}
-        {{- end }}
-        {{- with .Values.podLabels }}
-          {{- toYaml . | nindent 8 }}
-        {{- end }}
-    spec:
-      {{- include "hephaestus.imagePullSecrets" . | indent 6 }}
-      serviceAccountName: {{ include "hephaestus.buildkit.fullname" . }}
-      enableServiceLinks: {{ .Values.buildkit.enableServiceLinks }}
-      securityContext:
-        runAsNonRoot: {{ .Values.buildkit.rootless }}
-        runAsUser: {{ ternary .Values.buildkit.rootlessUser 0 .Values.buildkit.rootless }}
-        fsGroup: {{ ternary .Values.buildkit.rootlessUser 0 .Values.buildkit.rootless }}
-        fsGroupChangePolicy: "OnRootMismatch"
-        seLinuxOptions:
-          type: spc_t
-      containers:
-        - name: buildkitd
-          securityContext:
-            {{- if .Values.buildkit.rootless }}
-            # NOTE: To change UID/GID, you need to rebuild the image
-            runAsUser: {{ .Values.buildkit.rootlessUser }}
-            runAsGroup: {{ .Values.buildkit.rootlessUser }}
-            {{- toYaml .Values.buildkit.rootlessContainerSecurityContext | nindent 12 }}
-            {{- else }}
-            {{- toYaml .Values.buildkit.containerSecurityContext | nindent 12 }}
-            {{- end }}
-          image: {{ include "hephaestus.buildkit.image" . }}
-          imagePullPolicy: {{ .Values.buildkit.image.pullPolicy }}
-          args:
-            - --config
-            - /etc/buildkit/buildkitd.toml
-            {{- if .Values.buildkit.rootless }}
-            - --addr
-            - tcp://0.0.0.0:{{- default 1234 .Values.buildkit.service.port }}
-            - --addr
-            - unix:///run/user/{{ .Values.buildkit.rootlessUser }}/buildkit/buildkitd.sock
-            {{- end -}}
-            {{- if .Values.buildkit.debug }}
-            - --debug
-            {{- end }}
-            {{- with .Values.buildkit.args }}
-              {{- toYaml . | nindent 12 }}
-            {{- end }}
-          {{- with .Values.podEnv }}
-          env:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          ports:
-            - name: {{ .Values.buildkit.service.portName }}
-              protocol: TCP
-              containerPort: {{ .Values.buildkit.service.port }}
-          livenessProbe:
-            exec: null
-            tcpSocket:
-              port: {{ default 1234 .Values.buildkit.service.port }}
-            {{- with .Values.buildkit.livenessProbe }}
-            initialDelaySeconds: {{ .initialDelaySeconds }}
-            periodSeconds: {{ .periodSeconds }}
-            timeoutSeconds: {{ .timeoutSeconds }}
-            failureThreshold: {{ .failureThreshold }}
-            successThreshold: {{ .successThreshold }}
-            {{- end }}
-          readinessProbe:
-            exec: null
-            tcpSocket:
-              port: {{ default 1234 .Values.buildkit.service.port }}
-            {{- with .Values.buildkit.readinessProbe }}
-            initialDelaySeconds: {{ .initialDelaySeconds }}
-            periodSeconds: {{ .periodSeconds }}
-            timeoutSeconds: {{ .timeoutSeconds }}
-            failureThreshold: {{ .failureThreshold }}
-            successThreshold: {{ .successThreshold }}
-            {{- end }}
-          resources:
-            {{- toYaml .Values.buildkit.resources | nindent 12 }}
-          volumeMounts:
-            {{- if .Values.buildkit.rootless }}
-            - mountPath: /etc/subuid
-              name: config-vol
-              subPath: subuid
-            - mountPath: /etc/subgid
-              name: config-vol
-              subPath: subgid
-            {{- end }}
-            - name: config-vol
-              readOnly: true
-              mountPath: /etc/buildkit/buildkitd.toml
-              subPath: buildkitd.toml
-            {{- if .Values.buildkit.mtls.enabled }}
-            - name: mtls-vol
-              readOnly: true
-              mountPath: /etc/buildkit/x509
-            {{- end }}
-            {{- with .Values.buildkit.customCABundle }}
-            - name: ca-bundle-vol
-              readOnly: true
-              mountPath: /etc/ssl/certs
-            {{- end }}
-            {{- if .Values.buildkit.persistence.enabled }}
-            - name: cache
-              {{- if .Values.buildkit.rootless }}
-              mountPath: /home/user/.local/share/buildkit
-              {{- else }}
-              mountPath: /var/lib/buildkit
-              {{- end }}
-            {{- end }}
-      volumes:
-        - name: config-vol
-          configMap:
-            name: {{ include "hephaestus.buildkit.fullname" . }}
-        {{- if .Values.buildkit.mtls.enabled }}
-        - name: mtls-vol
-          secret:
-            secretName: {{ include "hephaestus.buildkit.serverSecret" . }}
-        {{- end }}
-        {{- with .Values.buildkit.customCABundle }}
-        - name: ca-bundle-vol
-          configMap:
-            name: {{ . }}
-        {{- end }}
-      {{- with .Values.buildkit.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.buildkit.affinity }}
-      affinity:
-        {{- tpl . $ | nindent 8 }}
-      {{- end }}
-      {{- with .Values.buildkit.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.buildkit.priorityClassName }}
-      priorityClassName: {{ . | quote }}
-      {{- end }}
-  {{- if .Values.buildkit.persistence.enabled }}
-  volumeClaimTemplates:
-    - metadata:
-        name: cache
-        labels:
-          {{- include "hephaestus.buildkit.labels.matchLabels" . | nindent 10 }}
-      spec:
-        storageClassName: {{ .Values.buildkit.persistence.storageClass }}
-        accessModes:
-          {{- toYaml .Values.buildkit.persistence.accessModes | nindent 10 }}
-        resources:
-          requests:
-            storage: {{ .Values.buildkit.persistence.size }}
-  {{- end }}
+{{- $pools := .Values.buildkit.platformPools }}
+{{- if not $pools }}
+{{- $pools = list (dict "name" "" "implicit" true) }}
+{{- end }}
+{{- range $i, $pool := $pools }}
+{{- $poolCtx := dict "root" $ "pool" $pool }}
+{{- $args := dict
+      "root" $
+      "name" (include "hephaestus.buildkit.pool.fullname" $poolCtx)
+      "namespace" (include "hephaestus.buildkit.pool.namespace" $poolCtx)
+      "standardLabels" (include "hephaestus.buildkit.pool.labels.standard" $poolCtx)
+      "matchLabels" (include "hephaestus.buildkit.pool.labels.matchLabels" $poolCtx)
+      "serviceAccountName" (include "hephaestus.buildkit.pool.serviceAccountName" $poolCtx)
+      "checksumConfig" (include (print $.Template.BasePath "/buildkit/configmap.yaml") $ | sha256sum)
+      "extraPodAnnotations" $pool.podAnnotations
+      "extraPodLabels" $pool.podLabels
+      "replicaCount" ($pool.replicaCount | default $.Values.buildkit.replicaCount)
+      "resources" ($pool.resources | default $.Values.buildkit.resources)
+      "nodeSelector" ($pool.nodeSelector | default $.Values.buildkit.nodeSelector)
+      "tolerations" ($pool.tolerations | default $.Values.buildkit.tolerations)
+      "affinity" ($pool.affinity | default $.Values.buildkit.affinity)
+      "priorityClassName" ($pool.priorityClassName | default $.Values.buildkit.priorityClassName)
+      "args" ($pool.args | default $.Values.buildkit.args)
+-}}
+{{- if $i }}
+---
+{{ include "hephaestus.buildkit.statefulset.render" $args }}
+{{- else -}}
+{{- include "hephaestus.buildkit.statefulset.render" $args }}
+{{- end }}
+{{- end }}
