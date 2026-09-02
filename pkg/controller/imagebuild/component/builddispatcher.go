@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
 	"os"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +17,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/newrelic/go-agent/v3/newrelic"
+	"golang.org/x/sync/errgroup"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -31,12 +32,21 @@ import (
 
 var errNotRunning = errors.New("build not running")
 
+// releaseTimeout bounds how long a worker release is allowed to take once detached from a
+// cancelled build context (see buildPlatform), so a release call can't hang forever.
+const releaseTimeout = 30 * time.Second
+
 type BuildDispatcherComponent struct {
 	cfg      config.Buildkit
 	caps     hephv1.PlatformCapabilities
-	pool     worker.Pool
+	pools    worker.PoolSet
 	phase    *phase.TransitionHelper
 	newRelic *newrelic.Application
+
+	// primaryPoolName is used for builds that request no platforms at all, preserving exact
+	// pre-multi-arch behavior: it's always the first entry in cfg.Pools(), which is the single
+	// synthesized "default" pool whenever PlatformPools is unset.
+	primaryPoolName string
 
 	delete  <-chan client.ObjectKey
 	cancels sync.Map
@@ -44,16 +54,17 @@ type BuildDispatcherComponent struct {
 
 func BuildDispatcher(
 	cfg config.Buildkit,
-	pool worker.Pool,
+	pools worker.PoolSet,
 	nr *newrelic.Application,
 	ch <-chan client.ObjectKey,
 ) *BuildDispatcherComponent {
 	return &BuildDispatcherComponent{
-		cfg:      cfg,
-		caps:     cfg.PlatformCapabilities(),
-		pool:     pool,
-		delete:   ch,
-		newRelic: nr,
+		cfg:             cfg,
+		caps:            cfg.PlatformCapabilities(),
+		pools:           pools,
+		primaryPoolName: cfg.Pools()[0].Name,
+		delete:          ch,
+		newRelic:        nr,
 	}
 }
 
@@ -77,7 +88,6 @@ func (c *BuildDispatcherComponent) Initialize(ctx *core.Context, _ *ctrl.Builder
 	return nil
 }
 
-//nolint:funlen
 func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result, error) {
 	obj := coreCtx.Object.(*hephv1.ImageBuild)
 
@@ -115,64 +125,38 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 
 	c.phase.SetInitializing(coreCtx, obj)
 
-	// Extracts cluster secrets into data to pass to buildkit
-	log.Info("Processing references to build secrets")
-	secretsReadSeq := txn.StartSegment("cluster-secrets-read")
-	secretsData, err := secrets.ReadSecrets(coreCtx, obj, log, coreCtx.Config, coreCtx.Scheme)
+	secretsData, configDir, insecureRegistries, err := c.prepareBuildInputs(coreCtx, obj, log, buildLog, txn)
+	if configDir != "" {
+		defer func(path string) {
+			if err := os.RemoveAll(path); err != nil {
+				log.Error(err, "Failed to delete registry credentials")
+			}
+		}(configDir)
+	}
 	if err != nil {
-		err = fmt.Errorf("cluster secrets processing failed: %w", err)
-		txn.NoticeError(newrelic.Error{
-			Message: err.Error(),
-			Class:   "ClusterSecretsReadError",
-		})
-
-		return ctrl.Result{}, c.failBuild(coreCtx, obj, err, "ClusterSecretsReadError")
+		return ctrl.Result{}, err
 	}
-	secretsReadSeq.End()
 
-	log.Info("Processing and persisting registry credentials")
-	persistCredsSeg := txn.StartSegment("credentials-persist")
-	configDir, helpMessage, err := credentials.Persist(coreCtx, buildLog, coreCtx.Config, obj.Spec.RegistryAuth)
+	groups, err := c.resolvePlatformGroups(obj.Spec.Platforms)
 	if err != nil {
-		err = fmt.Errorf("registry credentials processing failed: %w", err)
-		txn.NoticeError(newrelic.Error{
-			Message: err.Error(),
-			Class:   "CredentialsPersistError",
-		})
-
-		return ctrl.Result{}, c.failBuild(coreCtx, obj, err, "CredentialsPersistError")
-	}
-	persistCredsSeg.End()
-
-	defer func(path string) {
-		if err := os.RemoveAll(path); err != nil {
-			log.Error(err, "Failed to delete registry credentials")
-		}
-	}(configDir)
-
-	validateCredsSeg := txn.StartSegment("credentials-validate")
-
-	insecureRegistries := make([]string, 0)
-	for reg, opts := range c.cfg.Registries {
-		if opts.Insecure || opts.HTTP {
-			insecureRegistries = append(insecureRegistries, reg)
-		}
-	}
-
-	buildLog.Info("Validating registry credentials")
-	if err = credentials.Verify(coreCtx, configDir, insecureRegistries, helpMessage); err != nil {
-		txn.NoticeError(newrelic.Error{
-			Message: err.Error(),
-			Class:   "CredentialsValidateError",
-		})
-
-		buildLog.Error(err, fmt.Sprintf("Failed to validate registry credentials: %s", err.Error()))
-		return ctrl.Result{}, c.failBuild(coreCtx, obj, err, "CredentialsValidateError")
-	}
-	validateCredsSeg.End()
-
-	if err := c.checkSinglePoolServesPlatforms(obj.Spec.Platforms); err != nil {
 		return ctrl.Result{}, c.failBuild(coreCtx, obj, err, "PlatformResolutionError")
+	}
+
+	if len(groups) > 1 {
+		return ctrl.Result{}, c.reconcileFanOut(buildCtx, coreCtx, obj, txn, log, buildLog,
+			secretsData, configDir, insecureRegistries, groups)
+	}
+
+	var poolName string
+	var platforms []string
+	for name, ps := range groups {
+		poolName, platforms = name, ps
+	}
+
+	pool, ok := c.pools.Get(poolName)
+	if !ok {
+		return ctrl.Result{}, c.failBuild(coreCtx, obj,
+			fmt.Errorf("pool %q is not configured", poolName), "PoolNotConfigured")
 	}
 
 	log.Info("Leasing buildkit worker")
@@ -180,7 +164,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 
 	leaseSeg := txn.StartSegment("worker-lease")
 	allocStart := time.Now()
-	addr, err := c.pool.Get(coreCtx, obj.ObjectKey().String())
+	addr, err := pool.Get(coreCtx, obj.ObjectKey().String())
 	if err != nil {
 		buildLog.Error(err, fmt.Sprintf("Failed to acquire buildkit worker: %s", err.Error()))
 		txn.NoticeError(newrelic.Error{
@@ -203,7 +187,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 		} else {
 			log.Info("Buildkit worker released")
 		}
-	}(c.pool, addr)
+	}(pool, addr)
 
 	log.Info("Building new buildkit client", "addr", addr)
 	clientInitSeg := txn.StartSegment("worker-client-init")
@@ -245,7 +229,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 		Secrets:                  c.cfg.Secrets,
 		SecretsData:              secretsData,
 		FetchAndExtractTimeout:   c.cfg.FetchAndExtractTimeout,
-		Platforms:                obj.Spec.Platforms,
+		Platforms:                platforms,
 	}
 	log.Info("Dispatching image build", "images", buildOpts.Images)
 
@@ -281,6 +265,58 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 	populateImageStatus(buildCtx, bk, obj, result, log, buildLog, insecureRegistries)
 
 	return ctrl.Result{}, c.succeedBuild(coreCtx, obj)
+}
+
+// prepareBuildInputs reads referenced cluster secrets and processes/validates registry credentials
+// shared by every platform build in this reconcile. On any failure it calls failBuild itself and
+// returns that error; callers should treat a non-nil error as already terminal. configDir is
+// returned even on a validation failure (after Persist has succeeded) so the caller can still clean
+// it up, and is "" when returned before Persist ever ran.
+func (c *BuildDispatcherComponent) prepareBuildInputs(
+	coreCtx *core.Context, obj *hephv1.ImageBuild, log, buildLog logr.Logger, txn *newrelic.Transaction,
+) (secretsData map[string][]byte, configDir string, insecureRegistries []string, err error) {
+	log.Info("Processing references to build secrets")
+	secretsReadSeg := txn.StartSegment("cluster-secrets-read")
+	secretsData, err = secrets.ReadSecrets(coreCtx, obj, log, coreCtx.Config, coreCtx.Scheme)
+	if err != nil {
+		err = fmt.Errorf("cluster secrets processing failed: %w", err)
+		txn.NoticeError(newrelic.Error{Message: err.Error(), Class: "ClusterSecretsReadError"})
+
+		return nil, "", nil, c.failBuild(coreCtx, obj, err, "ClusterSecretsReadError")
+	}
+	secretsReadSeg.End()
+
+	log.Info("Processing and persisting registry credentials")
+	persistCredsSeg := txn.StartSegment("credentials-persist")
+	var helpMessage []string
+	configDir, helpMessage, err = credentials.Persist(coreCtx, buildLog, coreCtx.Config, obj.Spec.RegistryAuth)
+	if err != nil {
+		err = fmt.Errorf("registry credentials processing failed: %w", err)
+		txn.NoticeError(newrelic.Error{Message: err.Error(), Class: "CredentialsPersistError"})
+
+		return nil, "", nil, c.failBuild(coreCtx, obj, err, "CredentialsPersistError")
+	}
+	persistCredsSeg.End()
+
+	validateCredsSeg := txn.StartSegment("credentials-validate")
+
+	insecureRegistries = make([]string, 0)
+	for reg, opts := range c.cfg.Registries {
+		if opts.Insecure || opts.HTTP {
+			insecureRegistries = append(insecureRegistries, reg)
+		}
+	}
+
+	buildLog.Info("Validating registry credentials")
+	if err = credentials.Verify(coreCtx, configDir, insecureRegistries, helpMessage); err != nil {
+		txn.NoticeError(newrelic.Error{Message: err.Error(), Class: "CredentialsValidateError"})
+
+		buildLog.Error(err, fmt.Sprintf("Failed to validate registry credentials: %s", err.Error()))
+		return nil, configDir, nil, c.failBuild(coreCtx, obj, err, "CredentialsValidateError")
+	}
+	validateCredsSeg.End()
+
+	return secretsData, configDir, insecureRegistries, nil
 }
 
 // failBuild records a terminal Failed transition for the build and increments the phase
@@ -320,28 +356,436 @@ func (c *BuildDispatcherComponent) succeedBuild(ctx *core.Context, obj *hephv1.I
 	return nil
 }
 
-// checkSinglePoolServesPlatforms fails fast when the requested platforms can't be served by a
-// single buildkit pool. A single dispatcher only ever leases from one worker.Pool, so a request
-// spanning multiple pools would otherwise hang trying to solve platforms the leased worker can't
-// build; fanning a build out across pools is not yet supported.
-func (c *BuildDispatcherComponent) checkSinglePoolServesPlatforms(platforms []string) error {
+// resolvePlatformGroups maps the requested platforms to the pool(s) that must serve them. An empty
+// platforms list resolves to a single group against the primary pool, preserving exact
+// pre-multi-arch behavior. Every platform is guaranteed resolvable here since the validating
+// webhook already rejected any platform unsupported by every configured pool; a resolution error is
+// a defensive backstop, not an expected path.
+func (c *BuildDispatcherComponent) resolvePlatformGroups(platforms []string) (map[string][]string, error) {
 	if len(platforms) == 0 {
-		return nil
+		return map[string][]string{c.primaryPoolName: nil}, nil
 	}
 
 	groups, err := c.caps.ResolvePools(platforms)
 	if err != nil {
-		return fmt.Errorf("platform resolution failed: %w", err)
-	}
-	if len(groups) > 1 {
-		return fmt.Errorf(
-			"requested platforms %v span multiple buildkit pools (%v); "+
-				"fanning a single build out across pools is not yet supported",
-			platforms, slices.Sorted(maps.Keys(groups)),
-		)
+		return nil, fmt.Errorf("platform resolution failed: %w", err)
 	}
 
-	return nil
+	return groups, nil
+}
+
+// platformAssignment pairs a single requested platform with the pool that will build it.
+type platformAssignment struct {
+	pool     string
+	platform string
+}
+
+// flattenPlatformAssignments expands a pool -> platforms grouping into one assignment per
+// platform, sorted for deterministic logging/ordering.
+func flattenPlatformAssignments(groups map[string][]string) []platformAssignment {
+	assignments := make([]platformAssignment, 0, len(groups))
+	for pool, platforms := range groups {
+		for _, platform := range platforms {
+			assignments = append(assignments, platformAssignment{pool: pool, platform: platform})
+		}
+	}
+
+	slices.SortFunc(assignments, func(a, b platformAssignment) int {
+		if c := strings.Compare(a.platform, b.platform); c != 0 {
+			return c
+		}
+		return strings.Compare(a.pool, b.pool)
+	})
+
+	return assignments
+}
+
+// platformBuild is the outcome of building one platform within a fan-out ImageBuild: bk is the
+// buildkit client used for that platform's solve (needed afterward to retrieve the pushed image's
+// size/labels, and to assemble the final manifest list, since auth resolution is a local
+// configDir/authProvider lookup and any client sharing that configDir works regardless of which
+// daemon produced the image). images are the per-platform-suffixed refs that were actually pushed.
+// addr and allocationTime mirror the single-pool path's Status.BuilderAddr/AllocationTime, recorded
+// per platform since each is leased from its own pool.
+type platformBuild struct {
+	pool           string
+	platform       string
+	images         []string
+	bk             *buildkit.Client
+	result         buildkit.SolveResult
+	err            error
+	addr           string
+	allocationTime time.Duration
+}
+
+// platformImageSlug renders a platform string as an image-tag-safe suffix, e.g. "linux/arm64/v8"
+// -> "linux-arm64-v8".
+func platformImageSlug(platform string) string {
+	return strings.ReplaceAll(platform, "/", "-")
+}
+
+// suffixImageRef appends "-<slug>" to an image reference's tag, producing a distinct per-platform
+// intermediate tag. Untagged references are parsed as name.Tag with an implicit "latest" tag by
+// name.ParseReference, so the tag branch covers them too; a digest reference falls back to tagging
+// the same repository with "<default-tag>-<slug>", since a digest can't be suffixed in place.
+func suffixImageRef(image, slug string) string {
+	ref, err := name.ParseReference(image)
+	if err != nil {
+		return image + "-" + slug
+	}
+	if tag, ok := ref.(name.Tag); ok {
+		return tag.Context().Tag(tag.TagStr() + "-" + slug).Name()
+	}
+
+	return ref.Context().Tag(name.DefaultTag + "-" + slug).Name()
+}
+
+// suffixImageRefs applies suffixImageRef to every image, for the given platform.
+func suffixImageRefs(images []string, platform string) []string {
+	slug := platformImageSlug(platform)
+	suffixed := make([]string, len(images))
+	for i, image := range images {
+		suffixed[i] = suffixImageRef(image, slug)
+	}
+
+	return suffixed
+}
+
+// reconcileFanOut builds one image per platform assignment concurrently, each leased from its own
+// pool, then assembles the per-platform results into a single multi-platform manifest list/index
+// pushed to each of obj.Spec.Images. The build fails atomically: if any platform's solve fails, the
+// others are cancelled via the shared context and the whole ImageBuild is marked Failed, with
+// per-platform errors recorded on obj.Status.Platforms for visibility.
+func (c *BuildDispatcherComponent) reconcileFanOut(
+	buildCtx context.Context,
+	coreCtx *core.Context,
+	obj *hephv1.ImageBuild,
+	txn *newrelic.Transaction,
+	log, buildLog logr.Logger,
+	secretsData map[string][]byte,
+	configDir string,
+	insecureRegistries []string,
+	groups map[string][]string,
+) error {
+	assignments := flattenPlatformAssignments(groups)
+	log.Info("Dispatching multi-pool image build", "images", obj.Spec.Images, "assignments", assignments)
+
+	c.phase.SetRunning(coreCtx, obj)
+	fanOutSeg := txn.StartSegment("image-build-fanout")
+	start := time.Now()
+
+	// best effort phase change regardless if the original context is "done"
+	coreCtx.Context = context.Background()
+	builds, buildErr := c.buildAllPlatforms(buildCtx, obj, assignments, secretsData, configDir, buildLog)
+
+	obj.Status.BuildTime = time.Since(start).Truncate(time.Millisecond).String()
+	fanOutSeg.End()
+
+	obj.Status.Platforms = platformResultsFrom(buildCtx, builds, insecureRegistries, buildLog)
+	obj.Status.BuilderAddr = joinBuilderAddrs(builds)
+	obj.Status.AllocationTime = maxAllocationTime(builds).Truncate(time.Millisecond).String()
+
+	if buildErr != nil {
+		// if the underlying buildkit pod is terminated via resource delete, then buildCtx will be closed and there
+		// will be an error on it. otherwise, some external event (e.g. pod terminated) cancelled the build, so we
+		// should mark the build as failed. mirrors the single-pool path in Reconcile.
+		if buildCtx.Err() != nil {
+			log.Info("Build cancelled via resource delete")
+			txn.AddAttribute("cancelled", true)
+
+			return nil //nolint:nilerr // cancellation is not a build failure, see comment above
+		}
+
+		buildLog.Error(buildErr, "Failed to build one or more platforms")
+		txn.NoticeError(newrelic.Error{Message: buildErr.Error(), Class: "ImageBuildError"})
+
+		cleanupSucceededPlatformImages(buildCtx, builds, insecureRegistries, buildLog)
+
+		return c.failBuild(coreCtx, obj, fmt.Errorf("build failed: %w", buildErr), "ImageBuildError")
+	}
+
+	digest, err := assembleManifestLists(buildCtx, obj, builds, insecureRegistries)
+	if err != nil {
+		txn.NoticeError(newrelic.Error{Message: err.Error(), Class: "ManifestListAssemblyError"})
+
+		return c.failBuild(coreCtx, obj,
+			fmt.Errorf("manifest list assembly failed: %w", err), "ManifestListAssemblyError")
+	}
+	obj.Status.Digest = digest
+
+	return c.succeedBuild(coreCtx, obj)
+}
+
+// buildAllPlatforms runs one buildPlatform call per assignment concurrently, cancelling the rest via
+// the shared errgroup context as soon as any one fails. The returned error is errgroup's own
+// first-error-wins result: the error from whichever goroutine returned non-nil first, in wall-clock
+// order, which is the platform that actually triggered the cancellation - not necessarily the first
+// entry in assignments. Siblings aborted by that cancellation typically return a context-derived
+// error of their own, but those are discarded here in favor of the genuine root cause.
+func (c *BuildDispatcherComponent) buildAllPlatforms(
+	buildCtx context.Context,
+	obj *hephv1.ImageBuild,
+	assignments []platformAssignment,
+	secretsData map[string][]byte,
+	configDir string,
+	log logr.Logger,
+) ([]platformBuild, error) {
+	eg, egCtx := errgroup.WithContext(buildCtx)
+	builds := make([]platformBuild, len(assignments))
+
+	for i, a := range assignments {
+		eg.Go(func() error {
+			images := suffixImageRefs(obj.Spec.Images, a.platform)
+			builds[i] = c.buildPlatform(egCtx, obj, a.pool, a.platform, images, secretsData, configDir, log)
+			return builds[i].err
+		})
+	}
+	err := eg.Wait()
+
+	return builds, err
+}
+
+// joinBuilderAddrs renders the distinct buildkit worker addresses used across builds as a single
+// comma-separated string, mirroring the single-pool path's Status.BuilderAddr for a fan-out build
+// that necessarily spans more than one worker.
+func joinBuilderAddrs(builds []platformBuild) string {
+	seen := make(map[string]struct{}, len(builds))
+	addrs := make([]string, 0, len(builds))
+	for _, b := range builds {
+		if b.addr == "" {
+			continue
+		}
+		if _, ok := seen[b.addr]; ok {
+			continue
+		}
+		seen[b.addr] = struct{}{}
+		addrs = append(addrs, b.addr)
+	}
+
+	return strings.Join(addrs, ",")
+}
+
+// maxAllocationTime returns the longest per-platform worker allocation time across builds, mirroring
+// the single-pool path's Status.AllocationTime for a fan-out build whose platforms lease workers
+// concurrently rather than one at a time.
+func maxAllocationTime(builds []platformBuild) time.Duration {
+	var longest time.Duration
+	for _, b := range builds {
+		if b.allocationTime > longest {
+			longest = b.allocationTime
+		}
+	}
+
+	return longest
+}
+
+// cleanupSucceededPlatformImages best-effort deletes the images already pushed by platforms that
+// succeeded before a sibling's failure aborted the rest of the fan-out, so a partial failure doesn't
+// leave dangling, never-referenced images behind in the registry. Failures are logged, not returned,
+// since the ImageBuild is already being marked Failed regardless.
+func cleanupSucceededPlatformImages(
+	ctx context.Context, builds []platformBuild, insecureRegistries []string, log logr.Logger,
+) {
+	for _, b := range builds {
+		if b.err != nil || b.bk == nil {
+			continue
+		}
+
+		for _, image := range b.images {
+			if err := deletePushedImage(ctx, b.bk, image, insecureRegistries); err != nil {
+				log.Error(err, "Failed to clean up pushed platform image after fan-out failure",
+					"platform", b.platform, "image", image)
+			}
+		}
+	}
+}
+
+// deletePushedImage removes a single pushed image reference from the registry.
+func deletePushedImage(ctx context.Context, bk *buildkit.Client, imageName string, insecureRegistries []string) error {
+	ref, err := buildkit.ParseImageReference(imageName, insecureRegistries)
+	if err != nil {
+		return err
+	}
+
+	auth, err := bk.ResolveAuth(ctx, ref.Context().RegistryStr())
+	if err != nil {
+		return err
+	}
+
+	return remote.Delete(ref, remote.WithContext(ctx), remote.WithAuth(auth))
+}
+
+// buildPlatform leases a worker from the named pool and runs a single-platform solve against it,
+// releasing the worker before returning. Errors are recorded on the returned platformBuild rather
+// than returned directly, since callers need every platform's outcome even when one fails.
+func (c *BuildDispatcherComponent) buildPlatform(
+	ctx context.Context,
+	obj *hephv1.ImageBuild,
+	poolName, platform string,
+	images []string,
+	secretsData map[string][]byte,
+	configDir string,
+	log logr.Logger,
+) platformBuild {
+	pb := platformBuild{pool: poolName, platform: platform, images: images}
+
+	pool, ok := c.pools.Get(poolName)
+	if !ok {
+		pb.err = fmt.Errorf("pool %q is not configured", poolName)
+		return pb
+	}
+
+	log = log.WithValues("pool", poolName, "platform", platform)
+	log.Info("Leasing buildkit worker")
+
+	allocStart := time.Now()
+	addr, err := pool.Get(ctx, obj.ObjectKey().String()+"/"+platform)
+	if err != nil {
+		pb.err = fmt.Errorf("buildkit service lookup failed: %w", err)
+		return pb
+	}
+	pb.addr = addr
+	pb.allocationTime = time.Since(allocStart)
+	defer func() {
+		log.Info("Releasing buildkit worker", "endpoint", addr)
+
+		// best effort release regardless of whether a sibling platform's failure already
+		// cancelled ctx via the shared errgroup context
+		releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), releaseTimeout)
+		defer cancel()
+		if err := pool.Release(releaseCtx, addr); err != nil {
+			log.Error(err, "Failed to release pool endpoint", "endpoint", addr)
+		}
+	}()
+
+	log.Info("Building new buildkit client", "addr", addr)
+	authProvider := buildkit.NewRefreshingAuthProvider(credentials.CloudAuthRegistry, configDir, log)
+	bldr := buildkit.
+		NewClientBuilder(addr).
+		WithLogger(log.WithName("buildkit").WithValues("addr", addr, "logKey", obj.Spec.LogKey)).
+		WithDockerConfigDir(configDir).
+		WithAuthProvider(authProvider)
+	if mtls := c.cfg.MTLS; mtls != nil {
+		bldr.WithMTLSAuth(mtls.CACertPath, mtls.CertPath, mtls.KeyPath)
+	}
+
+	bk, err := bldr.Build(ctx)
+	if err != nil {
+		pb.err = err
+		return pb
+	}
+	pb.bk = bk
+
+	buildOpts := buildkit.BuildOptions{
+		Context:                  obj.Spec.Context,
+		DockerfileContents:       obj.Spec.DockerfileContents,
+		Images:                   images,
+		BuildArgs:                obj.Spec.BuildArgs,
+		NoCache:                  obj.Spec.DisableLocalBuildCache,
+		ImportCache:              obj.Spec.ImportRemoteBuildCache,
+		DisableInlineCacheExport: obj.Spec.DisableCacheLayerExport,
+		Secrets:                  c.cfg.Secrets,
+		SecretsData:              secretsData,
+		FetchAndExtractTimeout:   c.cfg.FetchAndExtractTimeout,
+		Platforms:                []string{platform},
+	}
+
+	log.Info("Dispatching platform image build", "images", images)
+	pb.result, pb.err = bk.Build(ctx, buildOpts)
+
+	return pb
+}
+
+// platformResultsFrom records each platform's outcome as a hephv1.PlatformResult: the digest
+// BuildKit reported for a failed build's error, or - on success - that digest plus a best-effort
+// size/labels enrichment fetched from the registry.
+func platformResultsFrom(
+	ctx context.Context, builds []platformBuild, insecureRegistries []string, log logr.Logger,
+) []hephv1.PlatformResult {
+	results := make([]hephv1.PlatformResult, len(builds))
+
+	for i, b := range builds {
+		pr := hephv1.PlatformResult{Platform: b.platform, Digest: b.result.Digest}
+		if b.err != nil {
+			pr.Error = b.err.Error()
+			results[i] = pr
+			continue
+		}
+
+		if b.bk != nil && len(b.images) > 0 {
+			populatePlatformImageDetails(ctx, b.bk, &pr, b.images[0], insecureRegistries, log)
+		}
+
+		results[i] = pr
+	}
+
+	return results
+}
+
+// populatePlatformImageDetails best-effort enriches pr with the pushed image's compressed size and
+// labels, fetched from the registry. Failures are logged, not returned, since the platform build
+// itself already succeeded by the time this runs.
+func populatePlatformImageDetails(
+	ctx context.Context, bk *buildkit.Client, pr *hephv1.PlatformResult, imageName string,
+	insecureRegistries []string, log logr.Logger,
+) {
+	img, err := retrieveImage(ctx, bk, imageName, insecureRegistries)
+	if err != nil {
+		log.Error(err, "Cannot retrieve platform image from registry", "platform", pr.Platform, "imageName", imageName)
+		return
+	}
+
+	size, err := calculateImageSize(img)
+	if err != nil {
+		log.Error(err, "Cannot calculate platform image size", "platform", pr.Platform)
+	} else {
+		pr.CompressedImageSizeBytes = strconv.FormatInt(size, 10)
+	}
+
+	cfgFile, err := img.ConfigFile()
+	if err != nil {
+		log.Error(err, "Cannot calculate platform image labels", "platform", pr.Platform)
+		return
+	}
+
+	pr.Labels = make(map[string]string)
+	for key, value := range cfgFile.Config.Labels {
+		if len(value) > 0 {
+			pr.Labels[key] = value
+		}
+	}
+}
+
+// assembleManifestLists combines the per-platform pushed images into one manifest list/index, using
+// any successful platform's buildkit client to do so (auth resolution doesn't depend on which daemon
+// produced the image - see platformBuild), and pushes that same index to every requested image ref.
+// Each platform's image is resolved from the registry exactly once (via its first pushed ref) and
+// reused across every image ref's push, rather than once per (image ref, platform) pair, since all of
+// a platform's pushed refs are content-identical.
+func assembleManifestLists(
+	ctx context.Context, obj *hephv1.ImageBuild, builds []platformBuild, insecureRegistries []string,
+) (string, error) {
+	var bk *buildkit.Client
+	var refs []buildkit.PlatformImageRef
+	for _, b := range builds {
+		if b.bk == nil || len(b.images) == 0 {
+			continue
+		}
+		if bk == nil {
+			bk = b.bk
+		}
+		refs = append(refs, buildkit.PlatformImageRef{Platform: b.platform, ImageRef: b.images[0]})
+	}
+	if bk == nil {
+		return "", errors.New("no successful platform build to assemble a manifest list from")
+	}
+
+	digest, err := bk.AssembleManifestLists(ctx, insecureRegistries, obj.Spec.Images, refs)
+	if err != nil {
+		return "", fmt.Errorf("cannot assemble manifest lists: %w", err)
+	}
+
+	return digest, nil
 }
 
 func (c *BuildDispatcherComponent) processCancellations(log logr.Logger) {
@@ -363,8 +807,10 @@ func (c *BuildDispatcherComponent) processCancellations(log logr.Logger) {
 // populateImageStatus records the pushed image's digest/size/labels onto obj.Status. A true
 // multi-platform solve (more than one requested platform) produces a manifest list/index directly
 // in result.Digest; it doesn't resolve to a single v1.Image the way retrieveImage expects, so that
-// case just records the digest BuildKit reported. Otherwise (0 or 1 platforms - the pre-multi-arch
-// behavior), the existing registry round-trip populates the full digest/size/labels breakdown.
+// case records the digest BuildKit reported plus a per-platform breakdown on Status.Platforms,
+// fetched from the pushed index - the same shape reconcileFanOut's cross-pool path produces, since
+// from the API's perspective both are just "more than one platform was requested". Otherwise (0 or 1
+// platforms), the existing registry round-trip populates the full digest/size/labels breakdown.
 func populateImageStatus(
 	ctx context.Context,
 	bk *buildkit.Client,
@@ -375,6 +821,7 @@ func populateImageStatus(
 ) {
 	if len(obj.Spec.Platforms) > 1 {
 		obj.Status.Digest = result.Digest
+		obj.Status.Platforms = platformResultsFromIndex(ctx, bk, result.ImageName, insecureRegistries, buildLog)
 		return
 	}
 
@@ -387,31 +834,100 @@ func populateImageStatus(
 	populateBuildStatus(obj, buildLog, img, result.ImageName)
 }
 
+// platformResultsFromIndex best-effort builds a per-platform breakdown from a manifest list/index
+// pushed by a single buildkit daemon that solved every requested platform in one Solve (as opposed to
+// platformResultsFrom, which builds the same shape from reconcileFanOut's separate per-platform
+// solves). Failures are logged, not returned, since the underlying build already succeeded.
+func platformResultsFromIndex(
+	ctx context.Context, bk *buildkit.Client, imageName string, insecureRegistries []string, log logr.Logger,
+) []hephv1.PlatformResult {
+	idx, err := retrieveImageIndex(ctx, bk, imageName, insecureRegistries)
+	if err != nil {
+		log.Error(err, "Cannot retrieve manifest list from registry", "imageName", imageName)
+		return nil
+	}
+
+	manifest, err := idx.IndexManifest()
+	if err != nil {
+		log.Error(err, "Cannot read manifest list", "imageName", imageName)
+		return nil
+	}
+
+	results := make([]hephv1.PlatformResult, 0, len(manifest.Manifests))
+	for _, desc := range manifest.Manifests {
+		if desc.Platform == nil {
+			continue
+		}
+
+		platform := formatPlatform(desc.Platform)
+		pr := hephv1.PlatformResult{Platform: platform, Digest: desc.Digest.String()}
+
+		img, err := idx.Image(desc.Digest)
+		if err != nil {
+			log.Error(err, "Cannot retrieve platform image from manifest list", "platform", platform)
+			results = append(results, pr)
+			continue
+		}
+
+		if size, err := calculateImageSize(img); err != nil {
+			log.Error(err, "Cannot calculate platform image size", "platform", platform)
+		} else {
+			pr.CompressedImageSizeBytes = strconv.FormatInt(size, 10)
+		}
+
+		if cfgFile, err := img.ConfigFile(); err != nil {
+			log.Error(err, "Cannot calculate platform image labels", "platform", platform)
+		} else {
+			pr.Labels = make(map[string]string)
+			for key, value := range cfgFile.Config.Labels {
+				if len(value) > 0 {
+					pr.Labels[key] = value
+				}
+			}
+		}
+
+		results = append(results, pr)
+	}
+
+	return results
+}
+
+// formatPlatform renders a v1.Platform descriptor as "os/arch[/variant]".
+func formatPlatform(p *v1.Platform) string {
+	if p.Variant != "" {
+		return fmt.Sprintf("%s/%s/%s", p.OS, p.Architecture, p.Variant)
+	}
+	return fmt.Sprintf("%s/%s", p.OS, p.Architecture)
+}
+
+func retrieveImageIndex(
+	ctx context.Context, c *buildkit.Client, imageName string, insecureRegistries []string,
+) (v1.ImageIndex, error) {
+	ref, err := buildkit.ParseImageReference(imageName, insecureRegistries)
+	if err != nil {
+		return nil, err
+	}
+
+	auth, err := c.ResolveAuth(ctx, ref.Context().RegistryStr())
+	if err != nil {
+		return nil, err
+	}
+
+	return remote.Index(ref, remote.WithContext(ctx), remote.WithAuth(auth))
+}
+
 func retrieveImage(
 	ctx context.Context,
 	c *buildkit.Client,
 	imageName string,
 	insecureRegistries []string,
 ) (v1.Image, error) {
-	ref, err := name.ParseReference(imageName)
+	ref, err := buildkit.ParseImageReference(imageName, insecureRegistries)
 	if err != nil {
 		return nil, err
 	}
-	registryName := ref.Context().RegistryStr()
 
-	for _, registry := range insecureRegistries {
-		if registry == registryName {
-			ref, err = name.ParseReference(imageName, name.Insecure)
-			if err != nil {
-				return nil, err
-			}
-
-			registryName = ref.Context().RegistryStr()
-			break
-		}
-	}
-
-	auth, err := c.ResolveAuth(ctx, registryName)
+	auth, err := c.ResolveAuth(ctx, ref.Context().RegistryStr())
 	if err != nil {
 		return nil, err
 	}

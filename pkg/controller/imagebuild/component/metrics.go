@@ -46,11 +46,16 @@ func recordImageBuildPhase(phase hephv1.Phase, failureReason string) {
 }
 
 // recordImageBuildPlatformPhases increments imageBuildPlatformPhaseTotal for every platform in
-// platforms, all under the same terminal phase/reason - a fan-out ImageBuild's platforms all share
-// one terminal outcome, since the resource as a whole is either Succeeded or Failed. A nil/empty
-// platforms (the single-pool case) is a no-op.
+// platforms, using the overall terminal phase/reason unless a platform's own result says otherwise:
+// a platform with no recorded Error still succeeded even when the ImageBuild as a whole later failed
+// (e.g. during manifest list assembly), so it's counted as Succeeded rather than inheriting the
+// overall Failed outcome. A nil/empty platforms (the single-pool case) is a no-op.
 func recordImageBuildPlatformPhases(platforms []hephv1.PlatformResult, phase hephv1.Phase, failureReason string) {
 	for _, p := range platforms {
-		imageBuildPlatformPhaseTotal.WithLabelValues(p.Platform, string(phase), failureReason).Inc()
+		platformPhase, platformReason := phase, failureReason
+		if phase == hephv1.PhaseFailed && p.Error == "" {
+			platformPhase, platformReason = hephv1.PhaseSucceeded, ""
+		}
+		imageBuildPlatformPhaseTotal.WithLabelValues(p.Platform, string(platformPhase), platformReason).Inc()
 	}
 }
