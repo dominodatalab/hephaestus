@@ -7,6 +7,11 @@ import (
 type ImageCacheSpec struct {
 	Images       []string              `json:"images"`
 	RegistryAuth []RegistryCredentials `json:"registryAuth,omitempty"`
+	// Platforms specifies one or more target OS/architecture combinations to warm the cache for, using
+	// "os/arch[/variant]" syntax (e.g. "linux/amd64", "linux/arm64"). Each requested platform must be
+	// served by a configured buildkit pool, natively or via emulation, or the request is rejected at
+	// admission time. When empty, caching runs on whatever platform the leased worker natively runs.
+	Platforms []string `json:"platforms,omitempty"`
 }
 
 type ImageCacheStatus struct {

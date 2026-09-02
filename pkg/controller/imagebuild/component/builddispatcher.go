@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -31,6 +33,7 @@ var errNotRunning = errors.New("build not running")
 
 type BuildDispatcherComponent struct {
 	cfg      config.Buildkit
+	caps     hephv1.PlatformCapabilities
 	pool     worker.Pool
 	phase    *phase.TransitionHelper
 	newRelic *newrelic.Application
@@ -47,6 +50,7 @@ func BuildDispatcher(
 ) *BuildDispatcherComponent {
 	return &BuildDispatcherComponent{
 		cfg:      cfg,
+		caps:     cfg.PlatformCapabilities(),
 		pool:     pool,
 		delete:   ch,
 		newRelic: nr,
@@ -167,6 +171,10 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 	}
 	validateCredsSeg.End()
 
+	if err := c.checkSinglePoolServesPlatforms(obj.Spec.Platforms); err != nil {
+		return ctrl.Result{}, c.failBuild(coreCtx, obj, err, "PlatformResolutionError")
+	}
+
 	log.Info("Leasing buildkit worker")
 	buildLog.Info("Leasing buildkit worker")
 
@@ -237,6 +245,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 		Secrets:                  c.cfg.Secrets,
 		SecretsData:              secretsData,
 		FetchAndExtractTimeout:   c.cfg.FetchAndExtractTimeout,
+		Platforms:                obj.Spec.Platforms,
 	}
 	log.Info("Dispatching image build", "images", buildOpts.Images)
 
@@ -246,7 +255,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 
 	// best effort phase change regardless if the original context is "done"
 	coreCtx.Context = context.Background()
-	imageName, err := bk.Build(buildCtx, buildOpts)
+	result, err := bk.Build(buildCtx, buildOpts)
 	if err != nil {
 		// if the underlying buildkit pod is terminated via resource delete, then buildCtx will be closed and there will
 		// be an error on it. otherwise, some external event (e.g. pod terminated) cancelled the build, so we should
@@ -269,13 +278,7 @@ func (c *BuildDispatcherComponent) Reconcile(coreCtx *core.Context) (ctrl.Result
 	obj.Status.BuildTime = time.Since(start).Truncate(time.Millisecond).String()
 	buildSeg.End()
 
-	img, err := retrieveImage(buildCtx, bk, imageName, insecureRegistries)
-	if err != nil {
-		log.Error(err, "Cannot retrieve image from registry", "imageName", imageName)
-		buildLog.Error(err, "Cannot retrieve image from registry", "imageName", imageName)
-	} else {
-		populateBuildStatus(obj, buildLog, img, imageName)
-	}
+	populateImageStatus(buildCtx, bk, obj, result, log, buildLog, insecureRegistries)
 
 	return ctrl.Result{}, c.succeedBuild(coreCtx, obj)
 }
@@ -296,6 +299,7 @@ func (c *BuildDispatcherComponent) failBuild(
 	}
 
 	recordImageBuildPhase(hephv1.PhaseFailed, reason)
+	recordImageBuildPlatformPhases(obj.Status.Platforms, hephv1.PhaseFailed, reason)
 
 	return err
 }
@@ -311,6 +315,31 @@ func (c *BuildDispatcherComponent) succeedBuild(ctx *core.Context, obj *hephv1.I
 	}
 
 	recordImageBuildPhase(hephv1.PhaseSucceeded, "")
+	recordImageBuildPlatformPhases(obj.Status.Platforms, hephv1.PhaseSucceeded, "")
+
+	return nil
+}
+
+// checkSinglePoolServesPlatforms fails fast when the requested platforms can't be served by a
+// single buildkit pool. A single dispatcher only ever leases from one worker.Pool, so a request
+// spanning multiple pools would otherwise hang trying to solve platforms the leased worker can't
+// build; fanning a build out across pools is not yet supported.
+func (c *BuildDispatcherComponent) checkSinglePoolServesPlatforms(platforms []string) error {
+	if len(platforms) == 0 {
+		return nil
+	}
+
+	groups, err := c.caps.ResolvePools(platforms)
+	if err != nil {
+		return fmt.Errorf("platform resolution failed: %w", err)
+	}
+	if len(groups) > 1 {
+		return fmt.Errorf(
+			"requested platforms %v span multiple buildkit pools (%v); "+
+				"fanning a single build out across pools is not yet supported",
+			platforms, slices.Sorted(maps.Keys(groups)),
+		)
+	}
 
 	return nil
 }
@@ -329,6 +358,33 @@ func (c *BuildDispatcherComponent) processCancellations(log logr.Logger) {
 		}
 		log.Info("Ignoring message, cancellation not found")
 	}
+}
+
+// populateImageStatus records the pushed image's digest/size/labels onto obj.Status. A true
+// multi-platform solve (more than one requested platform) produces a manifest list/index directly
+// in result.Digest; it doesn't resolve to a single v1.Image the way retrieveImage expects, so that
+// case just records the digest BuildKit reported. Otherwise (0 or 1 platforms - the pre-multi-arch
+// behavior), the existing registry round-trip populates the full digest/size/labels breakdown.
+func populateImageStatus(
+	ctx context.Context,
+	bk *buildkit.Client,
+	obj *hephv1.ImageBuild,
+	result buildkit.SolveResult,
+	log, buildLog logr.Logger,
+	insecureRegistries []string,
+) {
+	if len(obj.Spec.Platforms) > 1 {
+		obj.Status.Digest = result.Digest
+		return
+	}
+
+	img, err := retrieveImage(ctx, bk, result.ImageName, insecureRegistries)
+	if err != nil {
+		log.Error(err, "Cannot retrieve image from registry", "imageName", result.ImageName)
+		buildLog.Error(err, "Cannot retrieve image from registry", "imageName", result.ImageName)
+		return
+	}
+	populateBuildStatus(obj, buildLog, img, result.ImageName)
 }
 
 func retrieveImage(

@@ -66,6 +66,9 @@ func Start(cfg config.Controller) error {
 	}
 	defer nr.Shutdown(5 * time.Second)
 
+	log.Info("Registering buildkit platform capabilities")
+	hephv1.SetPlatformCapabilities(cfg.Buildkit.PlatformCapabilities())
+
 	mgr, err := createManager(log, cfg.Manager)
 	if err != nil {
 		return err
@@ -152,6 +155,10 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 		admission.WithValidator[*hephv1.ImageBuild](opts.Scheme, &hephv1.ImageBuild{}),
 	)
 	opts.WebhookServer.Register(
+		"/mutate-hephaestus-dominodatalab-com-v1-imagecache",
+		admission.WithDefaulter[*hephv1.ImageCache](opts.Scheme, &hephv1.ImageCache{}),
+	)
+	opts.WebhookServer.Register(
 		"/validate-hephaestus-dominodatalab-com-v1-imagecache",
 		admission.WithValidator[*hephv1.ImageCache](opts.Scheme, &hephv1.ImageCache{}),
 	)
@@ -220,6 +227,7 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 			"/",
 			"/mutate-hephaestus-dominodatalab-com-v1-imagebuild",
 			"/validate-hephaestus-dominodatalab-com-v1-imagebuild",
+			"/mutate-hephaestus-dominodatalab-com-v1-imagecache",
 			"/validate-hephaestus-dominodatalab-com-v1-imagecache",
 			"/livez",
 			"/debugz",

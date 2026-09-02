@@ -427,6 +427,28 @@ buildkit:
                     - {{ .Chart.Name }}
             topologyKey: "kubernetes.io/hostname"
 
+  # Declares one or more named buildkit pools and the platforms each can serve (natively or via
+  # emulation - see docs/building.md for what buildkit.image needs to support an emulated
+  # platform), passed through verbatim into the controller's
+  # buildkit.platformPools config. Leave empty to keep the single StatefulSet deployed by this
+  # chart as an implicit, un-platform-aware "default" pool (the pre-multi-arch behavior).
+  #
+  # This chart deploys exactly one buildkit StatefulSet; declaring more than one pool here only
+  # makes sense once additional buildkit StatefulSets serving those pools are deployed separately
+  # (e.g. hand-written manifests, or a second release of this chart with different pod placement) -
+  # this chart does not yet template multiple StatefulSets from this list.
+  #
+  # Example:
+  # platformPools:
+  #   - name: default
+  #     namespace: my-namespace
+  #     statefulSetName: my-release-buildkit
+  #     serviceName: my-release-buildkit
+  #     podLabels:
+  #       app.kubernetes.io/component: buildkit
+  #     platforms: ["linux/amd64", "linux/arm64"]
+  platformPools: []
+
 # waitForNetworking starts an initContainer that requires a curl_image
 # Set this to true in istio ambient mode to cause Hephaestus Manager to start up
 # with networking. We're not sure why this works. See: https://dominodatalab.atlassian.net/browse/DOM-70981

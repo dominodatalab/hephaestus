@@ -125,6 +125,128 @@ func TestControllerValidate(t *testing.T) {
 		config.NewRelic.LicenseKey = "0123456789012345678901234567890123456789"
 		assert.NoError(t, config.Validate())
 	})
+
+	t.Run("valid_platform_pools", func(t *testing.T) {
+		config := genConfig()
+		config.Buildkit.PlatformPools = []PlatformPool{
+			{
+				Name:            "amd64",
+				Namespace:       "test-ns",
+				PodLabels:       map[string]string{"app": "buildkit-amd64"},
+				StatefulSetName: "buildkit-amd64",
+				ServiceName:     "buildkit-amd64",
+				Platforms:       []string{"linux/amd64"},
+			},
+			{
+				Name:            "arm64",
+				Namespace:       "test-ns",
+				PodLabels:       map[string]string{"app": "buildkit-arm64"},
+				StatefulSetName: "buildkit-arm64",
+				ServiceName:     "buildkit-arm64",
+				Platforms:       []string{"linux/arm64"},
+			},
+		}
+		assert.NoError(t, config.Validate())
+	})
+
+	t.Run("bad_platform_pools", func(t *testing.T) {
+		base := func() PlatformPool {
+			return PlatformPool{
+				Name:            "amd64",
+				Namespace:       "test-ns",
+				PodLabels:       map[string]string{"app": "buildkit-amd64"},
+				StatefulSetName: "buildkit-amd64",
+				ServiceName:     "buildkit-amd64",
+				Platforms:       []string{"linux/amd64"},
+			}
+		}
+
+		mutations := map[string]func(*PlatformPool){
+			"blank_name":              func(p *PlatformPool) { p.Name = "" },
+			"blank_namespace":         func(p *PlatformPool) { p.Namespace = "" },
+			"nil_pod_labels":          func(p *PlatformPool) { p.PodLabels = nil },
+			"blank_stateful_set_name": func(p *PlatformPool) { p.StatefulSetName = "" },
+			"blank_service_name":      func(p *PlatformPool) { p.ServiceName = "" },
+			"no_platforms":            func(p *PlatformPool) { p.Platforms = nil },
+			"malformed_platform":      func(p *PlatformPool) { p.Platforms = []string{"not-a-platform"} },
+			"duplicate_platform": func(p *PlatformPool) {
+				p.Platforms = []string{"linux/amd64", "LINUX/AMD64"}
+			},
+		}
+
+		for name, mutate := range mutations {
+			t.Run(name, func(t *testing.T) {
+				config := genConfig()
+				pool := base()
+				mutate(&pool)
+				config.Buildkit.PlatformPools = []PlatformPool{pool}
+				assert.Error(t, config.Validate())
+			})
+		}
+
+		t.Run("duplicate_name", func(t *testing.T) {
+			config := genConfig()
+			config.Buildkit.PlatformPools = []PlatformPool{base(), base()}
+			assert.Error(t, config.Validate())
+		})
+	})
+}
+
+func TestBuildkitPools(t *testing.T) {
+	t.Run("synthesizes default pool when unconfigured", func(t *testing.T) {
+		buildkit := Buildkit{
+			Namespace:       "test-ns",
+			PodLabels:       map[string]string{"app": "buildkit"},
+			StatefulSetName: "buildkit",
+			ServiceName:     "buildkit",
+		}
+
+		pools := buildkit.Pools()
+		require.Len(t, pools, 1)
+		assert.Equal(t, "default", pools[0].Name)
+		assert.Equal(t, buildkit.Namespace, pools[0].Namespace)
+		assert.Equal(t, buildkit.PodLabels, pools[0].PodLabels)
+		assert.Equal(t, buildkit.StatefulSetName, pools[0].StatefulSetName)
+		assert.Equal(t, buildkit.ServiceName, pools[0].ServiceName)
+		assert.Equal(t, []string{"linux/amd64"}, pools[0].Platforms)
+	})
+
+	t.Run("returns configured pools verbatim when present", func(t *testing.T) {
+		configured := []PlatformPool{
+			{Name: "amd64", Platforms: []string{"linux/amd64"}},
+			{Name: "arm64", Platforms: []string{"linux/arm64"}},
+		}
+		buildkit := Buildkit{
+			Namespace:     "test-ns",
+			PlatformPools: configured,
+		}
+
+		assert.Equal(t, configured, buildkit.Pools())
+	})
+}
+
+func TestBuildkitPlatformCapabilities(t *testing.T) {
+	t.Run("legacy default pool serves native linux/amd64 only", func(t *testing.T) {
+		buildkit := Buildkit{Namespace: "test-ns", PodLabels: map[string]string{"app": "buildkit"}}
+
+		caps := buildkit.PlatformCapabilities()
+		assert.True(t, caps.Supports("linux/amd64"))
+		assert.False(t, caps.Supports("linux/arm64"))
+	})
+
+	t.Run("reflects configured pools", func(t *testing.T) {
+		buildkit := Buildkit{
+			PlatformPools: []PlatformPool{
+				{Name: "amd64", Platforms: []string{"linux/amd64"}},
+				{Name: "arm64", Platforms: []string{"linux/arm64"}},
+			},
+		}
+
+		caps := buildkit.PlatformCapabilities()
+		assert.True(t, caps.Supports("linux/amd64"))
+		assert.True(t, caps.Supports("linux/arm64"))
+		assert.False(t, caps.Supports("linux/arm/v7"))
+	})
 }
 
 func TestSensitiveDataRedaction(t *testing.T) {
