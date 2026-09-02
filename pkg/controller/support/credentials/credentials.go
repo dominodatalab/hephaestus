@@ -180,7 +180,6 @@ func targetedRegistryHosts(refs []string) map[string]bool {
 // *url.Error, which satisfies net.Error whatever the cause, and docker's bearer
 // transport returns registry status errors through it. Gating on that reads a
 // bearer 401 as an outage and lets a typo'd password reach a leased worker.
-// Every registry we care about speaks bearer.
 func unreachable(err error) bool {
 	if err == nil {
 		return false
@@ -266,9 +265,9 @@ func Verify(
 		}
 
 		// A dead build context is fatal. It is not an unreachable registry, and it
-		// must not discard cred failures already found for other registries.
+		// must not discard cred failures already found, this registry's included.
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return multierr.Append(multierr.Combine(errs...), err)
+			return multierr.Combine(append(errs, answered, err)...)
 		}
 
 		// A registry that never answered must not fail the build. It may be down
@@ -288,7 +287,7 @@ func Verify(
 			reason = authErr
 		}
 		//nolint:lll
-		detailedErr := fmt.Errorf("client credentials are invalid for registry %q.\nMake sure the following sources of credentials are correct: %s.\nUnderlying error: %w", host, strings.Join(helpMessage, ", "), reason)
+		detailedErr := fmt.Errorf("client credentials are invalid for registry %q.\nMake sure the following sources of credentials are correct: %s.\nUnderlying error: %w", server, strings.Join(helpMessage, ", "), reason)
 		errs = append(errs, detailedErr)
 	}
 	if len(errs) != 0 {

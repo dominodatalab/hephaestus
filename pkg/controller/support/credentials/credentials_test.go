@@ -112,7 +112,9 @@ func respondingHost(t *testing.T, status int) string {
 
 // bearerHost answers a token request with the given status after a Bearer
 // challenge. Bearer rejections arrive wrapped in *url.Error, which Basic ones do
-// not, so it needs its own coverage.
+// not, so it needs its own coverage. The JSON content type matters: without it
+// docker parses the body as a single errcode.Error and a 401 becomes
+// unauthorizedErr, a shape real registries never send.
 func bearerHost(t *testing.T, status int) string {
 	t.Helper()
 
@@ -121,6 +123,7 @@ func bearerHost(t *testing.T, status int) string {
 	t.Cleanup(srv.Close)
 
 	mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
 		_, _ = w.Write([]byte(`{"errors":[{"code":"UNAUTHORIZED","message":"bad creds"}]}`))
 	})
@@ -153,6 +156,7 @@ func rejectThenDieHost(t *testing.T, authed *atomic.Int32) string {
 		w.WriteHeader(http.StatusForbidden)
 		once.Do(func() { go srv.Close() })
 	}))
+	t.Cleanup(srv.Close)
 
 	return strings.TrimPrefix(srv.URL, "http://")
 }
@@ -348,10 +352,13 @@ func TestVerify(t *testing.T) {
 	})
 
 	t.Run("port_is_part_of_the_host", func(t *testing.T) {
-		// A non-default port is a distinct host.
+		// A non-default port is a distinct host: same port matches, no port does not.
 		dir := writeDockerConfigFor(t, "myreg.example.com:5000")
 
 		err := Verify(cancelledContext(), logr.Discard(), dir, nil, []string{"test"}, []string{"myreg.example.com:5000/org/app:latest"})
 		assert.ErrorIs(t, err, context.Canceled)
+
+		err = Verify(cancelledContext(), logr.Discard(), dir, nil, []string{"test"}, []string{"myreg.example.com/org/app:latest"})
+		assert.NoError(t, err)
 	})
 }
