@@ -224,8 +224,9 @@ func Verify(
 	}
 
 	targetedHosts := targetedRegistryHosts(refs)
-	if targetedHosts == nil {
-		logger.Info("Checking every credential: a build reference could not be parsed", "references", refs)
+	if len(refs) == 0 || targetedHosts == nil {
+		logger.Info("Checking every credential: no build targets to scope to, or a reference could not be parsed",
+			"references", refs)
 	}
 
 	var errs []error
