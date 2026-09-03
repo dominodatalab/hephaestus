@@ -69,6 +69,10 @@ func ReadSecrets(
 			}
 		}
 
+		if secretRef.MountPath != "" {
+			path = secretRef.MountPath
+		}
+
 		// builds a path for the secret like {namespace}/{name}/{key} to avoid hash key collisions
 		for filename, data := range secret.Data {
 			name := strings.Join([]string{path, filename}, "/")
