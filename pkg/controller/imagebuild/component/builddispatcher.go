@@ -308,7 +308,9 @@ func (c *BuildDispatcherComponent) prepareBuildInputs(
 	}
 
 	buildLog.Info("Validating registry credentials")
-	if err = credentials.Verify(coreCtx, configDir, insecureRegistries, helpMessage); err != nil {
+	err = credentials.Verify(coreCtx, buildLog, configDir, insecureRegistries, helpMessage,
+		slices.Concat(obj.Spec.Images, obj.Spec.ImportRemoteBuildCache))
+	if err != nil {
 		txn.NoticeError(newrelic.Error{Message: err.Error(), Class: "CredentialsValidateError"})
 
 		buildLog.Error(err, fmt.Sprintf("Failed to validate registry credentials: %s", err.Error()))
