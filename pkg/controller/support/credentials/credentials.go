@@ -2,6 +2,7 @@ package credentials
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -199,6 +200,18 @@ func unreachable(err error) bool {
 	return ok
 }
 
+// certRejected reports whether the TLS handshake failed certificate
+// verification (unknown authority, expired, wrong host). That happens
+// client-side before any HTTP round trip, so it never satisfies
+// errdefs.IsUnauthorized, but it is exactly as final as a 401: retrying an
+// untrusted cert cannot succeed, so it must short-circuit the backoff the
+// same way a real rejection does instead of being read as an outage.
+func certRejected(err error) bool {
+	_, ok := errors.AsType[*tls.CertificateVerificationError](err)
+
+	return ok
+}
+
 func Verify(
 	ctx context.Context,
 	logger logr.Logger,
@@ -253,7 +266,7 @@ func Verify(
 				if answered == nil && !unreachable(authErr) {
 					answered = authErr
 				}
-				if errdefs.IsUnauthorized(authErr) {
+				if errdefs.IsUnauthorized(authErr) || certRejected(authErr) {
 					return false, authErr
 				}
 				return false, nil
