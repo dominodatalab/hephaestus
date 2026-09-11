@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -40,9 +41,12 @@ func (l awsLogger) Logf(classification logging.Classification, format string, v 
 }
 
 var (
-	awsConfig aws.Config
-	newClient = newECRClient
-	urlRegex  = regexp.MustCompile(
+	awsConfig    aws.Config
+	awsConfigMu  sync.Mutex
+	awsConfigSet bool
+	loadDefault  = config.LoadDefaultConfig
+	newClient    = newECRClient
+	urlRegex     = regexp.MustCompile(
 		//nolint:lll
 		`^(?P<aws_account_id>[a-zA-Z\d][a-zA-Z\d-_]*)\.dkr\.ecr(-fips)?\.(?P<region>[a-zA-Z\d][a-zA-Z\d-_]*)\.amazonaws\.com(\.cn)?`,
 	)
@@ -50,11 +54,31 @@ var (
 )
 
 func Register(ctx context.Context, logger logr.Logger, registry *cloudauth.Registry) error {
+	registry.Register(urlRegex, authenticate)
+
+	// Pod networking may not be up yet (istio ambient, DOM-70981). Registering
+	// unconditionally lets authenticate finish the load on the first build.
+	if err := loadConfig(ctx, logger); err != nil {
+		logger.Info("ECR registered, AWS config load deferred to first use", "error", err)
+		return nil
+	}
+
+	logger.Info("ECR registered")
+	return nil
+}
+
+func loadConfig(ctx context.Context, logger logr.Logger) error {
+	awsConfigMu.Lock()
+	defer awsConfigMu.Unlock()
+
+	if awsConfigSet {
+		return nil
+	}
+
 	clientMode := aws.LogRequest | aws.LogResponse | aws.LogRetries
 	clientLogger := &awsLogger{logger}
 
-	var err error
-	awsConfig, err = config.LoadDefaultConfig(
+	cfg, err := loadDefault(
 		ctx,
 		config.WithEC2IMDSRegion(func(o *config.UseEC2IMDSRegion) {
 			o.Client = imds.New(imds.Options{
@@ -66,19 +90,22 @@ func Register(ctx context.Context, logger logr.Logger, registry *cloudauth.Regis
 		config.WithClientLogMode(clientMode),
 	)
 	if err != nil {
-		logger.Info("ECR not registered", "error", err)
-		return nil
+		return err
 	}
 
-	registry.Register(urlRegex, authenticate)
-	logger.Info("ECR registered")
+	awsConfig = cfg
+	awsConfigSet = true
 	return nil
 }
 
-func newECRClient(region string) ecrClient {
+func newECRClient(ctx context.Context, logger logr.Logger, region string) (ecrClient, error) {
+	if err := loadConfig(ctx, logger); err != nil {
+		return nil, fmt.Errorf("failed to load AWS config: %w", err)
+	}
+
 	c := awsConfig
 	c.Region = region
-	return ecr.NewFromConfig(c)
+	return ecr.NewFromConfig(c), nil
 }
 
 func authenticate(ctx context.Context, logger logr.Logger, url string) (*registry.AuthConfig, error) {
@@ -91,7 +118,11 @@ func authenticate(ctx context.Context, logger logr.Logger, url string) (*registr
 		return nil, err
 	}
 
-	client := newClient(match[urlRegexRegionIndex])
+	client, err := newClient(ctx, logger, match[urlRegexRegionIndex])
+	if err != nil {
+		logger.Info(err.Error())
+		return nil, err
+	}
 	input := &ecr.GetAuthorizationTokenInput{}
 
 	resp, err := client.GetAuthorizationToken(ctx, input)
