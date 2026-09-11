@@ -364,10 +364,8 @@ func TestVerify(t *testing.T) {
 }
 
 func TestCertRejected(t *testing.T) {
-	// registry.NewService treats 127.0.0.0/8 as insecure by default and skips
-	// certificate verification there, so a bad cert on a local listener can
-	// never reach svc.Auth through Verify(). Exercise the real error shape
-	// http.Client produces directly instead.
+	// Loopback is always insecure to registry.NewService, so cert verification
+	// never runs through Verify(). Hit http.Client directly instead.
 	t.Run("untrusted_cert_is_rejected_not_unreachable", func(t *testing.T) {
 		srv := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 		t.Cleanup(srv.Close)

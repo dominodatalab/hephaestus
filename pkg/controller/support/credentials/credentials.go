@@ -200,12 +200,9 @@ func unreachable(err error) bool {
 	return ok
 }
 
-// certRejected reports whether the TLS handshake failed certificate
-// verification (unknown authority, expired, wrong host). That happens
-// client-side before any HTTP round trip, so it never satisfies
-// errdefs.IsUnauthorized, but it is exactly as final as a 401: retrying an
-// untrusted cert cannot succeed, so it must short-circuit the backoff the
-// same way a real rejection does instead of being read as an outage.
+// certRejected reports a TLS handshake that failed certificate verification.
+// As final as a 401: never satisfies errdefs.IsUnauthorized, but retrying an
+// untrusted cert can't succeed either.
 func certRejected(err error) bool {
 	_, ok := errors.AsType[*tls.CertificateVerificationError](err)
 
