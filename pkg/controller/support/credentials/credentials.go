@@ -2,6 +2,7 @@ package credentials
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -199,6 +200,15 @@ func unreachable(err error) bool {
 	return ok
 }
 
+// certRejected reports a TLS handshake that failed certificate verification.
+// As final as a 401: never satisfies errdefs.IsUnauthorized, but retrying an
+// untrusted cert can't succeed either.
+func certRejected(err error) bool {
+	_, ok := errors.AsType[*tls.CertificateVerificationError](err)
+
+	return ok
+}
+
 func Verify(
 	ctx context.Context,
 	logger logr.Logger,
@@ -253,7 +263,7 @@ func Verify(
 				if answered == nil && !unreachable(authErr) {
 					answered = authErr
 				}
-				if errdefs.IsUnauthorized(authErr) {
+				if errdefs.IsUnauthorized(authErr) || certRejected(authErr) {
 					return false, authErr
 				}
 				return false, nil
