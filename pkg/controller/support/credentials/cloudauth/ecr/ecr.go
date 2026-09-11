@@ -59,7 +59,7 @@ func Register(ctx context.Context, logger logr.Logger, registry *cloudauth.Regis
 	// Pod networking may not be up yet (istio ambient, DOM-70981). Registering
 	// unconditionally lets authenticate finish the load on the first build.
 	if err := loadConfig(ctx, logger); err != nil {
-		logger.Info("ECR registered, AWS config load deferred", "error", err)
+		logger.Info("ECR registered, AWS config load deferred to first use", "error", err)
 		return nil
 	}
 
