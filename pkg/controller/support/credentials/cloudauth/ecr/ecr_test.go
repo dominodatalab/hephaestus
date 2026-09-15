@@ -7,9 +7,13 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	ecrTypes "github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	"github.com/docker/docker/api/types/registry"
+	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
+	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -154,9 +158,9 @@ func TestAuthenticate(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			newClient = func(region string) ecrClient {
+			newClient = func(_ context.Context, _ logr.Logger, region string) (ecrClient, error) {
 				tt.client.region = region
-				return &tt.client
+				return &tt.client, nil
 			}
 			authConfig, err := authenticate(defaultCtx, log, tt.serverUrl)
 
@@ -198,4 +202,22 @@ func (f *fakeECRClient) GetAuthorizationToken(
 		return nil, errors.New("test error")
 	}
 	return f.TokenOutput, nil
+}
+
+func TestRegisterDefersConfigLoad(t *testing.T) {
+	newClient = newECRClient
+	loadErr := errors.New("imds unreachable")
+	loadDefault = func(context.Context, ...func(*config.LoadOptions) error) (aws.Config, error) {
+		return aws.Config{}, loadErr
+	}
+	t.Cleanup(func() { loadDefault = config.LoadDefaultConfig })
+
+	ctx := context.Background()
+	log := zapr.NewLogger(zap.NewNop())
+	reg := &cloudauth.Registry{}
+	require.NoError(t, Register(ctx, log, reg))
+	assert.False(t, awsConfigSet)
+
+	_, err := reg.RetrieveAuthorization(ctx, log, "0123456789012.dkr.ecr.us-east-1.amazonaws.com")
+	assert.ErrorIs(t, err, loadErr)
 }
