@@ -53,7 +53,26 @@
     {
       "description": "Group the Go version bump (go.mod toolchain directive, Dockerfile base image, CI GO_VERSION) into one PR",
       "groupName": "go version",
-      "matchDepNames": ["go", "golang"]
+      "matchDepNames": ["go", "golang"],
+      "separateMinorPatch": true
+    },
+    {
+      "description": "Offer same-line patch updates for Go modules separately from minor updates",
+      "matchManagers": ["gomod"],
+      "separateMinorPatch": true
+    },
+    {
+      "description": "Track indirect Go modules so patched transitive deps get PRs",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["indirect"],
+      "enabled": true
+    },
+    {
+      "description": "Limit indirect Go modules to patch updates",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["indirect"],
+      "matchUpdateTypes": ["minor"],
+      "enabled": false
     },
     {
       "description": "Automerge digest and patch updates for Dockerfile bases",
