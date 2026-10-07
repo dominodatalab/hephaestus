@@ -22,6 +22,7 @@ spec:
   privateKey:
     algorithm: ECDSA
     size: 256
+    rotationPolicy: Never
   issuerRef:
     group: cert-manager.io
     kind: Issuer
