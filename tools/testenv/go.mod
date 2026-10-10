@@ -42,7 +42,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets v1.3.1 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/internal v1.1.1 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.0 // indirect
-	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
+	github.com/Azure/go-ansiterm v0.0.0-20261008234032-65faa4be4f89 // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.9.24 // indirect
 	github.com/Azure/go-autorest/autorest/azure/cli v0.4.7 // indirect
@@ -262,7 +262,7 @@ require (
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
 	golang.org/x/sync v0.18.0 // indirect
-	golang.org/x/sys v0.40.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
 	golang.org/x/term v0.37.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
