@@ -12,12 +12,14 @@ import (
 	"testing"
 
 	"github.com/docker/docker/api/types/registry"
+	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
 
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth/cloudauthtest"
@@ -219,6 +221,154 @@ func TestAuthenticate(t *testing.T) {
 			recentLogMessage := observedLogs.All()[logLen-1].Message
 			assert.Equal(t, tt.expectedLogMessage, recentLogMessage)
 		})
+	}
+}
+
+func TestRegisterDefersCredentialLoad(t *testing.T) {
+	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+	stubGCRAuthentication(t)
+	calls := 0
+	findDefaultCredentials = func(_ context.Context, scopes ...string) (*google.Credentials, error) {
+		calls++
+		assert.Equal(t, []string{cloudPlatformScope}, scopes)
+		return &google.Credentials{TokenSource: &fakeOauth2TokenSource{}}, nil
+	}
+
+	ctx := context.Background()
+	observerCore, observedLogs := observer.New(zap.DebugLevel)
+	log := zapr.NewLogger(zap.New(observerCore))
+	reg := &cloudauth.Registry{}
+	require.NoError(t, Register(ctx, log, reg))
+	require.Zero(t, calls)
+	assert.Equal(t, "GCR registered, credential load deferred to first use", observedLogs.All()[0].Message)
+
+	auth, err := reg.RetrieveAuthorization(ctx, log, "gcr.io")
+	require.NoError(t, err)
+	assert.Equal(t, &registry.AuthConfig{Username: "oauth2accesstoken", Password: "hey"}, auth)
+	assert.Equal(t, 1, calls)
+}
+
+func TestAuthenticateRetriesCredentialLoad(t *testing.T) {
+	stubGCRAuthentication(t)
+	loadErr := errors.New("metadata unreachable")
+	calls := 0
+	findDefaultCredentials = func(context.Context, ...string) (*google.Credentials, error) {
+		calls++
+		if calls == 1 {
+			return nil, loadErr
+		}
+		return &google.Credentials{TokenSource: &fakeOauth2TokenSource{}}, nil
+	}
+
+	ctx := context.Background()
+	log := logr.Discard()
+	provider := &gcrProvider{logger: log}
+	auth, err := provider.authenticate(ctx, log, "gcr.io")
+	require.ErrorIs(t, err, loadErr)
+	assert.NotErrorIs(t, err, cloudauth.ErrNoLoader)
+	assert.EqualError(t, err, "unable to load GCR credentials: metadata unreachable")
+	assert.Nil(t, auth)
+
+	for range 2 {
+		auth, err = provider.authenticate(ctx, log, "gcr.io")
+		require.NoError(t, err)
+		assert.Equal(t, &registry.AuthConfig{Username: "oauth2accesstoken", Password: "hey"}, auth)
+		assert.Equal(t, 2, calls)
+	}
+}
+
+func TestRegisterWithoutDefaultCredentials(t *testing.T) {
+	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+	stubGCRAuthentication(t)
+	findDefaultCredentials = func(context.Context, ...string) (*google.Credentials, error) {
+		return nil, errors.New("google: could not find default credentials")
+	}
+
+	ctx := context.Background()
+	log := logr.Discard()
+	reg := &cloudauth.Registry{}
+	require.NoError(t, Register(ctx, log, reg))
+	auth, err := reg.RetrieveAuthorization(ctx, log, "gcr.io")
+	assert.ErrorIs(t, err, cloudauth.ErrNoLoader)
+	assert.Nil(t, auth)
+}
+
+func TestRegisterRejectsInvalidKeyFile(t *testing.T) {
+	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "invalid-key.json")
+	stubGCRAuthentication(t)
+	loadErr := errors.New("invalid key file")
+	findDefaultCredentials = func(context.Context, ...string) (*google.Credentials, error) {
+		return nil, loadErr
+	}
+
+	ctx := context.Background()
+	log := logr.Discard()
+	reg := &cloudauth.Registry{}
+	require.ErrorIs(t, Register(ctx, log, reg), loadErr)
+	auth, err := reg.RetrieveAuthorization(ctx, log, "gcr.io")
+	assert.ErrorIs(t, err, cloudauth.ErrNoLoader)
+	assert.Nil(t, auth)
+}
+
+func TestRegisterWithKeyFileMemoizesCredentialLoad(t *testing.T) {
+	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "valid-key.json")
+	stubGCRAuthentication(t)
+	calls := 0
+	findDefaultCredentials = func(context.Context, ...string) (*google.Credentials, error) {
+		calls++
+		return &google.Credentials{TokenSource: &fakeOauth2TokenSource{}}, nil
+	}
+
+	ctx := context.Background()
+	observerCore, observedLogs := observer.New(zap.DebugLevel)
+	log := zapr.NewLogger(zap.New(observerCore))
+	reg := &cloudauth.Registry{}
+	require.NoError(t, Register(ctx, log, reg))
+	assert.Equal(t, 1, calls)
+	assert.Equal(t, "GCR registered", observedLogs.All()[0].Message)
+	auth, err := reg.RetrieveAuthorization(ctx, log, "gcr.io")
+	require.NoError(t, err)
+	assert.Equal(t, &registry.AuthConfig{Username: "oauth2accesstoken", Password: "hey"}, auth)
+	assert.Equal(t, 1, calls)
+}
+
+func TestCredentialLoadWithoutCancel(t *testing.T) {
+	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+	stubGCRAuthentication(t)
+	var credentialCtx context.Context
+	findDefaultCredentials = func(ctx context.Context, _ ...string) (*google.Credentials, error) {
+		credentialCtx = ctx
+		return &google.Credentials{TokenSource: &fakeOauth2TokenSource{}}, nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	log := logr.Discard()
+	reg := &cloudauth.Registry{}
+	require.NoError(t, Register(ctx, log, reg))
+	_, err := reg.RetrieveAuthorization(ctx, log, "gcr.io")
+	require.NoError(t, err)
+	require.NotNil(t, credentialCtx)
+	cancel()
+	require.ErrorIs(t, ctx.Err(), context.Canceled)
+	assert.NoError(t, credentialCtx.Err())
+	assert.Nil(t, credentialCtx.Done())
+}
+
+func stubGCRAuthentication(t *testing.T) {
+	t.Helper()
+	originalFind := findDefaultCredentials
+	originalChallenge := defaultChallengeLoginServer
+	originalClient := defaultClient
+	t.Cleanup(func() {
+		findDefaultCredentials = originalFind
+		defaultChallengeLoginServer = originalChallenge
+		defaultClient = originalClient
+	})
+
+	defaultChallengeLoginServer = cloudauthtest.FakeChallengeLoginServer("serviceName", "https://registry.example", nil)
+	defaultClient = &http.Client{
+		Transport: createRoundTripperFunc(t, tokenResponse{Token: "registry-token"}, http.StatusOK),
 	}
 }
 
