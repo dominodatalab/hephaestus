@@ -98,7 +98,7 @@ jobs:
           IMAGE="ghcr.io/dominodatalab/hephaestus:${{ steps.tag.outputs.tag }}"
 
           echo "Testing container startup..."
-          # distroless/static ships no shell, so exercise the entrypoint itself
+          # static base image ships no shell, so exercise the entrypoint itself
           docker run --rm --platform linux/amd64 "$IMAGE" --help
 
           echo "✓ Container execution test passed"
@@ -150,7 +150,7 @@ jobs:
           IMAGE="ghcr.io/dominodatalab/hephaestus:${{ steps.tag.outputs.tag }}"
 
           echo "Testing container startup..."
-          # distroless/static ships no shell, so exercise the entrypoint itself
+          # static base image ships no shell, so exercise the entrypoint itself
           docker run --rm --platform linux/arm64 "$IMAGE" --help
 
           echo "✓ Container execution test passed"
