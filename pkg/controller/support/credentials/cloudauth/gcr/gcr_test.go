@@ -289,7 +289,8 @@ func TestRegisterWithoutDefaultCredentials(t *testing.T) {
 	reg := &cloudauth.Registry{}
 	require.NoError(t, Register(ctx, log, reg))
 	auth, err := reg.RetrieveAuthorization(ctx, log, "gcr.io")
-	assert.ErrorIs(t, err, cloudauth.ErrNoLoader)
+	// authprovider compares with ==, so the sentinel must come back unwrapped.
+	assert.Same(t, cloudauth.ErrNoLoader, err)
 	assert.Nil(t, auth)
 }
 
@@ -306,7 +307,8 @@ func TestRegisterRejectsInvalidKeyFile(t *testing.T) {
 	reg := &cloudauth.Registry{}
 	require.ErrorIs(t, Register(ctx, log, reg), loadErr)
 	auth, err := reg.RetrieveAuthorization(ctx, log, "gcr.io")
-	assert.ErrorIs(t, err, cloudauth.ErrNoLoader)
+	// authprovider compares with ==, so the sentinel must come back unwrapped.
+	assert.Same(t, cloudauth.ErrNoLoader, err)
 	assert.Nil(t, auth)
 }
 
