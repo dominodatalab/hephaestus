@@ -48,14 +48,14 @@ func TestAuthenticateIntegration(t *testing.T) {
 		t.Skip("Skipping, gcp not setup")
 	}
 
-	p, err := newProvider(context.TODO(), logr.Discard())
-	if err != nil {
+	p := &gcrProvider{logger: logr.Discard()}
+	if _, err := p.loadTokenSource(context.TODO()); err != nil {
 		t.Fatal(err)
 	}
 
 	ctx := context.Background()
 	t.Run("invalid url", func(t *testing.T) {
-		auth, err := p.authenticate(ctx, "bogus.g.io")
+		auth, err := p.authenticate(ctx, logr.Discard(), "bogus.g.io")
 		if err == nil {
 			t.Error("unexpected error")
 		}
@@ -72,7 +72,7 @@ func TestAuthenticateIntegration(t *testing.T) {
 			{"us-west1-docker.pkg.dev"},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
-				auth, err := p.authenticate(ctx, tt.name)
+				auth, err := p.authenticate(ctx, logr.Discard(), tt.name)
 				if err != nil {
 					t.Fatalf("%#v", err)
 				}
