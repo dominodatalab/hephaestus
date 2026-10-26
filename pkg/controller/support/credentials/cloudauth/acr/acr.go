@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
@@ -22,6 +23,18 @@ import (
 
 const acrUserForRefreshToken = "00000000-0000-0000-0000-000000000000"
 
+// acrTokenScopeEnvVar overrides the scope derived from the registry's cloud.
+const acrTokenScopeEnvVar = "HEPHAESTUS_ACR_TOKEN_SCOPE"
+
+const defaultARMScope = "https://management.core.windows.net/.default"
+
+// armScopes maps ACR login server suffixes to the ARM audience of the matching Azure cloud.
+var armScopes = map[string]string{
+	".azurecr.io": defaultARMScope,
+	".azurecr.us": "https://management.core.usgovcloudapi.net/.default",
+	".azurecr.cn": "https://management.core.chinacloudapi.cn/.default",
+}
+
 var (
 	acrRegex  = regexp.MustCompile(`.*\.azurecr\.io|.*\.azurecr\.cn|.*\.azurecr\.de|.*\.azurecr\.us`)
 	errACRURL = fmt.Errorf("ACR URL is invalid, should match pattern %v", acrRegex)
@@ -38,6 +51,21 @@ type refreshTokensClientFunc func(loginURL string) cra.RefreshTokensClientAPI
 type acrProvider struct {
 	tenantID        string
 	tokenCredential azcore.TokenCredential
+	scopeOverride   string
+}
+
+// tokenScope returns the override if set, otherwise the ARM audience for the registry's cloud.
+func (a *acrProvider) tokenScope(loginServer string) string {
+	if a.scopeOverride != "" {
+		return a.scopeOverride
+	}
+	for suffix, scope := range armScopes {
+		if strings.HasSuffix(loginServer, suffix) {
+			return scope
+		}
+	}
+
+	return defaultARMScope
 }
 
 // Register will instantiate a new authentication provider whenever the AZURE_TENANT_ID or AZURE_CLIENT_ID envvars are
@@ -73,6 +101,7 @@ func newProvider(_ context.Context, _ logr.Logger, tenantID string) (*acrProvide
 	return &acrProvider{
 		tenantID:        tenantID,
 		tokenCredential: cred,
+		scopeOverride:   os.Getenv(acrTokenScopeEnvVar),
 	}, nil
 }
 
@@ -92,11 +121,12 @@ func (a *acrProvider) authenticate(
 	}
 	loginServer := match[0]
 
+	scope := a.tokenScope(loginServer)
 	armAccessToken, err := a.tokenCredential.GetToken(ctx, policy.TokenRequestOptions{
-		Scopes: []string{"https://management.core.windows.net/.default"},
+		Scopes: []string{scope},
 	})
 	if err != nil {
-		logger.Error(err, "Failed to GetToken.", "loginServer", loginServer)
+		logger.Error(err, "Failed to GetToken.", "loginServer", loginServer, "scope", scope)
 		return nil, err
 	}
 	loginServerURL := "https://" + loginServer

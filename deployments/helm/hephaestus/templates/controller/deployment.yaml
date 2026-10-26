@@ -95,6 +95,14 @@ spec:
               value: {{ required "Azure clientID is required when enabled!" .clientID | quote }}
             - name: AZURE_CLIENT_SECRET
               value: {{ .clientSecret | quote }}
+            {{- with .tokenScope }}
+            - name: HEPHAESTUS_ACR_TOKEN_SCOPE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .authorityHost }}
+            - name: AZURE_AUTHORITY_HOST
+              value: {{ . | quote }}
+            {{- end }}
             {{- end }}
             {{- end }}
             {{- if .cloudRegistryAuth.gcp.mountedCredentials.secretName }}
