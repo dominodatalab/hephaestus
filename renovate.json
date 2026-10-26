@@ -39,9 +39,9 @@
       "versioning": "regex:^v?(?<major>\\d+)(\\.(?<minor>\\d+))?(\\.(?<patch>\\d+))?(-r?(?<build>\\d+))?(-patch(?<hotfix>\\d+))?(-(?<compatibility>.*?))?$"
     },
     {
-      "description": "Default Distroless match since they don't have traditional versions",
+      "description": "Default Distroless and Chainguard static match since they don't have traditional versions",
       "matchDatasources": ["docker"],
-      "matchPackagePatterns": ["gcr.io/distroless"],
+      "matchPackagePatterns": ["gcr.io/distroless", "cgr.dev/chainguard/static"],
       "pinDigest": true,
       "versioning": "docker"
     },
