@@ -184,6 +184,10 @@ controller:
         clientID: ""
         clientSecret: ""
         workloadIdentity: false
+        # Overrides the token scope derived from the registry's cloud
+        tokenScope: ""
+        # Entra authority host for sovereign clouds
+        authorityHost: ""
       # GCP credentials required to access GCR
       gcp:
         enabled: false
