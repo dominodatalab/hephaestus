@@ -168,7 +168,6 @@ func TestAuthenticateRequestsCloudScope(t *testing.T) {
 		{"public", "foo.azurecr.io", "", "https://management.core.windows.net/.default"},
 		{"us_government", "foo.azurecr.us", "", "https://management.core.usgovcloudapi.net/.default"},
 		{"china", "foo.azurecr.cn", "", "https://management.core.chinacloudapi.cn/.default"},
-		{"germany", "foo.azurecr.de", "", "https://management.core.cloudapi.de/.default"},
 		{
 			"override_wins",
 			"foo.azurecr.us",
@@ -188,6 +187,14 @@ func TestAuthenticateRequestsCloudScope(t *testing.T) {
 			assert.Equal(t, []string{tt.expected}, cred.scopes)
 		})
 	}
+}
+
+func TestNewProviderReadsScopeOverride(t *testing.T) {
+	t.Setenv(acrTokenScopeEnvVar, "https://containerregistry.azure.net/.default")
+
+	p, err := newProvider(context.Background(), logr.Discard(), "test-tenantId")
+	require.NoError(t, err)
+	assert.Equal(t, "https://containerregistry.azure.net/.default", p.tokenScope("foo.azurecr.us"))
 }
 
 func (f fakeServicePrincipalToken) GetToken(ctx context.Context, options policy.TokenRequestOptions) (azcore.AccessToken, error) {

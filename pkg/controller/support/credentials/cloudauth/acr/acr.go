@@ -33,7 +33,6 @@ var armScopes = map[string]string{
 	".azurecr.io": defaultARMScope,
 	".azurecr.us": "https://management.core.usgovcloudapi.net/.default",
 	".azurecr.cn": "https://management.core.chinacloudapi.cn/.default",
-	".azurecr.de": "https://management.core.cloudapi.de/.default",
 }
 
 var (
