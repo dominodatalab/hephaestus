@@ -1145,6 +1145,12 @@ func schema_pkg_api_hephaestus_v1_SecretReference(ref common.ReferenceCallback) 
 							Format: "",
 						},
 					},
+					"mountPath": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
 				},
 			},
 		},
