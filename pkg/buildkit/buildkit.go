@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -125,6 +126,10 @@ type BuildOptions struct {
 	Secrets                  map[string]string
 	SecretsData              map[string][]byte
 	FetchAndExtractTimeout   time.Duration
+	// AdditionalContexts maps a named build context to the URL of an archive. Each archive is fetched
+	// into its own directory and exposed to the Dockerfile frontend as a named context, so the
+	// Dockerfile can use COPY --from=<name>. Names must not be "context" or "dockerfile".
+	AdditionalContexts map[string]string
 	// Platforms requests one or more target "os/arch[/variant]" platforms for this solve, passed
 	// through as BuildKit's comma-separated "platform" frontend attr. When more than one platform is
 	// requested, BuildKit produces a multi-platform manifest list/index in a single solve, provided
@@ -273,6 +278,15 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (SolveResult, err
 		},
 	}
 
+	additionalFS, err := c.fetchAdditionalContexts(ctx, buildDir, opts)
+	if err != nil {
+		return SolveResult{}, err
+	}
+	for name, fs := range additionalFS {
+		solveOpt.LocalMounts[name] = fs
+		solveOpt.FrontendAttrs["context:"+name] = "local:" + name
+	}
+
 	if opts.NoCache {
 		solveOpt.FrontendAttrs["no-cache"] = ""
 	}
@@ -319,6 +333,36 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (SolveResult, err
 
 	// build/push images
 	return c.runSolve(ctx, solveOpt)
+}
+
+// fetchAdditionalContexts downloads and extracts every entry of opts.AdditionalContexts into its own
+// directory under buildDir, because FetchAndExtract uses fixed file names inside its working directory.
+func (c *Client) fetchAdditionalContexts(ctx context.Context, buildDir string, opts BuildOptions) (map[string]fsutil.FS, error) {
+	result := make(map[string]fsutil.FS, len(opts.AdditionalContexts))
+	for _, name := range slices.Sorted(maps.Keys(opts.AdditionalContexts)) {
+		if name == "" || name == "context" || name == "dockerfile" {
+			return nil, fmt.Errorf("invalid additional context name %q", name)
+		}
+
+		wd, err := os.MkdirTemp(buildDir, "additional-context-")
+		if err != nil {
+			return nil, fmt.Errorf("cannot create directory for additional context %q: %w", name, err)
+		}
+
+		c.log.Info("Fetching additional context", "name", name)
+		extract, err := archive.FetchAndExtract(ctx, c.log, opts.AdditionalContexts[name], wd, opts.FetchAndExtractTimeout)
+		if err != nil {
+			return nil, fmt.Errorf("cannot fetch additional context %q: %w", name, err)
+		}
+
+		fs, err := fsutil.NewFS(extract.ContentsDir)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create additional context %q: %w", name, err)
+		}
+		result[name] = fs
+	}
+
+	return result, nil
 }
 
 func (c *Client) Cache(ctx context.Context, image string) error {
