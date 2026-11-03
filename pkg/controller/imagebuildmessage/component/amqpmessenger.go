@@ -32,6 +32,10 @@ import (
 const (
 	publishContentType                 = "application/json"
 	compressedImageSizeBytesAnnotation = "imagebuilder.dominodatalab.com/compressed-image-size-bytes"
+
+	// noFailureConditionMessage is published when a build is Failed but no false condition was recorded, so
+	// consumers still observe the terminal transition.
+	noFailureConditionMessage = "build failed, no failure condition recorded"
 )
 
 type AMQPMessengerComponent struct {
@@ -61,7 +65,6 @@ func (c *AMQPMessengerComponent) Initialize(_ *core.Context, bldr *ctrl.Builder)
 	return nil
 }
 
-//nolint:maintidx
 func (c *AMQPMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, error) {
 	log := ctx.Log
 	obj := ctx.Object
@@ -212,14 +215,9 @@ func (c *AMQPMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 			message.Annotations[compressedImageSizeBytesAnnotation] = ib.Status.CompressedImageSizeBytes
 			maps.Copy(message.Annotations, ib.Status.Labels)
 		case hephv1.PhaseFailed:
-			if ib.Status.Conditions == nil {
-				return ctrl.Result{Requeue: true}, nil
-			}
-
-			for _, condition := range ib.Status.Conditions {
-				if condition.Status == metav1.ConditionFalse {
-					message.ErrorMessage = condition.Message
-				}
+			message.ErrorMessage = failureMessage(ib.Status.Conditions)
+			if message.ErrorMessage == noFailureConditionMessage {
+				log.Info("Publishing Failed transition without a failure condition", "conditions", len(ib.Status.Conditions))
 			}
 		}
 
@@ -261,6 +259,18 @@ func (c *AMQPMessengerComponent) Reconcile(ctx *core.Context) (ctrl.Result, erro
 	}
 
 	return ctrl.Result{}, nil
+}
+
+// failureMessage returns the message of the last false condition, or a generic message if there is none.
+func failureMessage(conditions []metav1.Condition) string {
+	msg := noFailureConditionMessage
+	for _, condition := range conditions {
+		if condition.Status == metav1.ConditionFalse {
+			msg = condition.Message
+		}
+	}
+
+	return msg
 }
 
 func BuildObjectLink(obj client.Object, scheme *runtime.Scheme) (string, error) {
