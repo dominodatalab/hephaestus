@@ -35,21 +35,15 @@
     {
       "description": "Default Domino Dockerfile match",
       "groupName": "all dockerfiles",
-      "versioning": "regex:^v?(?<major>\\d+)(\\.(?<minor>\\d+))?(\\.(?<patch>\\d+))?(-r?(?<build>\\d+))?(-patch(?<hotfix>\\d+))?(-(?<compatibility>.*?))?$",
-      "matchPackageNames": [
-        "/quay.io/domino/"
-      ]
+      "matchPackageNames": ["/quay.io/domino/"],
+      "versioning": "regex:^v?(?<major>\\d+)(\\.(?<minor>\\d+))?(\\.(?<patch>\\d+))?(-r?(?<build>\\d+))?(-patch(?<hotfix>\\d+))?(-(?<compatibility>.*?))?$"
     },
     {
-      "description": "Default Distroless match since they don't have traditional versions",
+      "description": "Default Distroless and Chainguard static match since they don't have traditional versions",
       "matchDatasources": ["docker"],
-      "pinDigest": {
-        "enabled": true
-      },
-      "versioning": "docker",
-      "matchPackageNames": [
-        "/gcr.io/distroless/"
-      ]
+      "matchPackageNames": ["/gcr.io/distroless/", "/cgr.dev/chainguard/static/"],
+      "pinDigests": true,
+      "versioning": "docker"
     },
     {
       "description": "Strip v prefix from version tags of Chainguard packages",
@@ -59,12 +53,31 @@
     {
       "description": "Group the Go version bump (go.mod toolchain directive, Dockerfile base image, CI GO_VERSION) into one PR",
       "groupName": "go version",
-      "matchDepNames": ["go", "golang"]
+      "matchDepNames": ["go", "golang"],
+      "separateMinorPatch": true
     },
     {
-      "description": "Automerge patch and digest updates for Dockerfile bases",
-      "matchManagers": ["dockerfile"],
+      "description": "Offer same-line patch updates for Go modules separately from minor updates",
+      "matchManagers": ["gomod"],
+      "separateMinorPatch": true
+    },
+    {
+      "description": "Track indirect Go modules so patched transitive deps get PRs",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["indirect"],
+      "enabled": true
+    },
+    {
+      "description": "Limit indirect Go modules to patch updates",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["indirect"],
+      "matchUpdateTypes": ["minor"],
+      "enabled": false
+    },
+    {
+      "description": "Automerge digest and patch updates for Dockerfile bases",
       "matchUpdateTypes": ["digest", "patch"],
+      "matchManagers": ["dockerfile"],
       "schedule": ["at any time"],
       "automerge": true,
       "platformAutomerge": true,

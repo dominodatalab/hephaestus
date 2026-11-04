@@ -8,8 +8,10 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/registry"
@@ -23,6 +25,8 @@ import (
 const cloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform"
 
 var defaultChallengeLoginServer = cloudauth.ChallengeLoginServer
+
+var findDefaultCredentials = google.FindDefaultCredentials
 
 var (
 	gcrRegex      = regexp.MustCompile(`.*-docker\.pkg\.dev|(?:.*\.)?gcr\.io`)
@@ -44,16 +48,23 @@ type tokenResponse struct {
 
 type gcrProvider struct {
 	logger      logr.Logger
+	mu          sync.Mutex
 	tokenSource oauth2.TokenSource
 }
 
 func Register(ctx context.Context, logger logr.Logger, registry *cloudauth.Registry) error {
-	provider, err := newProvider(ctx, logger)
-	if err != nil {
+	provider := &gcrProvider{logger: logger.WithName("gcr-auth-provider")}
+
+	// A key file needs no network. Metadata probes memoize misses for the process,
+	// so defer them until pod networking is up (DOM-70981).
+	if os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
+		registry.Register(gcrRegex, provider.authenticate)
+		logger.Info("GCR registered, credential load deferred to first use")
+		return nil
+	}
+
+	if _, err := provider.loadTokenSource(ctx); err != nil {
 		logger.Info("GCR not registered", "error", err)
-		if strings.Contains(err.Error(), "could not find default credentials") {
-			return nil
-		}
 		return err
 	}
 
@@ -62,13 +73,22 @@ func Register(ctx context.Context, logger logr.Logger, registry *cloudauth.Regis
 	return nil
 }
 
-func newProvider(ctx context.Context, logger logr.Logger) (*gcrProvider, error) {
-	creds, err := google.FindDefaultCredentials(ctx, cloudPlatformScope)
+func (g *gcrProvider) loadTokenSource(ctx context.Context) (oauth2.TokenSource, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	if g.tokenSource != nil {
+		return g.tokenSource, nil
+	}
+
+	// Some token sources retain ctx for refreshes, so it must outlive this call.
+	creds, err := findDefaultCredentials(context.WithoutCancel(ctx), cloudPlatformScope)
 	if err != nil {
 		return nil, err
 	}
 
-	return &gcrProvider{logger: logger.WithName("gcr-auth-provider"), tokenSource: creds.TokenSource}, nil
+	g.tokenSource = creds.TokenSource
+	return g.tokenSource, nil
 }
 
 func (g *gcrProvider) authenticate(
@@ -84,7 +104,19 @@ func (g *gcrProvider) authenticate(
 		return nil, err
 	}
 
-	token, err := g.tokenSource.Token()
+	tokenSource, err := g.loadTokenSource(ctx)
+	if err != nil {
+		// Preserve empty credentials for GCR pulls outside GCP.
+		if strings.Contains(err.Error(), "could not find default credentials") {
+			return nil, cloudauth.ErrNoLoader
+		}
+		err = fmt.Errorf("unable to load GCR credentials: %w", err)
+		logger.Info(err.Error())
+
+		return nil, err
+	}
+
+	token, err := tokenSource.Token()
 	if err != nil {
 		err = fmt.Errorf("unable to access GCR token from oauth: %w", err)
 		logger.Info(err.Error())

@@ -11,6 +11,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/preview/containerregistry/runtime/2019-08-15-preview/containerregistry"
 	"github.com/Azure/azure-sdk-for-go/services/preview/containerregistry/runtime/2019-08-15-preview/containerregistry/containerregistryapi"
 	"github.com/docker/docker/api/types/registry"
+	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -145,6 +146,55 @@ func TestAuthenticate(t *testing.T) {
 
 type fakeServicePrincipalToken struct {
 	err error
+}
+
+// recordingTokenCredential captures the scopes requested so tests can assert cloud-specific audiences.
+type recordingTokenCredential struct {
+	scopes []string
+}
+
+func (r *recordingTokenCredential) GetToken(_ context.Context, options policy.TokenRequestOptions) (azcore.AccessToken, error) {
+	r.scopes = append(r.scopes, options.Scopes...)
+	return azcore.AccessToken{Token: "test-oauth-token"}, nil
+}
+
+func TestAuthenticateRequestsCloudScope(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		server   string
+		override string
+		expected string
+	}{
+		{"public", "foo.azurecr.io", "", "https://management.core.windows.net/.default"},
+		{"us_government", "foo.azurecr.us", "", "https://management.core.usgovcloudapi.net/.default"},
+		{"china", "foo.azurecr.cn", "", "https://management.core.chinacloudapi.cn/.default"},
+		{
+			"override_wins",
+			"foo.azurecr.us",
+			"https://containerregistry.azure.net/.default",
+			"https://containerregistry.azure.net/.default",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			defaultChallengeLoginServer = cloudauthtest.FakeChallengeLoginServer("test-service", "test-realm", nil)
+			defaultRefreshTokensClient = createRefreshTokensClient(nil)
+
+			cred := &recordingTokenCredential{}
+			p := &acrProvider{tenantID: "test-tenantId", tokenCredential: cred, scopeOverride: tt.override}
+
+			_, err := p.authenticate(context.Background(), logr.Discard(), tt.server)
+			require.NoError(t, err)
+			assert.Equal(t, []string{tt.expected}, cred.scopes)
+		})
+	}
+}
+
+func TestNewProviderReadsScopeOverride(t *testing.T) {
+	t.Setenv(acrTokenScopeEnvVar, "https://containerregistry.azure.net/.default")
+
+	p, err := newProvider(context.Background(), logr.Discard(), "test-tenantId")
+	require.NoError(t, err)
+	assert.Equal(t, "https://containerregistry.azure.net/.default", p.tokenScope("foo.azurecr.us"))
 }
 
 func (f fakeServicePrincipalToken) GetToken(ctx context.Context, options policy.TokenRequestOptions) (azcore.AccessToken, error) {

@@ -16,16 +16,22 @@ var imagebuildlog = logf.Log.WithName("webhook").WithName("imagebuild")
 
 var _ admission.Defaulter[*ImageBuild] = &ImageBuild{}
 
-func (in *ImageBuild) Default(context.Context, *ImageBuild) error {
-	log := imagebuildlog.WithName("defaulter").WithValues("imagebuild", client.ObjectKeyFromObject(in))
+func (in *ImageBuild) Default(_ context.Context, obj *ImageBuild) error {
+	log := imagebuildlog.WithName("defaulter").WithValues("imagebuild", client.ObjectKeyFromObject(obj))
 	log.V(1).Info("Applying default values")
+
+	// admission.WithDefaulter binds Default's receiver (in) to a single static template registered at
+	// startup, not the decoded request object - obj is the one whose mutations the webhook response
+	// actually applies, so defaults must be written onto obj, not in.
+	obj.Spec.Platforms = normalizePlatforms(obj.Spec.Platforms)
+
 	return nil
 }
 
 var _ admission.Validator[*ImageBuild] = &ImageBuild{}
 
 func (in *ImageBuild) ValidateCreate(_ context.Context, obj *ImageBuild) (admission.Warnings, error) {
-	log := imagebuildlog.WithName("validator").WithValues("imagebuild", client.ObjectKeyFromObject(in))
+	log := imagebuildlog.WithName("validator").WithValues("imagebuild", client.ObjectKeyFromObject(obj))
 	log.V(1).Info("Using data from obj parameter",
 		"name", obj.Name,
 		"namespace", obj.Namespace,
@@ -55,7 +61,7 @@ func (in *ImageBuild) ValidateDelete(context.Context, *ImageBuild) (admission.Wa
 }
 
 func (in *ImageBuild) validateImageBuild(action string, obj *ImageBuild) (admission.Warnings, error) {
-	log := imagebuildlog.WithName("validator").WithName(action).WithValues("imagebuild", client.ObjectKeyFromObject(in))
+	log := imagebuildlog.WithName("validator").WithName(action).WithValues("imagebuild", client.ObjectKeyFromObject(obj))
 	log.V(1).Info("Starting validation")
 
 	var errList field.ErrorList
@@ -88,6 +94,10 @@ func (in *ImageBuild) validateImageBuild(action string, obj *ImageBuild) (admiss
 	}
 
 	if errs := validateRegistryAuth(log, fp.Child("registryAuth"), obj.Spec.RegistryAuth); errs != nil {
+		errList = append(errList, errs...)
+	}
+
+	if errs := validatePlatforms(log, fp.Child("platforms"), obj.Spec.Platforms, platformCapabilities); errs != nil {
 		errList = append(errList, errs...)
 	}
 

@@ -66,6 +66,9 @@ func Start(cfg config.Controller) error {
 	}
 	defer nr.Shutdown(5 * time.Second)
 
+	log.Info("Registering buildkit platform capabilities")
+	hephv1.SetPlatformCapabilities(cfg.Buildkit.PlatformCapabilities())
+
 	mgr, err := createManager(log, cfg.Manager)
 	if err != nil {
 		return err
@@ -152,6 +155,10 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 		admission.WithValidator[*hephv1.ImageBuild](opts.Scheme, &hephv1.ImageBuild{}),
 	)
 	opts.WebhookServer.Register(
+		"/mutate-hephaestus-dominodatalab-com-v1-imagecache",
+		admission.WithDefaulter[*hephv1.ImageCache](opts.Scheme, &hephv1.ImageCache{}),
+	)
+	opts.WebhookServer.Register(
 		"/validate-hephaestus-dominodatalab-com-v1-imagecache",
 		admission.WithValidator[*hephv1.ImageCache](opts.Scheme, &hephv1.ImageCache{}),
 	)
@@ -220,6 +227,7 @@ func createManager(log logr.Logger, cfg config.Manager) (ctrl.Manager, error) {
 			"/",
 			"/mutate-hephaestus-dominodatalab-com-v1-imagebuild",
 			"/validate-hephaestus-dominodatalab-com-v1-imagebuild",
+			"/mutate-hephaestus-dominodatalab-com-v1-imagecache",
 			"/validate-hephaestus-dominodatalab-com-v1-imagecache",
 			"/livez",
 			"/debugz",
@@ -265,7 +273,7 @@ func createWorkerPool(
 	log logr.Logger,
 	mgr ctrl.Manager,
 	cfg config.Buildkit,
-) (worker.Pool, error) {
+) (worker.PoolSet, error) {
 	log.Info("Initializing buildkit worker pool")
 	poolOpts := []worker.PoolOption{
 		worker.Logger(ctrl.Log.WithName("buildkit.worker-pool")),
@@ -285,23 +293,23 @@ func createWorkerPool(
 
 	clientset, err := kubernetes.Clientset(mgr.GetConfig())
 	if err != nil {
-		return nil, err
+		return worker.PoolSet{}, err
 	}
 
-	return worker.NewPool(clientset, cfg, poolOpts...), nil
+	return worker.NewPoolSet(clientset, cfg, poolOpts...), nil
 }
 
 func registerControllers(
 	log logr.Logger,
 	mgr ctrl.Manager,
-	pool worker.Pool,
+	pools worker.PoolSet,
 	nr *newrelic.Application,
 	cfg config.Controller,
 ) error {
 	deleteCh := make(chan client.ObjectKey, 10)
 
 	log.Info("Registering ImageBuild controller")
-	if err := imagebuild.Register(mgr, cfg, pool, nr, deleteCh); err != nil {
+	if err := imagebuild.Register(mgr, cfg, pools, nr, deleteCh); err != nil {
 		return err
 	}
 

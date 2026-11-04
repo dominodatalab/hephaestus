@@ -16,6 +16,10 @@ jobs:
     name: Verify Multi-arch Images
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -38,11 +42,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to Quay.io
-        uses: docker/login-action@v3
+        uses: ./.github/actions/quay-robot-login
         with:
-          registry: quay.io
           username: ${{ secrets.QUAY_USERNAME }}
-          password: ${{ secrets.QUAY_PASSWORD }}
 
       - name: Verify multi-arch manifests
         run: |
@@ -96,8 +98,8 @@ jobs:
           IMAGE="ghcr.io/dominodatalab/hephaestus:${{ steps.tag.outputs.tag }}"
 
           echo "Testing container startup..."
-          # The controller expects certain env vars, so just verify it's a valid executable
-          docker run --rm --entrypoint /bin/sh "$IMAGE" -c "test -x /usr/bin/hephaestus-controller && echo 'Binary is executable'"
+          # static base image ships no shell, so exercise the entrypoint itself
+          docker run --rm --platform linux/amd64 "$IMAGE" --help
 
           echo "✓ Container execution test passed"
 
@@ -148,7 +150,8 @@ jobs:
           IMAGE="ghcr.io/dominodatalab/hephaestus:${{ steps.tag.outputs.tag }}"
 
           echo "Testing container startup..."
-          docker run --rm --entrypoint /bin/sh "$IMAGE" -c "test -x /usr/bin/hephaestus-controller && echo 'Binary is executable'"
+          # static base image ships no shell, so exercise the entrypoint itself
+          docker run --rm --platform linux/arm64 "$IMAGE" --help
 
           echo "✓ Container execution test passed"
 
@@ -205,8 +208,8 @@ jobs:
           docker pull --platform linux/amd64 "$IMAGE"
 
           echo "Checking for debug tools..."
-          # Debug image should be based on Ubuntu and have a shell
-          docker run --rm "$IMAGE" bash -c "echo 'Shell is available'"
+          # the debug image entrypoint is the controller, so override it to reach bash
+          docker run --rm --platform linux/amd64 --entrypoint bash "$IMAGE" -c "echo 'Shell is available'"
 
           echo "✓ Debug image verified"
 

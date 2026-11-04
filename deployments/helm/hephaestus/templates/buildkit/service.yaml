@@ -1,18 +1,20 @@
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ include "hephaestus.buildkit.fullname" . }}
-  labels:
-    {{- include "hephaestus.buildkit.labels.standard" . | nindent 4 }}
-spec:
-  clusterIP: None
-  {{- with .Values.buildkit }}
-  type: {{ .service.type }}
-  ports:
-    - name: {{ .service.portName }}
-      port: {{ .service.port }}
-      targetPort: {{ .service.portName }}
-      protocol: TCP
-  {{- end }}
-  selector:
-    {{- include "hephaestus.buildkit.labels.matchLabels" . | nindent 4 }}
+{{- $pools := .Values.buildkit.platformPools }}
+{{- if not $pools }}
+{{- $pools = list (dict "name" "" "implicit" true) }}
+{{- end }}
+{{- range $i, $pool := $pools }}
+{{- $poolCtx := dict "root" $ "pool" $pool }}
+{{- $args := dict
+      "root" $
+      "name" (include "hephaestus.buildkit.pool.fullname" $poolCtx)
+      "namespace" (include "hephaestus.buildkit.pool.namespace" $poolCtx)
+      "standardLabels" (include "hephaestus.buildkit.pool.labels.standard" $poolCtx)
+      "matchLabels" (include "hephaestus.buildkit.pool.labels.matchLabels" $poolCtx)
+-}}
+{{- if $i }}
+---
+{{ include "hephaestus.buildkit.service.render" $args }}
+{{- else -}}
+{{- include "hephaestus.buildkit.service.render" $args }}
+{{- end }}
+{{- end }}

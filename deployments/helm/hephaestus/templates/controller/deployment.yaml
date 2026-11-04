@@ -82,7 +82,7 @@ spec:
             - start
             - --config=/etc/hephaestus/config.yaml
           {{- with .Values.controller.manager }}
-          {{- if or .extraEnvVars .cloudRegistryAuth.azure.enabled .cloudRegistryAuth.gcp.mountedCredentials.secretName $.Values.podEnv }}
+          {{- if or .extraEnvVars .cloudRegistryAuth.azure.enabled .cloudRegistryAuth.gcp.enabled .cloudRegistryAuth.gcp.mountedCredentials.secretName $.Values.podEnv }}
           env:
             {{- with .extraEnvVars }}
             {{- include "common.tplvalues.render" (dict "value" . "context" $) | nindent 12 }}
@@ -95,11 +95,23 @@ spec:
               value: {{ required "Azure clientID is required when enabled!" .clientID | quote }}
             - name: AZURE_CLIENT_SECRET
               value: {{ .clientSecret | quote }}
+            {{- with .tokenScope }}
+            - name: HEPHAESTUS_ACR_TOKEN_SCOPE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .authorityHost }}
+            - name: AZURE_AUTHORITY_HOST
+              value: {{ . | quote }}
+            {{- end }}
             {{- end }}
             {{- end }}
             {{- if .cloudRegistryAuth.gcp.mountedCredentials.secretName }}
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: /google-creds/key.json
+            {{- else if .cloudRegistryAuth.gcp.enabled }}
+            {{- /* Workload Identity: skip GCE detection, which memoizes a miss for the process if pod networking is still coming up. */}}
+            - name: GCE_METADATA_HOST
+              value: "169.254.169.254"
             {{- end }}
             {{- with $.Values.podEnv }}
               {{- toYaml . | nindent 12 }}

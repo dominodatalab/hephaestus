@@ -184,6 +184,10 @@ controller:
         clientID: ""
         clientSecret: ""
         workloadIdentity: false
+        # Overrides the token scope derived from the registry's cloud
+        tokenScope: ""
+        # Entra authority host for sovereign clouds
+        authorityHost: ""
       # GCP credentials required to access GCR
       gcp:
         enabled: false
@@ -426,6 +430,43 @@ buildkit:
                   values:
                     - {{ .Chart.Name }}
             topologyKey: "kubernetes.io/hostname"
+
+  # Declares one or more named buildkit pools and the platforms each can serve (natively or via
+  # emulation - see docs/building.md for what buildkit.image needs), passed through verbatim into
+  # the controller's buildkit.platformPools config.
+  #
+  # Leave empty (the default) to keep the single buildkit StatefulSet/Service/ServiceAccount/
+  # ConfigMap/NetworkPolicy this chart has always deployed, as an implicit "default" pool - the
+  # pre-multi-arch behavior, byte-for-byte. Setting it deploys one of each PER entry instead, named
+  # "<release>-hephaestus-buildkit-<name>".
+  #
+  # Only placement/sizing can be overridden per pool (nodeSelector, tolerations, affinity,
+  # resources, replicaCount, priorityClassName, args, podLabels, podAnnotations); every other
+  # buildkit.* setting (image, rootless mode, mTLS, service port, persistence) is shared across
+  # every pool. namespace defaults to the release namespace but can be set per pool; the generated
+  # NetworkPolicy allows controller ingress either way. statefulSetName/serviceName aren't set here
+  # - they're always derived from `name`, so the values file and deployed objects can't drift apart.
+  #
+  # Example - two native pools, each pinned to nodes of the matching architecture:
+  # platformPools:
+  #   - name: amd64
+  #     platforms: ["linux/amd64"]
+  #     nodeSelector:
+  #       kubernetes.io/arch: amd64
+  #   - name: arm64
+  #     platforms: ["linux/arm64"]
+  #     nodeSelector:
+  #       kubernetes.io/arch: arm64
+  #     tolerations:
+  #       - key: dedicated
+  #         operator: Equal
+  #         value: buildkit-arm64
+  #         effect: NoSchedule
+  #
+  # See docs/building.md in the hephaestus repo for the single-pool-with-emulation alternative,
+  # which needs no more than one pool declared here and buildkit.image built with the emulator
+  # binaries baked in.
+  platformPools: []
 
 # waitForNetworking starts an initContainer that requires a curl_image
 # Set this to true in istio ambient mode to cause Hephaestus Manager to start up

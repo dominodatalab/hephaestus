@@ -36,6 +36,11 @@ type ImageBuildSpec struct {
 	DisableCacheLayerExport bool `json:"disableCacheExport,omitempty"`
 	// Secrets provides references to Kubernetes secrets to expose to individual image builds.
 	Secrets []SecretReference `json:"secrets,omitempty"`
+	// Platforms specifies one or more target OS/architecture combinations to build for, using
+	// "os/arch[/variant]" syntax (e.g. "linux/amd64", "linux/arm64"). Each requested platform must be
+	// served by a configured buildkit pool, natively or via emulation, or the request is rejected at
+	// admission time. When empty, the build runs on whatever platform the leased worker natively runs.
+	Platforms []string `json:"platforms,omitempty"`
 }
 
 type ImageBuildTransition struct {
@@ -53,18 +58,42 @@ type ImageBuildStatus struct {
 	// BuilderAddr is the routable address to the buildkit pod used during the image build process.
 	BuilderAddr string `json:"builderAddr,omitempty"`
 	// CompressedImageSizeBytes is the total size of all the compressed layers in the image.
+	// For a build spanning more than one requested platform, see Platforms instead.
 	CompressedImageSizeBytes string `json:"compressedImageSizeBytes,omitempty"`
-	// Digest is the image digest
+	// Digest is the image digest. For a multi-platform build this is the manifest list/index digest.
 	Digest string `json:"digest,omitempty"`
 	// Map of string keys and values corresponding OCI image config labels.
 	// Labels contains arbitrary metadata for the container.
+	// For a build spanning more than one requested platform, see Platforms instead.
 	Labels map[string]string `json:"labels,omitempty"`
+	// Platforms contains a per-platform breakdown, populated whenever Spec.Platforms requests more
+	// than one platform - whether they were built by a single buildkit pool in one multi-platform
+	// solve, or fanned out across more than one pool.
+	Platforms []PlatformResult `json:"platforms,omitempty"`
 
 	Conditions  []metav1.Condition     `json:"conditions,omitempty"`
 	Transitions []ImageBuildTransition `json:"transitions,omitempty"`
 	Phase       Phase                  `json:"phase,omitempty"`
 
 	unappliedTransition ImageBuildTransition `json:"-"`
+}
+
+// PlatformResult records the outcome of building a single platform as part of a build spanning more
+// than one requested platform, whether built by one buildkit pool in a single multi-platform solve or
+// fanned out across more than one pool. Error is only ever set in the latter case, since a
+// single-pool multi-platform solve either produces every platform or fails the build entirely.
+type PlatformResult struct {
+	// Platform is the "os/arch[/variant]" this result corresponds to.
+	Platform string `json:"platform"`
+	// Digest is the pushed single-platform image digest. Empty if Error is set.
+	Digest string `json:"digest,omitempty"`
+	// CompressedImageSizeBytes is the total size of all the compressed layers for this platform.
+	CompressedImageSizeBytes string `json:"compressedImageSizeBytes,omitempty"`
+	// Labels contains arbitrary OCI image config metadata for this platform.
+	Labels map[string]string `json:"labels,omitempty"`
+	// Error contains the failure reason when this platform failed to build. Only ever set for a
+	// build fanned out across more than one buildkit pool.
+	Error string `json:"error,omitempty"`
 }
 
 // +genclient

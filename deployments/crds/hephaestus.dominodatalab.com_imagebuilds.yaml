@@ -101,6 +101,15 @@ spec:
               logKey:
                 description: LogKey is used to uniquely annotate build logs for post-processing
                 type: string
+              platforms:
+                description: |-
+                  Platforms specifies one or more target OS/architecture combinations to build for, using
+                  "os/arch[/variant]" syntax (e.g. "linux/amd64", "linux/arm64"). Each requested platform must be
+                  served by a configured buildkit pool, natively or via emulation, or the request is rejected at
+                  admission time. When empty, the build runs on whatever platform the leased worker natively runs.
+                items:
+                  type: string
+                type: array
               registryAuth:
                 description: RegistryAuth credentials used to pull/push images from/to
                   private registries.
@@ -162,8 +171,9 @@ spec:
                   used during the image build process.
                 type: string
               compressedImageSizeBytes:
-                description: CompressedImageSizeBytes is the total size of all the
-                  compressed layers in the image.
+                description: |-
+                  CompressedImageSizeBytes is the total size of all the compressed layers in the image.
+                  For a build spanning more than one requested platform, see Platforms instead.
                 type: string
               conditions:
                 items:
@@ -222,7 +232,8 @@ spec:
                   type: object
                 type: array
               digest:
-                description: Digest is the image digest
+                description: Digest is the image digest. For a multi-platform build
+                  this is the manifest list/index digest.
                 type: string
               labels:
                 additionalProperties:
@@ -230,10 +241,50 @@ spec:
                 description: |-
                   Map of string keys and values corresponding OCI image config labels.
                   Labels contains arbitrary metadata for the container.
+                  For a build spanning more than one requested platform, see Platforms instead.
                 type: object
               phase:
                 description: Phase represents a step in a resource processing lifecycle.
                 type: string
+              platforms:
+                description: |-
+                  Platforms contains a per-platform breakdown, populated whenever Spec.Platforms requests more
+                  than one platform - whether they were built by a single buildkit pool in one multi-platform
+                  solve, or fanned out across more than one pool.
+                items:
+                  description: |-
+                    PlatformResult records the outcome of building a single platform as part of a build spanning more
+                    than one requested platform, whether built by one buildkit pool in a single multi-platform solve or
+                    fanned out across more than one pool. Error is only ever set in the latter case, since a
+                    single-pool multi-platform solve either produces every platform or fails the build entirely.
+                  properties:
+                    compressedImageSizeBytes:
+                      description: CompressedImageSizeBytes is the total size of all
+                        the compressed layers for this platform.
+                      type: string
+                    digest:
+                      description: Digest is the pushed single-platform image digest.
+                        Empty if Error is set.
+                      type: string
+                    error:
+                      description: |-
+                        Error contains the failure reason when this platform failed to build. Only ever set for a
+                        build fanned out across more than one buildkit pool.
+                      type: string
+                    labels:
+                      additionalProperties:
+                        type: string
+                      description: Labels contains arbitrary OCI image config metadata
+                        for this platform.
+                      type: object
+                    platform:
+                      description: Platform is the "os/arch[/variant]" this result
+                        corresponds to.
+                      type: string
+                  required:
+                  - platform
+                  type: object
+                type: array
               transitions:
                 items:
                   properties:
