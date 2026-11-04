@@ -286,14 +286,8 @@ func copyRegularFile(target string, tr *tar.Reader, mode int64) error {
 	}
 	defer f.Close()
 
-	for {
-		if _, err = io.CopyN(f, tr, 1024); err != nil {
-			if err == io.EOF {
-				break
-			}
-
-			return fmt.Errorf("error reading tar regular file: %w", err)
-		}
+	if _, err = io.Copy(f, tr); err != nil {
+		return fmt.Errorf("error reading tar regular file: %w", err)
 	}
 
 	return nil

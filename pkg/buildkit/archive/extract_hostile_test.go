@@ -4,6 +4,8 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -112,4 +114,67 @@ func TestExtractFailsWhenParentIsAFile(t *testing.T) {
 		{hdr: tar.Header{Name: "a/b.txt", Typeflag: tar.TypeReg, Mode: 0o644}, body: "y"},
 	})
 	require.Error(t, err)
+}
+
+func TestExtractLargeFileIsIntact(t *testing.T) {
+	body := strings.Repeat("0123456789abcdef", 256*1024) // 4 MiB
+	wd, _, err := extractEntries(t, []entry{{hdr: tar.Header{Name: "big.bin", Typeflag: tar.TypeReg, Mode: 0o644}, body: body}})
+	require.NoError(t, err)
+
+	got, err := os.ReadFile(filepath.Join(wd, "extracted", "big.bin"))
+	require.NoError(t, err)
+	require.True(t, bytes.Equal([]byte(body), got), "extracted content differs from the archived content")
+}
+
+// patterned returns n bytes that differ from one position to the next, so a copy that skips, repeats or
+// reorders data cannot produce identical output.
+func patterned(n int) []byte {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = byte(i*7 + i/251)
+	}
+
+	return b
+}
+
+// Sizes around the boundaries of the copy: empty, one byte, either side of 1 KiB and of io.Copy's 32 KiB buffer.
+func TestExtractFileSizeBoundaries(t *testing.T) {
+	for _, size := range []int{0, 1, 1023, 1024, 1025, 2048, 32 * 1024, 32*1024 + 1, 1<<20 + 17} {
+		t.Run(fmt.Sprintf("%d bytes", size), func(t *testing.T) {
+			want := patterned(size)
+			wd, _, err := extractEntries(t, []entry{{hdr: tar.Header{Name: "f.bin", Typeflag: tar.TypeReg, Mode: 0o644}, body: string(want)}})
+			require.NoError(t, err)
+
+			got, err := os.ReadFile(filepath.Join(wd, "extracted", "f.bin"))
+			require.NoError(t, err)
+			require.True(t, bytes.Equal(want, got), "extracted content differs from the archived content")
+		})
+	}
+}
+
+// A tar cut off in the middle of a file must fail, not extract a short file as if it were complete.
+func TestExtractTruncatedArchiveFails(t *testing.T) {
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	require.NoError(t, tw.WriteHeader(&tar.Header{Name: "f.bin", Typeflag: tar.TypeReg, Mode: 0o644, Size: 5000}))
+	_, err := tw.Write(patterned(5000))
+	require.NoError(t, err)
+	require.NoError(t, tw.Close())
+
+	// 512 bytes of header plus 2500 of the 5000 body bytes.
+	var gzBuf bytes.Buffer
+	gz := gzip.NewWriter(&gzBuf)
+	_, err = gz.Write(buf.Bytes()[:512+2500])
+	require.NoError(t, err)
+	require.NoError(t, gz.Close())
+
+	wd := t.TempDir()
+	fp := filepath.Join(wd, "archive")
+	require.NoError(t, os.WriteFile(fp, gzBuf.Bytes(), 0o600))
+	dst := filepath.Join(wd, "extracted")
+	require.NoError(t, os.Mkdir(dst, 0o755))
+
+	err = extract(logr.Discard(), fp, mimeTypeGzip, dst)
+	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	require.ErrorContains(t, err, "error reading tar regular file")
 }
