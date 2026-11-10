@@ -31,6 +31,10 @@ func fastBackoff(t *testing.T, steps int) {
 	t.Cleanup(func() { defaultBackoff = orig })
 }
 
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
 // tarBytes returns a tar, optionally gzipped, holding one file.
 func tarBytes(t *testing.T, name, body string, gzipped bool) []byte {
 	t.Helper()
@@ -144,10 +148,25 @@ func TestFetchAndExtractRetriesConnectionRefused(t *testing.T) {
 	closedURL := srv.URL
 	srv.Close()
 
+	// Count request attempts at the transport so the retries are observable.
+	var attempts atomic.Int32
+	origTransport := http.DefaultClient.Transport
+	http.DefaultClient.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		attempts.Add(1)
+		rt := origTransport
+		if rt == nil {
+			rt = http.DefaultTransport
+		}
+
+		return rt.RoundTrip(r)
+	})
+	t.Cleanup(func() { http.DefaultClient.Transport = origTransport })
+
 	start := time.Now()
 	_, err := fetch(t, closedURL, 0)
 	require.Error(t, err)
 	require.Less(t, time.Since(start), 10*time.Second)
+	require.EqualValues(t, 3, attempts.Load(), "one attempt per backoff step")
 }
 
 func TestRetryable(t *testing.T) {
