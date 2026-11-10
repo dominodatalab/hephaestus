@@ -16,10 +16,9 @@ import (
 	"github.com/containerd/errdefs"
 
 	"github.com/distribution/reference"
-	dockertypesregistry "github.com/docker/docker/api/types/registry"
-	"github.com/docker/docker/registry"
 	"github.com/go-logr/logr"
 	typesregistry "github.com/moby/moby/api/types/registry"
+	"github.com/moby/moby/v2/daemon/pkg/registry"
 	"go.uber.org/multierr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -252,20 +251,10 @@ func Verify(
 		}
 
 		auth.ServerAddress = server
-		// registry.Service still takes the docker/docker type, which has the
-		// same fields plus the long-deprecated Email.
-		dockerAuth := dockertypesregistry.AuthConfig{
-			Username:      auth.Username,
-			Password:      auth.Password,
-			Auth:          auth.Auth,
-			ServerAddress: auth.ServerAddress,
-			IdentityToken: auth.IdentityToken,
-			RegistryToken: auth.RegistryToken,
-		}
 
 		var authErr, answered error
 		err := wait.ExponentialBackoffWithContext(ctx, defaultBackoff, func(ctx context.Context) (bool, error) {
-			if _, _, authErr = svc.Auth(ctx, &dockerAuth, "DominoDataLab_Hephaestus/1.0"); authErr != nil {
+			if _, authErr = svc.Auth(ctx, &auth, "DominoDataLab_Hephaestus/1.0"); authErr != nil {
 				// Remember the first answer we got. Only the last retry survives in
 				// authErr, so a registry that answers and then goes down would
 				// otherwise look unreachable and let the bad cred through. Docker's
