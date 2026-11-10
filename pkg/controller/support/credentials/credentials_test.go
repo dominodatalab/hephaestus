@@ -364,7 +364,7 @@ func TestVerify(t *testing.T) {
 }
 
 func TestCertRejected(t *testing.T) {
-	// Loopback is always insecure to registry.NewService, so cert verification
+	// Loopback is always insecure to registryLogin, so cert verification
 	// never runs through Verify(). Hit http.Client directly instead.
 	t.Run("untrusted_cert_is_rejected_not_unreachable", func(t *testing.T) {
 		srv := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
