@@ -100,7 +100,7 @@ func FetchAndExtract(ctx context.Context, log logr.Logger, url, wd string, timeo
 	if err := os.MkdirAll(dest, 0755); err != nil {
 		return nil, err
 	}
-	if err := extract(archive, ct, dest); err != nil {
+	if err := extract(log, archive, ct, dest); err != nil {
 		return nil, err
 	}
 
@@ -205,7 +205,7 @@ func getFileContentType(fp string) (ct mimeType, err error) {
 	return mimeType(kind.MIME.Value), nil
 }
 
-func extract(fp string, ct mimeType, dst string) error {
+func extract(log logr.Logger, fp string, ct mimeType, dst string) error {
 	f, err := os.Open(fp)
 	if err != nil {
 		return err
@@ -250,16 +250,29 @@ func extract(fp string, ct mimeType, dst string) error {
 				return err
 			}
 		case tar.TypeReg:
+			// A tar can hold "a/b.txt" without a separate "a/" entry (for example one made with
+			// `tar cf x.tar a/b.txt`), so create the parent directory before writing the file.
+			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+				return err
+			}
 			if err = copyRegularFile(target, tr, header.Mode); err != nil {
 				return err
 			}
+		case tar.TypeSymlink, tar.TypeLink:
+			// Links are not extracted: a link that points outside the destination could be used to
+			// write there. Say so instead of dropping the entry silently.
+			log.Info("Skipping link entry in archive, links are not extracted",
+				"name", header.Name, "type", string(header.Typeflag), "linkname", header.Linkname)
 		}
 	}
 }
 
 func sanitizeExtractPath(destination, filename string) (string, error) {
-	destPath := filepath.Join(destination, filename)
-	if !strings.HasPrefix(destPath, filepath.Clean(destination)) {
+	dest := filepath.Clean(destination)
+	destPath := filepath.Join(dest, filename)
+
+	// Compare with a trailing separator, otherwise "<dest>-other" would pass as being inside "<dest>".
+	if destPath != dest && !strings.HasPrefix(destPath, dest+string(os.PathSeparator)) {
 		return "", fmt.Errorf("content filepath tainted: %s", destPath)
 	}
 
@@ -273,14 +286,8 @@ func copyRegularFile(target string, tr *tar.Reader, mode int64) error {
 	}
 	defer f.Close()
 
-	for {
-		if _, err = io.CopyN(f, tr, 1024); err != nil {
-			if err == io.EOF {
-				break
-			}
-
-			return fmt.Errorf("error reading tar regular file: %w", err)
-		}
+	if _, err = io.Copy(f, tr); err != nil {
+		return fmt.Errorf("error reading tar regular file: %w", err)
 	}
 
 	return nil
