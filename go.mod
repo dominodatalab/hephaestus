@@ -30,6 +30,7 @@ require (
 	github.com/h2non/filetype v1.1.3
 	github.com/lestrrat-go/dataurl v0.0.0-20220721131304-b60017625013
 	github.com/moby/buildkit v0.33.1
+	github.com/moby/moby/api v1.54.2
 	github.com/newrelic/go-agent/v3 v3.43.3
 	github.com/newrelic/go-agent/v3/integrations/nrzap v1.0.1
 	github.com/prometheus/client_golang v1.24.1
@@ -182,7 +183,6 @@ require (
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	gotest.tools/v3 v3.5.1 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect

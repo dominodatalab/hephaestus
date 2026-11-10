@@ -14,9 +14,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/smithy-go/logging"
-	"github.com/docker/docker/api/types/registry"
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
 	"github.com/go-logr/logr"
+	"github.com/moby/moby/api/types/registry"
 )
 
 type ecrClient interface {

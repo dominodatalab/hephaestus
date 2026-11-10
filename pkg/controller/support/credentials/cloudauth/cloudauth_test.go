@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/docker/docker/api/types/registry"
 	"github.com/go-logr/logr"
+	"github.com/moby/moby/api/types/registry"
 )
 
 func TestRegistry_RetrieveAuthorization(t *testing.T) {
