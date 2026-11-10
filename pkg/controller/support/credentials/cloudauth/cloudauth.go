@@ -5,8 +5,8 @@ import (
 	"errors"
 	"regexp"
 
-	"github.com/docker/docker/api/types/registry"
 	"github.com/go-logr/logr"
+	"github.com/moby/moby/api/types/registry"
 )
 
 var ErrNoLoader = errors.New("no loader found")

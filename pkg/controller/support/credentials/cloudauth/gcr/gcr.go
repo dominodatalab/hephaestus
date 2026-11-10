@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/docker/docker/api/types/registry"
 	"github.com/go-logr/logr"
+	"github.com/moby/moby/api/types/registry"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 

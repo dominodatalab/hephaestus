@@ -16,9 +16,9 @@ import (
 	"github.com/containerd/errdefs"
 
 	"github.com/distribution/reference"
-	typesregistry "github.com/docker/docker/api/types/registry"
-	"github.com/docker/docker/registry"
+	dockercreds "github.com/docker/cli/cli/config/credentials"
 	"github.com/go-logr/logr"
+	typesregistry "github.com/moby/moby/api/types/registry"
 	"go.uber.org/multierr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -141,7 +141,7 @@ func Persist(
 // bare host so the two compare. Keys can carry a scheme, a path and userinfo.
 // Docker Hub answers to several names, so they all collapse to docker.io.
 func normalizeRegistryHost(server string) string {
-	host := strings.ToLower(registry.ConvertToHostname(server))
+	host := strings.ToLower(dockercreds.ConvertToHostname(server))
 	if at := strings.LastIndex(host, "@"); at != -1 {
 		host = host[at+1:]
 	}
@@ -178,7 +178,7 @@ func targetedRegistryHosts(refs []string) map[string]bool {
 // with a rejection.
 //
 // Don't test the top-level error's type. http.Client wraps every failure in
-// *url.Error, which satisfies net.Error whatever the cause, and docker's bearer
+// *url.Error, which satisfies net.Error whatever the cause, and the bearer
 // transport returns registry status errors through it. Gating on that reads a
 // bearer 401 as an outage and lets a typo'd password reach a leased worker.
 func unreachable(err error) bool {
@@ -209,6 +209,17 @@ func certRejected(err error) bool {
 	return ok
 }
 
+// realmRefused reports that go-containerregistry would not contact the token
+// endpoint a registry advertised, such as a private IP on another host or a
+// redirect to one. The check then has no verdict, and buildkit decides at push.
+// Both refusals are plain errors, so match their text; tests pin it.
+func realmRefused(err error) bool {
+	msg := err.Error()
+
+	return strings.Contains(msg, "invalid realm in www-authenticate: ") ||
+		strings.Contains(msg, "refusing token-server redirect to ")
+}
+
 func Verify(
 	ctx context.Context,
 	logger logr.Logger,
@@ -225,11 +236,6 @@ func Verify(
 
 	configJSON := DockerConfigJSON{}
 	if err = json.Unmarshal(data, &configJSON); err != nil {
-		return err
-	}
-
-	svc, err := registry.NewService(registry.ServiceOptions{InsecureRegistries: insecureRegistries})
-	if err != nil {
 		return err
 	}
 
@@ -254,16 +260,13 @@ func Verify(
 
 		var authErr, answered error
 		err := wait.ExponentialBackoffWithContext(ctx, defaultBackoff, func(ctx context.Context) (bool, error) {
-			if _, _, authErr = svc.Auth(ctx, &auth, "DominoDataLab_Hephaestus/1.0"); authErr != nil {
-				// Remember the first answer we got. Only the last retry survives in
-				// authErr, so a registry that answers and then goes down would
-				// otherwise look unreachable and let the bad cred through. Docker's
-				// own HTTPS-then-HTTP attempts inside one Auth call keep only their
-				// last error, so that layer can still mask an answer.
-				if answered == nil && !unreachable(authErr) {
+			if authErr = authenticate(ctx, &auth, insecureRegistries, "DominoDataLab_Hephaestus/1.0"); authErr != nil {
+				// Preserve the first go-containerregistry rejection across retries.
+				// A later outage must not hide an answer and let a bad credential through.
+				if answered == nil && !unreachable(authErr) && !realmRefused(authErr) {
 					answered = authErr
 				}
-				if errdefs.IsUnauthorized(authErr) || certRejected(authErr) {
+				if errdefs.IsUnauthorized(authErr) || certRejected(authErr) || realmRefused(authErr) {
 					return false, authErr
 				}
 				return false, nil
@@ -279,6 +282,11 @@ func Verify(
 		// must not discard cred failures already found, this registry's included.
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return multierr.Combine(append(errs, answered, err)...)
+		}
+
+		if answered == nil && realmRefused(authErr) {
+			logger.Info("Skipping credential check for unsupported token realm", "registry", host, "reason", authErr.Error())
+			continue
 		}
 
 		// A registry that never answered must not fail the build. It may be down
