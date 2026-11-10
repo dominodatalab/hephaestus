@@ -98,6 +98,23 @@ func TestExtractSkipsLinksAndLogsThem(t *testing.T) {
 	require.Contains(t, logs, "Skipping link entry")
 }
 
+// Special files are never created: a device node or FIFO in an archive must not reach the filesystem.
+func TestExtractIgnoresSpecialFiles(t *testing.T) {
+	wd, _, err := extractEntries(t, []entry{
+		{hdr: tar.Header{Name: "keep", Typeflag: tar.TypeReg, Mode: 0o644}, body: "x"},
+		{hdr: tar.Header{Name: "fifo", Typeflag: tar.TypeFifo, Mode: 0o644}},
+		{hdr: tar.Header{Name: "chr", Typeflag: tar.TypeChar, Mode: 0o644, Devmajor: 1, Devminor: 3}},
+		{hdr: tar.Header{Name: "blk", Typeflag: tar.TypeBlock, Mode: 0o644, Devmajor: 7, Devminor: 0}},
+	})
+	require.NoError(t, err)
+
+	require.FileExists(t, filepath.Join(wd, "extracted", "keep"))
+	for _, name := range []string{"fifo", "chr", "blk"} {
+		_, lerr := os.Lstat(filepath.Join(wd, "extracted", name))
+		require.True(t, os.IsNotExist(lerr), "%s should not be extracted", name)
+	}
+}
+
 // Archives need not contain an entry for every parent directory.
 func TestExtractFileWithoutDirectoryEntry(t *testing.T) {
 	wd, _, err := extractEntries(t, []entry{{hdr: tar.Header{Name: "a/b.txt", Typeflag: tar.TypeReg, Mode: 0o644}, body: "x"}})
