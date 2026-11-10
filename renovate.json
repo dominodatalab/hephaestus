@@ -41,7 +41,7 @@
     {
       "description": "Default Distroless and Chainguard static match since they don't have traditional versions",
       "matchDatasources": ["docker"],
-      "matchPackageNames": ["/gcr.io/distroless/", "/cgr.dev/chainguard/static/"],
+      "matchPackageNames": ["/gcr.io/distroless/", "/cgr.dev/chainguard/static/", "/cgr.dev/chainguard/wolfi-base/"],
       "pinDigests": true,
       "versioning": "docker"
     },
