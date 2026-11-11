@@ -62,10 +62,17 @@ func (h *TransitionHelper) SetRunning(ctx *core.Context, obj PhasedObject) {
 // SetFailed transitions the object to the Failed phase and persists it. It returns the
 // status-write error (nil on success), NOT the passed-in build error: a non-nil return
 // means the terminal transition was not durably recorded and the reconcile should be
-// retried. err is used only to populate the failure condition message.
+// retried. err is used only to populate the failure condition message, which is persisted together with the phase.
 func (h *TransitionHelper) SetFailed(ctx *core.Context, obj PhasedObject, err error) error {
 	obj.SetPhase(hephv1.PhaseFailed)
 	ctx.Conditions.SetFalse(h.ReadyCondition, "ExecutionError", err.Error())
+
+	// Conditions are otherwise only applied to the object once the component returns. Flush them now so the
+	// failure condition is persisted in the same status write as the Failed phase; otherwise a build can be left
+	// Failed with no conditions if the later write is lost.
+	if flushErr := ctx.Conditions.Flush(); flushErr != nil {
+		return flushErr
+	}
 
 	return h.updateStatus(ctx, obj)
 }
