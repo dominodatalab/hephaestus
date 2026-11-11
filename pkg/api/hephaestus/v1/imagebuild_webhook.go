@@ -101,6 +101,10 @@ func (in *ImageBuild) validateImageBuild(action string, obj *ImageBuild) (admiss
 		errList = append(errList, errs...)
 	}
 
+	if errs := validateAdditionalContexts(log, fp.Child("additionalContexts"), obj.Spec.AdditionalContexts); errs != nil {
+		errList = append(errList, errs...)
+	}
+
 	if strings.TrimSpace(obj.Spec.LogKey) == "" {
 		log.Info("WARNING: Blank 'logKey' will preclude post-log processing")
 	}
