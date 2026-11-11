@@ -22,8 +22,7 @@ import (
 const (
 	registryProbeTimeout = 15 * time.Second
 
-	// dockerHubEndpoint is where Docker Hub serves the v2 API. The legacy
-	// credential keys (index.docker.io, docker.io) all point here.
+	// dockerHubEndpoint is where Docker Hub serves the v2 API.
 	dockerHubEndpoint = "registry-1.docker.io"
 )
 
@@ -97,7 +96,7 @@ func authenticate(
 
 	var inner http.RoundTripper = httpsOnlyTransport{base}
 	if insecure {
-		base.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec
+		base.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 		inner = base
 	}
 
@@ -114,6 +113,7 @@ func authenticate(
 		return classifyAuthError(err)
 	}
 
+	// rt rewrites the scheme to whichever one answered the ping.
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+reg.RegistryStr()+"/v2/", http.NoBody)
 	if err != nil {
 		return err

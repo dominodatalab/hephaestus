@@ -192,7 +192,6 @@ func shortBackoff(t *testing.T) {
 	retryBackoff(t, 1)
 }
 
-// retryBackoff lets Verify try steps times, 1ms apart.
 func retryBackoff(t *testing.T, steps int) {
 	t.Helper()
 
@@ -332,6 +331,27 @@ func TestVerify(t *testing.T) {
 		shortBackoff(t)
 
 		err := Verify(context.Background(), logr.Discard(), dir, nil, []string{"test"}, []string{host + "/org/app:latest"})
+		assert.NoError(t, err)
+	})
+
+	t.Run("insecure_registry_network_failure_is_skipped", func(t *testing.T) {
+		// The listener answers the HTTPS probe in plain HTTP, then resets the
+		// HTTP request, so no attempt carries an answer.
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			conn, _, err := w.(http.Hijacker).Hijack()
+			if err != nil {
+				return
+			}
+			_ = conn.(*net.TCPConn).SetLinger(0)
+			_ = conn.Close()
+		}))
+		t.Cleanup(srv.Close)
+
+		host := strings.TrimPrefix(srv.URL, "http://")
+		dir := writeDockerConfigFor(t, host)
+		shortBackoff(t)
+
+		err := Verify(context.Background(), logr.Discard(), dir, []string{host}, []string{"test"}, []string{host + "/org/app:latest"})
 		assert.NoError(t, err)
 	})
 

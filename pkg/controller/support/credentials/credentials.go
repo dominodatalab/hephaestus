@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -178,9 +179,9 @@ func targetedRegistryHosts(refs []string) map[string]bool {
 // with a rejection.
 //
 // Don't test the top-level error's type. http.Client wraps every failure in
-// *url.Error, which satisfies net.Error whatever the cause, and the bearer
-// transport returns registry status errors through it. Gating on that reads a
-// bearer 401 as an outage and lets a typo'd password reach a leased worker.
+// *url.Error, which satisfies net.Error whatever the cause. Gating on that
+// reads an untrusted certificate or a refused plain-HTTP fallback as an outage
+// and lets the build reach a leased worker unchecked.
 func unreachable(err error) bool {
 	if err == nil {
 		return false
@@ -189,6 +190,15 @@ func unreachable(err error) bool {
 	// The registry named the credential as the problem, so it answered.
 	if errdefs.IsUnauthorized(err) {
 		return false
+	}
+
+	// An insecure registry is tried over HTTPS and HTTP, and both failures come
+	// back joined, HTTPS first. HTTPS reaching a plain-HTTP port is no answer,
+	// so the HTTP attempt's network failure decides.
+	if errors.Is(err, http.ErrSchemeMismatch) {
+		_, failed := errors.AsType[*net.OpError](err)
+
+		return failed || errors.Is(err, context.DeadlineExceeded)
 	}
 
 	if urlErr, ok := errors.AsType[*url.Error](err); ok {
@@ -212,7 +222,7 @@ func certRejected(err error) bool {
 // realmRefused reports that go-containerregistry would not contact the token
 // endpoint a registry advertised, such as a private IP on another host or a
 // redirect to one. The check then has no verdict, and buildkit decides at push.
-// Both refusals are plain errors, so match their text; tests pin it.
+// Both refusals are plain errors, so match their text.
 func realmRefused(err error) bool {
 	msg := err.Error()
 
@@ -261,8 +271,7 @@ func Verify(
 		var authErr, answered error
 		err := wait.ExponentialBackoffWithContext(ctx, defaultBackoff, func(ctx context.Context) (bool, error) {
 			if authErr = authenticate(ctx, &auth, insecureRegistries, "DominoDataLab_Hephaestus/1.0"); authErr != nil {
-				// Preserve the first go-containerregistry rejection across retries.
-				// A later outage must not hide an answer and let a bad credential through.
+				// A later outage must not hide the first answer and let a bad credential through.
 				if answered == nil && !unreachable(authErr) && !realmRefused(authErr) {
 					answered = authErr
 				}
