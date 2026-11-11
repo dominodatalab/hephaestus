@@ -144,9 +144,19 @@ func retryable(err *url.Error) bool {
 // downloadFile takes a file URL and local location to download it to.
 // It returns "done" (retryable or not) and an error.
 func downloadFile(ctx context.Context, log logr.Logger, c fileDownloader, fileURL, fp string) (bool, error) {
+	return downloadFileWith(ctx, log, c, fileURL, fp, nil)
+}
+
+// downloadFileWith is downloadFile with optional verification. A nil v keeps the plain behavior.
+func downloadFileWith(
+	ctx context.Context, log logr.Logger, c fileDownloader, fileURL, fp string, v *verification,
+) (bool, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fileURL, nil)
 	if err != nil {
 		return false, err
+	}
+	if v != nil && v.token != "" {
+		req.Header.Set("Authorization", "Bearer "+v.token)
 	}
 	resp, err := c.Do(req)
 	if err != nil {
@@ -173,6 +183,25 @@ func downloadFile(ctx context.Context, log logr.Logger, c fileDownloader, fileUR
 	case http.StatusOK:
 	default:
 		return false, fmt.Errorf("file download failed with status %d", resp.StatusCode)
+	}
+
+	if v != nil {
+		err := v.save(resp, fp) // removes the partial file on failure
+		if readErr, ok := errors.AsType[*readError](err); ok {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return true, fmt.Errorf("reading response body: %w", ctxErr)
+			}
+
+			// The connection broke while the body was being read (reset, unexpected EOF, truncated body...).
+			// Unlike a checksum mismatch, a size violation or a failure writing the file, it can succeed next time.
+			log.Error(
+				readErr.err, "Received transient error while reading context, will attempt to retry",
+				"url", fileURL, "file", fp,
+			)
+			return false, nil
+		}
+
+		return true, err
 	}
 
 	out, err := os.Create(fp)
