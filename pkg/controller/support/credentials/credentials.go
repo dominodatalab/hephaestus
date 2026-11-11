@@ -16,9 +16,8 @@ import (
 	"github.com/containerd/errdefs"
 
 	"github.com/distribution/reference"
-	typesregistry "github.com/docker/docker/api/types/registry"
-	"github.com/docker/docker/registry"
 	"github.com/go-logr/logr"
+	typesregistry "github.com/moby/moby/api/types/registry"
 	"go.uber.org/multierr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -141,7 +140,7 @@ func Persist(
 // bare host so the two compare. Keys can carry a scheme, a path and userinfo.
 // Docker Hub answers to several names, so they all collapse to docker.io.
 func normalizeRegistryHost(server string) string {
-	host := strings.ToLower(registry.ConvertToHostname(server))
+	host := strings.ToLower(convertToHostname(server))
 	if at := strings.LastIndex(host, "@"); at != -1 {
 		host = host[at+1:]
 	}
@@ -228,11 +227,6 @@ func Verify(
 		return err
 	}
 
-	svc, err := registry.NewService(registry.ServiceOptions{InsecureRegistries: insecureRegistries})
-	if err != nil {
-		return err
-	}
-
 	targetedHosts := targetedRegistryHosts(refs)
 	if len(refs) == 0 || targetedHosts == nil {
 		logger.Info("Checking every credential: no build targets to scope to, or a reference could not be parsed",
@@ -254,12 +248,12 @@ func Verify(
 
 		var authErr, answered error
 		err := wait.ExponentialBackoffWithContext(ctx, defaultBackoff, func(ctx context.Context) (bool, error) {
-			if _, _, authErr = svc.Auth(ctx, &auth, "DominoDataLab_Hephaestus/1.0"); authErr != nil {
+			if authErr = registryLogin(ctx, auth, insecureRegistries); authErr != nil {
 				// Remember the first answer we got. Only the last retry survives in
 				// authErr, so a registry that answers and then goes down would
-				// otherwise look unreachable and let the bad cred through. Docker's
-				// own HTTPS-then-HTTP attempts inside one Auth call keep only their
-				// last error, so that layer can still mask an answer.
+				// otherwise look unreachable and let the bad cred through. The
+				// HTTPS-then-HTTP attempts inside one registryLogin call keep only
+				// their last error, so that layer can still mask an answer.
 				if answered == nil && !unreachable(authErr) {
 					answered = authErr
 				}

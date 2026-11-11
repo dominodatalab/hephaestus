@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/docker/api/types/registry"
 	"github.com/go-logr/logr"
+	"github.com/moby/moby/api/types/registry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -364,7 +364,7 @@ func TestVerify(t *testing.T) {
 }
 
 func TestCertRejected(t *testing.T) {
-	// Loopback is always insecure to registry.NewService, so cert verification
+	// Loopback is always insecure to registryLogin, so cert verification
 	// never runs through Verify(). Hit http.Client directly instead.
 	t.Run("untrusted_cert_is_rejected_not_unreachable", func(t *testing.T) {
 		srv := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))

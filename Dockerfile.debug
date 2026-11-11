@@ -1,4 +1,4 @@
-# hadolint global ignore=DL3008
+# hadolint global ignore=DL3018
 FROM --platform=$BUILDPLATFORM golang:1.26.10-alpine AS build
 ARG VERSION="dev"
 ARG TARGETOS
@@ -14,46 +14,46 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -ldflags="-X 'main.Version=${VERSION}'" -o hephaestus-controller ./cmd/controller
 
 
-FROM ubuntu:noble
+FROM cgr.dev/chainguard/wolfi-base:latest@sha256:b7787f1d3f29dcfb48730372d3515391ac3b218723201a765c94949922676099
 ARG USERNAME=lala
 ARG USER_UID=1001
 ARG USER_GID=$USER_UID
-RUN apt-get update \
-  && apt-get install --no-install-recommends --yes \
+USER root
+RUN apk add --no-cache \
+    7zip \
     bash \
-    bind9-host \
+    bind-tools \
     coreutils \
     curl \
-    dnsutils \
-    gnupg2 \
+    glibc-locales \
+    gnupg \
+    gpg \
     grep \
     httpie \
-    influxdb-client \
-    iputils-ping \
+    iputils \
     jq \
     kafkacat \
-    locales \
     mysql-client \
     nano \
     net-tools \
     netcat-openbsd \
     ngrep \
-    nmap \
     openssh-client \
-    p7zip-full \
     postgresql-client \
-    python3-pip \
-    python3-setuptools \
-    redis-tools \
+    py3-pip \
+    shadow \
     swaks \
     tcpdump \
-    telnet \
+    valkey-9.0-cli \
     vim \
     wget \
-    xz-utils \
-  && rm -rf /var/lib/apt/lists/* \
+    xz \
+  && ln -s /usr/bin/valkey-cli /usr/bin/redis-cli \
+  && ln -s /usr/bin/kcat /usr/bin/kafkacat \
+  && { [ -e /usr/bin/python3 ] || ln -s "$(ls /usr/bin/python3.* | grep -E '/python3\.[0-9]+$' | sort -V | tail -1)" /usr/bin/python3; } \
   && groupadd --gid $USER_GID $USERNAME \
-  && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME
+  && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
+  && mkdir -p /opt
 
 
 WORKDIR /
