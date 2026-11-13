@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,8 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/docker/api/types/registry"
 	"github.com/go-logr/logr"
+	"github.com/go-logr/logr/funcr"
+	"github.com/moby/moby/api/types/registry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -111,10 +113,7 @@ func respondingHost(t *testing.T, status int) string {
 }
 
 // bearerHost answers a token request with the given status after a Bearer
-// challenge. Bearer rejections arrive wrapped in *url.Error, which Basic ones do
-// not, so it needs its own coverage. The JSON content type matters: without it
-// docker parses the body as a single errcode.Error and a 401 becomes
-// unauthorizedErr, a shape real registries never send.
+// challenge. Token rejections need coverage separate from registry responses.
 func bearerHost(t *testing.T, status int) string {
 	t.Helper()
 
@@ -190,13 +189,141 @@ func cancelledContext() context.Context {
 // shortBackoff makes Verify try once with no wait.
 func shortBackoff(t *testing.T) {
 	t.Helper()
+	retryBackoff(t, 1)
+}
+
+func retryBackoff(t *testing.T, steps int) {
+	t.Helper()
 
 	orig := defaultBackoff
-	defaultBackoff = wait.Backoff{Duration: time.Millisecond, Steps: 1}
+	defaultBackoff = wait.Backoff{Duration: time.Millisecond, Steps: steps}
 	t.Cleanup(func() { defaultBackoff = orig })
 }
 
 func TestVerify(t *testing.T) {
+	t.Run("refused_token_realm_is_skipped_without_retry", func(t *testing.T) {
+		for _, scheme := range []string{"http", "https"} {
+			t.Run(scheme, func(t *testing.T) {
+				var realmRequests, registryRequests atomic.Int32
+				tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					realmRequests.Add(1)
+					if user, pass, ok := r.BasicAuth(); !ok || user != "u" || pass != "p" {
+						w.WriteHeader(http.StatusUnauthorized)
+						return
+					}
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = w.Write([]byte(`{"token":"valid-token"}`))
+				}))
+				t.Cleanup(tokenServer.Close)
+
+				srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					registryRequests.Add(1)
+					if r.Header.Get("Authorization") == "Bearer valid-token" {
+						w.WriteHeader(http.StatusOK)
+						return
+					}
+					w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="%s/token",service="registry"`, tokenServer.URL))
+					w.WriteHeader(http.StatusUnauthorized)
+				}))
+				if scheme == "https" {
+					srv.StartTLS()
+				} else {
+					srv.Start()
+				}
+				t.Cleanup(srv.Close)
+
+				host := strings.TrimPrefix(srv.URL, scheme+"://")
+				dir := writeDockerConfigFor(t, host)
+				retryBackoff(t, 3)
+
+				var logs strings.Builder
+				logger := funcr.New(func(_, args string) { logs.WriteString(args) }, funcr.Options{})
+				err := Verify(context.Background(), logger, dir, []string{host}, []string{"test"}, []string{host + "/org/app:latest"})
+				assert.NoError(t, err)
+				assert.Zero(t, realmRequests.Load(), "a refused realm must receive no requests or credentials")
+				assert.Equal(t, int32(1), registryRequests.Load(), "realm refusal must stop after one attempt")
+				assert.Contains(t, logs.String(), "Skipping credential check for unsupported token realm")
+				reason := `realm host \"127.0.0.1\" is a private or link-local address`
+				if scheme == "https" {
+					reason = `realm scheme \"http\" not allowed for a secure registry; use https`
+				}
+				assert.Contains(t, logs.String(), "invalid realm in www-authenticate: "+reason)
+			})
+		}
+	})
+
+	t.Run("token_redirect_to_private_ip_is_skipped", func(t *testing.T) {
+		var tokenRequests, registryRequests atomic.Int32
+		token := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			tokenRequests.Add(1)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"token":"valid-token"}`))
+		}))
+		t.Cleanup(token.Close)
+
+		redirect := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, token.URL+"/token", http.StatusFound)
+		}))
+		t.Cleanup(redirect.Close)
+
+		// A hostname realm passes the realm check; only its redirect target is refused.
+		realm := strings.Replace(redirect.URL, "127.0.0.1", "localhost", 1)
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			registryRequests.Add(1)
+			if r.Header.Get("Authorization") == "Bearer valid-token" {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="%s/token",service="registry"`, realm))
+			w.WriteHeader(http.StatusUnauthorized)
+		}))
+		t.Cleanup(srv.Close)
+
+		host := strings.TrimPrefix(srv.URL, "http://")
+		dir := writeDockerConfigFor(t, host)
+		retryBackoff(t, 3)
+
+		var logs strings.Builder
+		logger := funcr.New(func(_, args string) { logs.WriteString(args) }, funcr.Options{})
+		err := Verify(context.Background(), logger, dir, []string{host}, []string{"test"}, []string{host + "/org/app:latest"})
+		assert.NoError(t, err)
+		assert.Zero(t, tokenRequests.Load(), "a refused redirect target must receive no requests or credentials")
+		assert.Equal(t, int32(1), registryRequests.Load(), "realm refusal must stop after one attempt")
+		assert.Contains(t, logs.String(), "refusing token-server redirect to ")
+	})
+
+	t.Run("token_refresh_unauthorized_is_not_retried", func(t *testing.T) {
+		var tokenRequests, registryRequests atomic.Int32
+		mux := http.NewServeMux()
+		srv := httptest.NewServer(mux)
+		t.Cleanup(srv.Close)
+
+		mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			if tokenRequests.Add(1)%2 == 0 {
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = w.Write([]byte(`{"errors":[{"code":"UNAUTHORIZED","message":"bad creds"}]}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"token":"expired-token"}`))
+		})
+		mux.HandleFunc("/v2/", func(w http.ResponseWriter, _ *http.Request) {
+			registryRequests.Add(1)
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="%s/token",service="registry"`, srv.URL))
+			w.WriteHeader(http.StatusUnauthorized)
+		})
+
+		host := strings.TrimPrefix(srv.URL, "http://")
+		dir := writeDockerConfigFor(t, host)
+		retryBackoff(t, 3)
+
+		err := Verify(context.Background(), logr.Discard(), dir, []string{host}, []string{"test"}, []string{host + "/org/app:latest"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "client credentials are invalid")
+		assert.Equal(t, int32(2), tokenRequests.Load(), "only the initial token request and one refresh may run")
+		assert.Equal(t, int32(2), registryRequests.Load(), "only the challenge and final GET may run")
+	})
+
 	t.Run("unreachable_registry_is_skipped", func(t *testing.T) {
 		// Refused connection, so skip and let the build run.
 		host := unreachableHost(t)
@@ -204,6 +331,27 @@ func TestVerify(t *testing.T) {
 		shortBackoff(t)
 
 		err := Verify(context.Background(), logr.Discard(), dir, nil, []string{"test"}, []string{host + "/org/app:latest"})
+		assert.NoError(t, err)
+	})
+
+	t.Run("insecure_registry_network_failure_is_skipped", func(t *testing.T) {
+		// The listener answers the HTTPS probe in plain HTTP, then resets the
+		// HTTP request, so no attempt carries an answer.
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			conn, _, err := w.(http.Hijacker).Hijack()
+			if err != nil {
+				return
+			}
+			_ = conn.(*net.TCPConn).SetLinger(0)
+			_ = conn.Close()
+		}))
+		t.Cleanup(srv.Close)
+
+		host := strings.TrimPrefix(srv.URL, "http://")
+		dir := writeDockerConfigFor(t, host)
+		shortBackoff(t)
+
+		err := Verify(context.Background(), logr.Discard(), dir, []string{host}, []string{"test"}, []string{host + "/org/app:latest"})
 		assert.NoError(t, err)
 	})
 
@@ -285,6 +433,67 @@ func TestVerify(t *testing.T) {
 		require.Equal(t, int32(1), authed.Load(), "registry answered more than once, so no outage followed the rejection")
 	})
 
+	t.Run("untrusted_cert_is_fatal_without_retry", func(t *testing.T) {
+		var connections atomic.Int32
+		srv := httptest.NewUnstartedServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+		srv.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+			if state == http.StateNew {
+				connections.Add(1)
+			}
+		}
+		srv.StartTLS()
+		t.Cleanup(srv.Close)
+
+		host := strings.TrimPrefix(srv.URL, "https://")
+		dir := writeDockerConfigFor(t, host)
+		retryBackoff(t, 3)
+
+		err := Verify(context.Background(), logr.Discard(), dir, nil, []string{"test"}, []string{host + "/org/app:latest"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "client credentials are invalid")
+		assert.True(t, certRejected(err), err.Error())
+		assert.Equal(t, int32(1), connections.Load(), "certificate rejection must stop after one connection")
+	})
+
+	t.Run("unauthorized_is_not_retried", func(t *testing.T) {
+		retryBackoff(t, 3)
+
+		for _, scheme := range []string{"basic", "bearer"} {
+			t.Run(scheme, func(t *testing.T) {
+				var attempts atomic.Int32
+				mux := http.NewServeMux()
+				srv := httptest.NewServer(mux)
+				t.Cleanup(srv.Close)
+
+				mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
+					attempts.Add(1)
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusUnauthorized)
+					_, _ = w.Write([]byte(`{"errors":[{"code":"UNAUTHORIZED","message":"bad creds"}]}`))
+				})
+				mux.HandleFunc("/v2/", func(w http.ResponseWriter, r *http.Request) {
+					if scheme == "bearer" {
+						w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="%s/token",service="registry"`, srv.URL))
+					} else {
+						if r.Header.Get("Authorization") != "" {
+							attempts.Add(1)
+						}
+						w.Header().Set("WWW-Authenticate", `Basic realm="registry"`)
+					}
+					w.WriteHeader(http.StatusUnauthorized)
+				})
+
+				host := strings.TrimPrefix(srv.URL, "http://")
+				dir := writeDockerConfigFor(t, host)
+				//nolint:lll
+				err := Verify(context.Background(), logr.Discard(), dir, []string{host}, []string{"test"}, []string{host + "/org/app:latest"})
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "client credentials are invalid")
+				assert.Equal(t, int32(1), attempts.Load(), "a 401 must stop after one authenticated attempt")
+			})
+		}
+	})
+
 	t.Run("cancelled_context_is_fatal", func(t *testing.T) {
 		// A cancelled context is not an unreachable registry.
 		host := unreachableHost(t)
@@ -364,8 +573,6 @@ func TestVerify(t *testing.T) {
 }
 
 func TestCertRejected(t *testing.T) {
-	// Loopback is always insecure to registry.NewService, so cert verification
-	// never runs through Verify(). Hit http.Client directly instead.
 	t.Run("untrusted_cert_is_rejected_not_unreachable", func(t *testing.T) {
 		srv := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 		t.Cleanup(srv.Close)

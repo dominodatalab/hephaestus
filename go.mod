@@ -20,7 +20,6 @@ require (
 	github.com/containerd/platforms v1.0.0-rc.5
 	github.com/distribution/reference v0.6.0
 	github.com/docker/cli v29.7.2+incompatible
-	github.com/docker/docker v28.5.2+incompatible
 	github.com/dominodatalab/amqp-client v0.1.4
 	github.com/dominodatalab/controller-util v0.1.6
 	github.com/go-logr/logr v1.4.4
@@ -30,6 +29,7 @@ require (
 	github.com/h2non/filetype v1.1.3
 	github.com/lestrrat-go/dataurl v0.0.0-20220721131304-b60017625013
 	github.com/moby/buildkit v0.33.1
+	github.com/moby/moby/api v1.54.2
 	github.com/newrelic/go-agent/v3 v3.43.3
 	github.com/newrelic/go-agent/v3/integrations/nrzap v1.0.1
 	github.com/prometheus/client_golang v1.24.1
@@ -91,11 +91,7 @@ require (
 	github.com/containerd/typeurl/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dimchansky/utfbom v1.1.1 // indirect
-	github.com/docker/distribution v2.8.3+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.9.8 // indirect
-	github.com/docker/go-connections v0.7.0 // indirect
-	github.com/docker/go-metrics v0.0.1 // indirect
-	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7 // indirect
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
 	github.com/evanphx/json-patch v5.9.11+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
@@ -122,7 +118,6 @@ require (
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/in-toto/attestation v1.2.0 // indirect
@@ -182,7 +177,6 @@ require (
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	gotest.tools/v3 v3.5.1 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect

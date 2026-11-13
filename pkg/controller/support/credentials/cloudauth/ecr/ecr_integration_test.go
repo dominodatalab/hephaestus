@@ -14,8 +14,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	"github.com/go-logr/logr"
 
-	"github.com/docker/docker/api/types/registry"
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
+	"github.com/moby/moby/api/types/registry"
 )
 
 func TestRegisterIntegration(t *testing.T) {

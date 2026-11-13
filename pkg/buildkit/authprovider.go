@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/docker/cli/cli/config"
-	"github.com/docker/docker/api/types/registry"
 	"github.com/go-logr/logr"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/auth"
 	"github.com/moby/buildkit/session/auth/authprovider"
+	"github.com/moby/moby/api/types/registry"
 	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/util/wait"
 

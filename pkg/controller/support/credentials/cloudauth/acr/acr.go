@@ -14,9 +14,9 @@ import (
 	cra "github.com/Azure/azure-sdk-for-go/services/preview/containerregistry/runtime/2019-08-15-preview/containerregistry/containerregistryapi"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 	"github.com/Azure/go-autorest/autorest/to"
-	"github.com/docker/docker/api/types/registry"
 	"github.com/dominodatalab/hephaestus/pkg/controller/support/credentials/cloudauth"
 	"github.com/go-logr/logr"
+	"github.com/moby/moby/api/types/registry"
 )
 
 // https://github.com/Azure/acr/blob/main/docs/AAD-OAuth.md

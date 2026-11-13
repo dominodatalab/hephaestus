@@ -11,9 +11,9 @@ import (
 
 	"github.com/docker/cli/cli/config/configfile"
 	"github.com/docker/cli/cli/config/types"
-	"github.com/docker/docker/api/types/registry"
 	"github.com/go-logr/logr"
 	"github.com/moby/buildkit/session/auth"
+	"github.com/moby/moby/api/types/registry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
