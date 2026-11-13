@@ -41,6 +41,47 @@ type ImageBuildSpec struct {
 	// served by a configured buildkit pool, natively or via emulation, or the request is rejected at
 	// admission time. When empty, the build runs on whatever platform the leased worker natively runs.
 	Platforms []string `json:"platforms,omitempty"`
+	// AdditionalContexts declares named, remotely hosted build contexts that are made available to the build
+	// alongside the main context (analogous to "docker buildx build --build-context name=...").
+	// +optional
+	AdditionalContexts []AdditionalContext `json:"additionalContexts,omitempty"`
+}
+
+// AdditionalContext describes a named remote archive that is exposed to the build as an additional context.
+//
+// The archive is fetched by the controller, verified against SHA256 and bounded by MaxSizeBytes. When TokenSecret is
+// set, the URL must use https because the token is sent as a bearer credential. The token Secret is always read from
+// the ImageBuild's own namespace.
+//
+// NOTE: because the token is sent to whatever host the URL names, the controller (H5) MUST enforce a
+// controller-configured allowlist of permitted hosts before it attaches the token to a request. The admission
+// webhook cannot do this itself, since the allowlist is controller configuration and is not part of this API.
+// +kubebuilder:validation:XValidation:rule="!has(self.tokenSecret) || self.url.startsWith('https://')"
+type AdditionalContext struct {
+	// Name identifies the context and is the name referenced from the Dockerfile (e.g. "COPY --from=<name>").
+	// BuildKit parses the name as an image reference path component, so it must be lowercase, start with a letter,
+	// contain only lowercase letters, digits and the separators '.', '_', '__' or '-', and not end in a separator.
+	// It must be at most 63 characters long and must not be "context" or "dockerfile".
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:Pattern=`^[a-z][a-z0-9]*(?:(?:[._]|__|-+)[a-z0-9]+)*$`
+	Name string `json:"name"`
+	// URL is the http(s) location the context archive is fetched from. It must use https when TokenSecret is set.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^https?://.+`
+	URL string `json:"url"`
+	// SHA256 is the required lowercase hex-encoded digest (64 characters) the fetched content must match.
+	// +kubebuilder:validation:Pattern=`^[0-9a-f]{64}$`
+	SHA256 string `json:"sha256"`
+	// TokenSecret references a key in a Secret, in the same namespace as the ImageBuild, that holds a bearer token
+	// used to fetch the URL. The URL must use https when this is set. The controller MUST only send the token to
+	// hosts permitted by a controller-configured allowlist.
+	// +optional
+	TokenSecret *SecretKeyReference `json:"tokenSecret,omitempty"`
+	// MaxSizeBytes is the required, positive upper bound on the size of the fetched content. The controller never
+	// fetches unbounded content.
+	// +kubebuilder:validation:Minimum=1
+	MaxSizeBytes int64 `json:"maxSizeBytes"`
 }
 
 type ImageBuildTransition struct {

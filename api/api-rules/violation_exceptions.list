@@ -1,4 +1,5 @@
 API rule violation: list_type_missing,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,ImageBuildMessageStatus,AMQPSentMessages
+API rule violation: list_type_missing,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,ImageBuildSpec,AdditionalContexts
 API rule violation: list_type_missing,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,ImageBuildSpec,BuildArgs
 API rule violation: list_type_missing,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,ImageBuildSpec,Images
 API rule violation: list_type_missing,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,ImageBuildSpec,ImportRemoteBuildCache
@@ -15,6 +16,7 @@ API rule violation: list_type_missing,github.com/dominodatalab/hephaestus/pkg/ap
 API rule violation: list_type_missing,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,ImageCacheStatus,BuildkitPods
 API rule violation: list_type_missing,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,ImageCacheStatus,CachedImages
 API rule violation: list_type_missing,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,ImageCacheStatus,Conditions
+API rule violation: names_match,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,AdditionalContext,SHA256
 API rule violation: names_match,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,ImageBuildSpec,DisableCacheLayerExport
 API rule violation: names_match,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,ImageBuildSpec,DisableLocalBuildCache
 API rule violation: names_match,github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1,PlatformCapabilities,platforms

@@ -12,6 +12,7 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.AdditionalContext":                 schema_pkg_api_hephaestus_v1_AdditionalContext(ref),
 		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.BasicAuthCredentials":              schema_pkg_api_hephaestus_v1_BasicAuthCredentials(ref),
 		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuild":                        schema_pkg_api_hephaestus_v1_ImageBuild(ref),
 		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildAMQPOverrides":           schema_pkg_api_hephaestus_v1_ImageBuildAMQPOverrides(ref),
@@ -34,7 +35,62 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.PlatformResult":                    schema_pkg_api_hephaestus_v1_PlatformResult(ref),
 		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.RegistryCredentials":               schema_pkg_api_hephaestus_v1_RegistryCredentials(ref),
 		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.SecretCredentials":                 schema_pkg_api_hephaestus_v1_SecretCredentials(ref),
+		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.SecretKeyReference":                schema_pkg_api_hephaestus_v1_SecretKeyReference(ref),
 		"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.SecretReference":                   schema_pkg_api_hephaestus_v1_SecretReference(ref),
+	}
+}
+
+func schema_pkg_api_hephaestus_v1_AdditionalContext(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AdditionalContext describes a named remote archive that is exposed to the build as an additional context.\n\nThe archive is fetched by the controller, verified against SHA256 and bounded by MaxSizeBytes. When TokenSecret is set, the URL must use https because the token is sent as a bearer credential. The token Secret is always read from the ImageBuild's own namespace.\n\nNOTE: because the token is sent to whatever host the URL names, the controller (H5) MUST enforce a controller-configured allowlist of permitted hosts before it attaches the token to a request. The admission webhook cannot do this itself, since the allowlist is controller configuration and is not part of this API.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name identifies the context and is the name referenced from the Dockerfile (e.g. \"COPY --from=<name>\"). BuildKit parses the name as an image reference path component, so it must be lowercase, start with a letter, contain only lowercase letters, digits and the separators '.', '_', '__' or '-', and not end in a separator. It must be at most 63 characters long and must not be \"context\" or \"dockerfile\".",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"url": {
+						SchemaProps: spec.SchemaProps{
+							Description: "URL is the http(s) location the context archive is fetched from. It must use https when TokenSecret is set.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"sha256": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SHA256 is the required lowercase hex-encoded digest (64 characters) the fetched content must match.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"tokenSecret": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TokenSecret references a key in a Secret, in the same namespace as the ImageBuild, that holds a bearer token used to fetch the URL. The URL must use https when this is set. The controller MUST only send the token to hosts permitted by a controller-configured allowlist.",
+							Ref:         ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.SecretKeyReference"),
+						},
+					},
+					"maxSizeBytes": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxSizeBytes is the required, positive upper bound on the size of the fetched content. The controller never fetches unbounded content.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+				},
+				Required: []string{"name", "url", "sha256", "maxSizeBytes"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.SecretKeyReference"},
 	}
 }
 
@@ -511,11 +567,24 @@ func schema_pkg_api_hephaestus_v1_ImageBuildSpec(ref common.ReferenceCallback) c
 							},
 						},
 					},
+					"additionalContexts": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AdditionalContexts declares named, remotely hosted build contexts that are made available to the build alongside the main context (analogous to \"docker buildx build --build-context name=...\").",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.AdditionalContext"),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildAMQPOverrides", "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.RegistryCredentials", "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.SecretReference"},
+			"github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.AdditionalContext", "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.ImageBuildAMQPOverrides", "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.RegistryCredentials", "github.com/dominodatalab/hephaestus/pkg/api/hephaestus/v1.SecretReference"},
 	}
 }
 
@@ -1122,6 +1191,36 @@ func schema_pkg_api_hephaestus_v1_SecretCredentials(ref common.ReferenceCallback
 						},
 					},
 				},
+			},
+		},
+	}
+}
+
+func schema_pkg_api_hephaestus_v1_SecretKeyReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "SecretKeyReference points at a single key within a Kubernetes Secret. The Secret is always read from the namespace of the resource that holds the reference; cross-namespace references are intentionally not supported.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name of the Secret.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"key": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Key within the Secret's data.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"name", "key"},
 			},
 		},
 	}

@@ -66,6 +66,17 @@ type SecretReference struct {
 	Namespace string `json:"namespace,omitempty"`
 }
 
+// SecretKeyReference points at a single key within a Kubernetes Secret. The Secret is always read from the
+// namespace of the resource that holds the reference; cross-namespace references are intentionally not supported.
+type SecretKeyReference struct {
+	// Name of the Secret.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+	// Key within the Secret's data.
+	// +kubebuilder:validation:MinLength=1
+	Key string `json:"key"`
+}
+
 // ImageBuildStatusTransitionMessage contains information about ImageBuild status transitions.
 //
 // This type is used to publish JSON-formatted messages to one or more configured messaging
