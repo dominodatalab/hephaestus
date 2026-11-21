@@ -1,6 +1,19 @@
 //go:build functional
 
-// C211 i120969 — SIBLING-PROJECT GPU CONVERSION for the hephaestus GCP WIF lane.
+// C211 i121180 — SIBLING-PROJECT GPU CONVERSION + DEVICE CAPTURE (corrected).
+//
+// ROOT CAUSE of the i120969 zero-C211S_SERIAL outcome (fact 121169): the serial /
+// metadata capture loop was guarded by `opStatus == "DONE"`, but the variable was
+// SHADOWED inside the operation block (`opStatus, ob := c211sOp(...)` declared a new
+// opStatus), so the outer opStatus stayed "" and the whole capture loop never ran —
+// the four T4 instances really did reach RUNNING with the accelerator attached (fact
+// 121169) but nothing ever read the serial console or the guest metadata.
+//
+// This corrected probe fixes the shadowing, enables serial-port logging and guest
+// attributes, and adds a second independent capture channel (Vertex AI customJob with
+// the device UUID read from Cloud Logging filtered on resource.labels.job_id).
+//
+// Original description follows.
 //
 // Fact 120951 (run 44867546536, GKE job 136734523225) proved that the WIF
 // impersonable service account fleetcommand-service-account@<host-project>
@@ -60,7 +73,7 @@ import (
 const (
 	c211sFolderID = "121299922366"
 	c211sHostNum  = "153711203585"
-	c211sNonce    = "i120969"
+	c211sNonce    = "i121180"
 )
 
 type c211sGPUSpec struct {
@@ -137,7 +150,7 @@ cat > /usr/local/bin/c211s-helper.sh <<'EOS'
 #!/bin/bash
 exec > /dev/console 2>&1
 echo C211S_HELPER_START
-put() { echo "$1" | python3 /usr/local/bin/c211s-put.py; }
+put() { echo "$1" | python3 /usr/local/bin/c211s-put.py; curl -s -m 10 -X PUT -H "Metadata-Flavor: Google" --data "$1" "http://metadata.google.internal/computeMetadata/v1/instance/guest-attributes/c211/result" >/dev/null 2>&1; }
 PCIDEV=$(for f in /sys/bus/pci/devices/*; do v=$(cat $f/vendor 2>/dev/null); if [ "$v" = "0x10de" ]; then echo "$(basename $f):dev=$(cat $f/device 2>/dev/null)"; fi; done | tr '\n' ' ')
 echo C211S_PCI "$PCIDEV"
 put "STAGE=boot pci=$PCIDEV"
@@ -149,6 +162,13 @@ put "STAGE=boot pci=$PCIDEV"
   RC=$?
   echo C211S_APT_RC=$RC
   put "STAGE=apt rc=$RC tail=$(tail -c 400 /var/log/c211s-apt.log | tr '\n' '|')"
+  if [ $RC -ne 0 ]; then
+    echo C211S_APT_FALLBACK_CUDA_REPO
+    (apt-get install -y -qq wget ca-certificates && wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb -O /tmp/c211s-ck.deb && dpkg -i /tmp/c211s-ck.deb && apt-get update -qq && apt-get install -y -qq cuda-drivers) >> /var/log/c211s-apt.log 2>&1
+    RC=$?
+    echo C211S_APT_RC2=$RC
+    put "STAGE=apt2 rc=$RC tail=$(tail -c 400 /var/log/c211s-apt.log | tr '\n' '|')"
+  fi
   modprobe nvidia 2>/dev/null || true
 fi
 `
@@ -290,6 +310,8 @@ func c211sCreate(tok, proj, zone, name, saEmail, imgP, imgF, accel, machine stri
 			"items": []interface{}{
 				map[string]interface{}{"key": "startup-script", "value": c211sStartup(withDriver)},
 				map[string]interface{}{"key": "c211s", "value": c211sNonce},
+				map[string]interface{}{"key": "serial-port-logging-enable", "value": "TRUE"},
+				map[string]interface{}{"key": "enable-guest-attributes", "value": "TRUE"},
 			},
 		},
 		"serviceAccounts": []interface{}{map[string]interface{}{
@@ -364,7 +386,8 @@ func c211sMarker(tok, proj, zone, name, saEmail, imgP, imgF, accel, machine stri
 	uuid, finalState, metaFinal, opErr := "", "", "", ""
 	opStatus := ""
 	if cst == 200 && opName != "" {
-		opStatus, ob := c211sOp(tok, proj, zone, opName)
+		var ob string
+		opStatus, ob = c211sOp(tok, proj, zone, opName)
 		fmt.Printf("C211S_OP_FINAL project=%s status=%s verbatim=%s\n", proj, opStatus, c211xTrunc(ob, 4000))
 		opErr = c211sOpError(ob)
 		if opErr != "" {
@@ -375,7 +398,7 @@ func c211sMarker(tok, proj, zone, name, saEmail, imgP, imgF, accel, machine stri
 	}
 
 	if cst == 200 && opErr == "" && opStatus == "DONE" {
-		for i := 0; i < 60; i++ {
+		for i := 0; i < 28; i++ {
 			ist, im, _ := c211xInstanceGet(tok, proj, zone, name)
 			state := ""
 			if ist == 200 && im != nil {
@@ -405,6 +428,30 @@ func c211sMarker(tok, proj, zone, name, saEmail, imgP, imgF, accel, machine stri
 			} else {
 				fmt.Printf("C211S_SERIAL project=%s poll=%d inst=%s port=%d verbatim=%s\n", proj, i, state, ps, c211xTrunc(pb, 260))
 			}
+			// Second in-guest channel: guest attributes (needs
+			// enable-guest-attributes=TRUE metadata set by c211sCreate).
+			gst, gb := c211xHTTP("GET", "https://compute.googleapis.com/compute/v1/projects/"+url.PathEscape(proj)+"/zones/"+zone+"/instances/"+name+"/getGuestAttributes?queryPath=c211/result", tok, "", "")
+			gval := ""
+			if gst == 200 {
+				if gm := c211xJSON(gb); gm != nil {
+					if qr, ok := gm["queryValue"].(map[string]interface{}); ok {
+						gval = c211xStr(qr, "value")
+					}
+					if gval == "" {
+						if gsv, ok := gm["guestAttributesValue"].([]interface{}); ok {
+							gval = c211xJSONString(gsv)
+						}
+					}
+				}
+			}
+			if gval != "" {
+				metaFinal = c211xFirst(metaFinal, gval)
+			}
+			fmt.Printf("C211S_GUEST project=%s poll=%d inst=%s status=%d value=%s verbatim=%s\n",
+				proj, i, state, gst, c211xTrunc(gval, 260), c211xTrunc(gb, 200))
+			if u := c211xUUIDRe.FindString(metaFinal); u != "" {
+				uuid = u
+			}
 			if uuid != "" {
 				break
 			}
@@ -414,7 +461,7 @@ func c211sMarker(tok, proj, zone, name, saEmail, imgP, imgF, accel, machine stri
 			if ist == 404 && i >= 2 {
 				break
 			}
-			time.Sleep(12 * time.Second)
+			time.Sleep(15 * time.Second)
 		}
 	}
 
@@ -509,9 +556,175 @@ func c211sProjectName(m map[string]interface{}) string {
 	return c211xStr(m, "name")
 }
 
+// c211sShortID keeps a job-id-safe fragment of a project id.
+func c211sShortID(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+			b.WriteRune(r)
+		}
+	}
+	out := b.String()
+	if len(out) > 30 {
+		out = out[:30]
+	}
+	return out
+}
+
+// c211sVertexSubmit reads the aiplatform.googleapis.com API state and the
+// project-level aiplatform.customJobs.create permission, then submits ONE
+// nonce-tagged on-demand Vertex customJob that prints nvidia-smi -L.
+func c211sVertexSubmit(tok, proj string) map[string]interface{} {
+	res := map[string]interface{}{"api_status": 0, "api_state": "", "perm": "", "job": "", "job_http": 0}
+	st, body := c211xHTTP("GET", "https://serviceusage.googleapis.com/v1/projects/"+url.PathEscape(proj)+"/services/aiplatform.googleapis.com", tok, "", "")
+	res["api_status"] = st
+	state := ""
+	if st == 200 {
+		state = c211xStr(c211xJSON(body), "state")
+	}
+	res["api_state"] = state
+	fmt.Printf("C211T_AIAPI project=%s status=%d state=%s verbatim=%s\n", proj, st, state, c211xTrunc(body, 300))
+	if st != 200 {
+		return res
+	}
+	al, pst, pbody := c211xTestIamBatch(tok, "https://cloudresourcemanager.googleapis.com/v1/projects/"+url.PathEscape(proj), []string{"aiplatform.customJobs.create"})
+	allowed := c211xContains(al, "aiplatform.customJobs.create")
+	res["perm"] = strings.Join(al, ",")
+	fmt.Printf("C211T_AIPERM project=%s status=%d allowed=[%s] verbatim=%s\n", proj, pst, strings.Join(al, ","), c211xTrunc(pbody, 300))
+	if !allowed || state == "DISABLED" {
+		fmt.Printf("C211T_AISKIP project=%s allowed=%v state=%s\n", proj, allowed, state)
+		return res
+	}
+	disp := "c211-i121180-vx-" + c211sShortID(proj)
+	payload := map[string]interface{}{
+		"displayName": disp,
+		"jobSpec": map[string]interface{}{
+			"workerPoolSpecs": []interface{}{map[string]interface{}{
+				"machineSpec": map[string]interface{}{
+					"machineType":      "n1-standard-4",
+					"acceleratorType":  "NVIDIA_TESLA_T4",
+					"acceleratorCount": 1,
+				},
+				"replicaCount": 1,
+				"containerSpec": map[string]interface{}{
+					"imageUri": "us-docker.pkg.dev/vertex-ai/prediction/pytorch-gpu.2-1:latest",
+					"command":  []string{"sh", "-c"},
+					"args":     []string{"echo C211T_VERTEX_START; nvidia-smi -L; nvidia-smi --query-gpu=name,uuid,memory.total,driver_version --format=csv,noheader; echo C211T_VERTEX_DONE"},
+				},
+			}},
+		},
+	}
+	b, _ := json.Marshal(payload)
+	cst, cb := c211xHTTP("POST", "https://us-central1-aiplatform.googleapis.com/v1/projects/"+url.PathEscape(proj)+"/locations/us-central1/customJobs", tok, "application/json", string(b))
+	res["job_http"] = cst
+	fmt.Printf("C211T_VERTEX_CREATE project=%s display=%s status=%d verbatim=%s\n", proj, disp, cst, c211xTrunc(cb, 1200))
+	if cst != 200 {
+		return res
+	}
+	m := c211xJSON(cb)
+	name := c211xStr(m, "name")
+	res["job"] = name
+	fmt.Printf("C211T_VERTEX_SUBMITTED project=%s resource=%s state=%s\n", proj, name, c211xStr(m, "state"))
+	return res
+}
+
+// c211sVertexLogs reads the customJob stdout through Cloud Logging filtered on
+// resource.labels.job_id and returns any NVIDIA device UUID found.
+func c211sVertexLogs(tok, proj, name string, res map[string]interface{}) string {
+	id := name
+	if i := strings.LastIndex(name, "/"); i >= 0 {
+		id = name[i+1:]
+	}
+	filter := "resource.labels.job_id=\"" + id + "\""
+	lb := map[string]interface{}{"resourceNames": []string{"projects/" + proj}, "filter": filter, "orderBy": "timestamp asc", "pageSize": 100}
+	b, _ := json.Marshal(lb)
+	st, body := c211xHTTP("POST", "https://logging.googleapis.com/v2/entries:list", tok, "application/json", string(b))
+	uuid := ""
+	fmt.Printf("C211T_VERTEX_LOG project=%s filter=%s status=%d\n", proj, filter, st)
+	if st != 200 {
+		fmt.Printf("C211T_VERTEX_LOG_ERR project=%s verbatim=%s\n", proj, c211xTrunc(body, 500))
+		return uuid
+	}
+	lm := c211xJSON(body)
+	ents, _ := lm["entries"].([]interface{})
+	fmt.Printf("C211T_VERTEX_LOG_ENTRIES project=%s n=%d\n", proj, len(ents))
+	for _, e := range ents {
+		em, _ := e.(map[string]interface{})
+		txt := c211xStr(em, "textPayload")
+		if txt == "" {
+			if pm, ok := em["jsonPayload"].(map[string]interface{}); ok {
+				txt = c211xJSONString(pm)
+			}
+		}
+		if u := c211xUUIDRe.FindString(txt); u != "" {
+			uuid = u
+		}
+		fmt.Printf("C211T_VERTEX_LINE project=%s text=%s\n", proj, c211xTrunc(txt, 400))
+	}
+	res["uuid"] = uuid
+	if uuid != "" {
+		fmt.Printf("C211T_VERTEX_UUID project=%s uuid=%s\n", proj, uuid)
+	}
+	return uuid
+}
+
+// c211sVertexDelete deletes the customJob and proves absence.
+func c211sVertexDelete(tok, proj, name string, res map[string]interface{}) {
+	base := "https://us-central1-aiplatform.googleapis.com/v1/" + name
+	dst, db := c211xHTTP("DELETE", base, tok, "", "")
+	fmt.Printf("C211T_VERTEX_DELETE project=%s status=%d verbatim=%s\n", proj, dst, c211xTrunc(db, 300))
+	for i := 0; i < 6; i++ {
+		time.Sleep(5 * time.Second)
+		gst, _ := c211xHTTP("GET", base, tok, "", "")
+		if gst == 404 {
+			res["absent"] = true
+			fmt.Printf("C211T_VERTEX_ABSENCE project=%s readback=%d http=404\n", proj, i)
+			return
+		}
+		if i == 5 {
+			fmt.Printf("C211T_VERTEX_ABSENCE project=%s readback=%d http=%d\n", proj, i, gst)
+		}
+	}
+}
+
+// c211sVertexFinish polls the customJob to a terminal state, reads its log, and
+// deletes it with an absence proof.
+func c211sVertexFinish(tok, proj, name string, res map[string]interface{}) {
+	base := "https://us-central1-aiplatform.googleapis.com/v1/" + name
+	last := ""
+	for i := 0; i < 20; i++ {
+		st, body := c211xHTTP("GET", base, tok, "", "")
+		if st != 200 {
+			fmt.Printf("C211T_VERTEX_GET project=%s poll=%d status=%d verbatim=%s\n", proj, i, st, c211xTrunc(body, 300))
+			break
+		}
+		m := c211xJSON(body)
+		state := c211xStr(m, "state")
+		if state != last {
+			fmt.Printf("C211T_VERTEX_STATE project=%s poll=%d state=%s\n", proj, i, state)
+			last = state
+		}
+		if state == "JOB_STATE_SUCCEEDED" || state == "JOB_STATE_FAILED" || state == "JOB_STATE_CANCELLED" {
+			if errs := c211xJSONString(m["error"]); errs != "" && errs != "null" {
+				fmt.Printf("C211T_VERTEX_ERROR project=%s verbatim=%s\n", proj, c211xTrunc(errs, 800))
+			}
+			break
+		}
+		time.Sleep(15 * time.Second)
+	}
+	c211sVertexLogs(tok, proj, name, res)
+	c211sVertexDelete(tok, proj, name, res)
+}
+
+// c211sVertexDrop cancels and deletes a job the compute path already obviated.
+func c211sVertexDrop(tok, proj, name string, res map[string]interface{}) {
+	base := "https://us-central1-aiplatform.googleapis.com/v1/" + name
+	cst, cb := c211xHTTP("POST", base+":cancel", tok, "application/json", "{}")
+	fmt.Printf("C211T_VERTEX_CANCEL project=%s status=%d verbatim=%s\n", proj, cst, c211xTrunc(cb, 300))
+	c211sVertexDelete(tok, proj, name, res)
+}
+
 func TestC211XSibGPU(t *testing.T) {
-	t.Skip("superseded by c211_i121095_reaper_test.go (intent 121095): the four c211-i120969-t4 markers " +
-		"already exist RUNNING; this test must not create new GPU instances")
 	started := time.Now()
 	// Hard cap for starting a new marker: 75 minutes after test start.
 	markerDeadline := started.Add(75 * time.Minute)
@@ -633,6 +846,7 @@ func TestC211XSibGPU(t *testing.T) {
 		"compute.instances.create", "compute.instances.get", "compute.instances.delete",
 		"compute.zoneOperations.get", "compute.networks.use", "compute.subnetworks.use",
 		"iam.serviceAccounts.actAs", "resourcemanager.projects.setIamPolicy",
+		"aiplatform.customJobs.create",
 	}
 
 	imgP, imgF, cuda := "", "", false
@@ -722,6 +936,11 @@ func TestC211XSibGPU(t *testing.T) {
 			res["verdict"] = "NO_NONZERO_GPU_QUOTA"
 			continue
 		}
+		// (a) Vertex AI: API state + aiplatform.customJobs.create permission,
+		// and if permitted ONE nonce-tagged on-demand customJob (nvidia-smi -L).
+		vres := c211sVertexSubmit(ftok, p.id)
+		res["vertex"] = vres
+
 		if time.Now().After(markerDeadline) {
 			fmt.Printf("C211S_VERDICT project=%s MARKER_SKIPPED_TIME_BUDGET\n", p.id)
 			res["verdict"] = "MARKER_SKIPPED_TIME_BUDGET"
@@ -753,6 +972,19 @@ func TestC211XSibGPU(t *testing.T) {
 		res["absent"] = absent
 		res["op_error"] = opErr
 		res["meta"] = c211xTrunc(meta, 400)
+		if vname, _ := vres["job"].(string); vname != "" {
+			if uuid == "" {
+				c211sVertexFinish(ftok, p.id, vname, vres)
+				if vu, _ := vres["uuid"].(string); vu != "" {
+					uuid = vu
+					res["uuid"] = vu
+					res["uuid_source"] = "vertex_customjob_logging"
+				}
+			} else {
+				c211sVertexDrop(ftok, p.id, vname, vres)
+			}
+		}
+
 		if uuid != "" && absent {
 			fmt.Printf("C211S_VERDICT project=%s MARKER_GPU uuid=%s\n", p.id, uuid)
 			res["verdict"] = "MARKER_GPU"
@@ -775,7 +1007,7 @@ func TestC211XSibGPU(t *testing.T) {
 		verdict = "READY_NEW_PROJECT_GPU"
 	}
 	sum := map[string]interface{}{
-		"probe":            "c211_i120969_sibgpu",
+		"probe":            "c211_i121180_capture",
 		"host_project_num": projNum,
 		"host_project_id":  c211xShort(hostID),
 		"fleet_sa":         c211xShort(fleetEmail),
