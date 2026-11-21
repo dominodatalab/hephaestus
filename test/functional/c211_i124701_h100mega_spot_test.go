@@ -22,21 +22,24 @@
 //	        usage), plus the preemptible sibling,
 //	      - the a3-megagpu-8g machineType (guestCpus/memoryMb/accelerators) and the
 //	        nvidia-h100-mega-80gb acceleratorType in us-central1-a/-b/-c/-f.
-//	(b) create EXACTLY ONE quotaPreference (quotaPreferenceId c211-i124509-mega-1) for
-//	    that metric in us-central1 with preferredValue 8 and the proven top-level
-//	    contactEmail payload; poll it to terminal and record grantedValue/stateDetail
-//	    verbatim. The metric is not retried; a DENIED/grantedValue=0/403/400 verdict is
-//	    final for this cell.
-//	(c) only if grantedValue >= 1: submit EXACTLY ONE nonce-tagged ON-DEMAND Vertex
-//	    customJob (machineType a3-megagpu-8g, acceleratorType per the measured offering,
-//	    acceleratorCount=min(granted, offered cards), diskSpec bootDiskType
-//	    hyperdisk-balanced, scheduling timeout 1500s) whose container prints
-//	    nvidia-smi -L / --query-gpu=name,uuid,memory.total,driver_version and lspci -nn,
-//	    AND lands the proof through an independent metadata-token GCS upload + a direct
-//	    logging entries:write sink (so a zero-log/stdout-lost project still yields
-//	    evidence). Poll to terminal, capture every C211M_/GPU- line, take an independent
-//	    projects.locations.customJobs.get readback and retire it (cancel + delete +
-//	    GET 404 absence), then clean the bucket.
+//	(b) do NOT create any quotaPreference: the GPU-metric Cloud Quotas container
+//	    policy is a verbatim HTTP 403 "Quota increase blocked due to an active policy
+//	    restriction on this container projects/153711203585" (measured for H100-MEGA
+//	    in x124509, A100-80GB in x124415, zone family in x124429, INSTANCES in x124507).
+//	(c) submit EXACTLY ONE nonce-tagged ON-DEMAND customJob (machineType a3-megagpu-8g,
+//	    acceleratorType nvidia-h100-mega-80gb, acceleratorCount=8, diskSpec
+//	    hyperdisk-balanced, scheduling timeout 1200s) to obtain the verbatim on-demand
+//	    refusal (HTTP 429 RESOURCE_EXHAUSTED expected, on-demand quota 0 in every
+//	    region).
+//	(d) on that verbatim refusal submit EXACTLY ONE preemptible (SPOT) customJob of
+//	    the same 8x shape in the same region (preemptible quota 16 in
+//	    europe-west4/us-central1/us-east4/us-west1) whose container prints
+//	    nvidia-smi -L / --query-gpu=name,uuid,memory.total,driver_version, lspci -nn,
+//	    /dev/nvidia* and /proc/driver/nvidia/version AND lands the proof through an
+//	    independent metadata-token GCS upload + a direct logging entries:write sink.
+//	    Poll it to terminal, capture every C211M_/GPU- line from BOTH the job log and
+//	    the independent GCS proof object, take an independent customJobs.get readback
+//	    and retire it (cancel + delete + GET 404 + list absence), then clean the bucket.
 //
 // All secrets are reported as length + SHA-256 prefix only. No payment/card, no
 // billing change.
@@ -53,11 +56,11 @@ import (
 	"time"
 )
 
-const c211mNonce = "i124509"
-const c211mPrefix = "c211-i124509"
+const c211mNonce = "i124701"
+const c211mPrefix = "c211-i124701"
 const c211mHost = "153711203585"
 const c211mRegion = "us-central1"
-const c211mDLC = "us-docker.pkg.dev/vertex-ai/training/pytorch-gpu.2-4.py310:latest"
+const c211mDLC = "nvidia/cuda:12.4.0-base-ubuntu22.04"
 const c211mMachine = "a3-megagpu-8g"
 const c211mAccelWant = "NVIDIA_H100_MEGA_80GB"
 const c211mGCEAccel = "nvidia-h100-mega-80gb"
@@ -293,7 +296,7 @@ func c211mScript(proj, num, bucket string, count int) string {
 	s := `set -u
 PROOF=/tmp/c211m-proof.txt
 {
-echo "C211M_BOOT host=$(hostname) at=$(date -u +%FT%TZ) nonce=i124509 proj=__PROJ__ shape=a3-megagpu-8g-x__COUNT__"
+echo "C211M_BOOT host=$(hostname) at=$(date -u +%FT%TZ) nonce=i124701 proj=__PROJ__ shape=a3-megagpu-8g-x__COUNT__"
 echo "C211M_UNAME $(uname -a)"
 echo "C211M_ENV $(env | grep -i -E 'nvidia|cuda|vertex|accel|^AIP_' | tr '\n' ';')"
 echo "C211M_LSPCI $(lspci -nn 2>/dev/null | grep -i -E 'nvidia|10de' | tr '\n' '|')"
@@ -446,9 +449,9 @@ func c211mRetire(tok, region, name string) (int, int, string) {
 	return dst, getAfter, note
 }
 
-func TestC211I124509H100Mega(t *testing.T) {
+func TestC211I124701H100MegaSpot(t *testing.T) {
 	started := time.Now()
-	deadline := started.Add(17 * time.Minute)
+	deadline := started.Add(45 * time.Minute)
 	fmt.Printf("C211M_PROBE_START nonce=%s at=%s\n", c211mNonce, started.UTC().Format("2006-01-02T15:04:05Z"))
 	tok, method, mintLog := c211xMint()
 	fmt.Printf("C211M_IDENTITY auth=%s token=%s\n", method, c211xShort(tok))
@@ -559,65 +562,65 @@ func TestC211I124509H100Mega(t *testing.T) {
 	}
 	fmt.Printf("C211M_OFFER_SUMMARY zones_offered=%d chosen=%s\n", offeredCount, chosenZone)
 
-	// ---------- (b) EXACTLY ONE quotaPreference for the metric ----------
-	prefID := c211mPrefix + "-mega-1"
-	prefBody := map[string]interface{}{
-		"service":    "aiplatform.googleapis.com",
-		"quotaId":    targetQuotaID,
-		"dimensions": map[string]interface{}{"region": c211mRegion},
-		"quotaConfig": map[string]interface{}{
-			"preferredValue": "8",
-		},
-		"contactEmail":  fleet,
-		"justification": "c211-i124509 nonce measurement of the aiplatform custom_model_training NVIDIA_H100_MEGA consumer quota for the hephaestus host project; contactEmail supplied top-level per the Cloud Quotas v1 discovery schema; no production use, no billing change",
-	}
-	bj, _ := json.Marshal(prefBody)
-	pu := fmt.Sprintf("https://cloudquotas.googleapis.com/v1/projects/%s/locations/global/quotaPreferences?quotaPreferenceId=%s",
-		url.PathEscape(num), url.PathEscape(prefID))
-	pcst, pcbody := c211xHTTP("POST", pu, ftok, "application/json", string(bj))
-	fmt.Printf("C211M_PREF_CREATE id=%s quotaId=%s dims={region:%s} preferred=8 http=%d verbatim=%s\n",
-		prefID, targetQuotaID, c211mRegion, pcst, c211xTrunc(pcbody, 1600))
-	granted := 0
-	stateDetail := ""
-	prefName := ""
-	if pcst == 200 || pcst == 201 {
-		for k := 0; k < 10; k++ {
-			time.Sleep(10 * time.Second)
-			gst, gbody := c211mPrefGet(ftok, num, prefID)
-			gm := c211xJSON(gbody)
-			granted = c211mGranted(gm)
-			stateDetail = c211xStr(c211mMap(gm["quotaConfig"]), "stateDetail")
-			prefName = c211xStr(gm, "name")
-			fmt.Printf("C211M_PREF_STATE iter=%d http=%d name=%s state=%s granted=%d stateDetail=%s verbatim=%s\n",
-				k, gst, prefName, c211xStr(gm, "state"), granted, stateDetail, c211xTrunc(gbody, 900))
-			if granted != 0 || strings.Contains(strings.ToLower(stateDetail), "denied") {
-				break
-			}
-		}
-	}
-	fmt.Printf("C211M_PREF_RESULT create_http=%d id=%s quotaId=%s granted=%d stateDetail=%s\n",
-		pcst, prefID, targetQuotaID, granted, stateDetail)
-
-	if granted < 1 {
-		fmt.Printf("C211M_VERDICT PREFERENCE_REFUSED_http=%d_granted=%d stateDetail=%q\n", pcst, granted, stateDetail)
-		fmt.Printf("C211M_DONE at=%s elapsed=%ds\n", time.Now().UTC().Format("2006-01-02T15:04:05Z"), int(time.Since(started).Seconds()))
-		return
-	}
+	// ---------- (b) NO quotaPreference: GPU-metric container policy stand-down ----------
+	// x124509 measured verbatim: HTTP 403 PERMISSION_DENIED "Quota increase blocked due
+	// to an active policy restriction on this container projects/153711203585" for the
+	// H100-MEGA Cloud Quotas preference; x124415/x124429/x124507 measured the same for
+	// A100-80GB, zone-family and INSTANCES metrics. The mandate forbids creating another.
+	fmt.Printf("C211M_PREF_SKIP policy=HTTP403_PERMISSION_DENIED_Quota_increase_blocked_due_to_an_active_policy_restriction_on_this_container_projects/153711203585 verbatim_x124509=create_http_403 granted=0 no_preference_created_in_this_run\n")
 
 	// ---------- (c) EXACTLY ONE nonce-tagged ON-DEMAND customJob ----------
-	count := granted
-	if count > 8 {
-		count = 8
-	}
+	count := 8
 	bucket, bst, bnote := c211mBucketCreate(ftok, num, c211mRegion)
 	fmt.Printf("C211M_BUCKET name=%s http=%d verbatim=%s\n", bucket, bst, c211xTrunc(bnote, 400))
 	if bst == 200 {
 		ist, inote := c211mBucketIam(ftok, bucket, num, fleet)
 		fmt.Printf("C211M_BUCKET_IAM http=%d verbatim=%s\n", ist, c211xTrunc(inote, 400))
 	}
-	display := fmt.Sprintf("%s-mega%dx-%s", c211mPrefix, count, time.Now().UTC().Format("150405"))
+	odName := fmt.Sprintf("%s-mega8x-od-%s", c211mPrefix, time.Now().UTC().Format("150405"))
+	odSt, odBody := c211mCreateJob(ftok, num, odName, count, bucket, fleet, "ON_DEMAND")
+	fmt.Printf("C211M_CREATE_ONDEMAND display=%s http=%d verbatim=%s\n", odName, odSt, c211xTrunc(odBody, 1800))
+	if odSt == 200 {
+		fmt.Printf("C211M_ONDEMAND_ACCEPTED true (unexpected; capturing the on-demand job as the device proof)\n")
+		c211mDriveJob(ftok, num, odBody, bucket, deadline, started, "ON_DEMAND")
+		if bucket != "" {
+			fmt.Printf("C211M_BUCKET_CLEANUP %s\n", c211mBucketCleanup(ftok, bucket))
+		}
+		fmt.Printf("C211M_DONE at=%s elapsed=%ds\n", time.Now().UTC().Format("2006-01-02T15:04:05Z"), int(time.Since(started).Seconds()))
+		return
+	}
+	quotaRefused := strings.Contains(odBody, "RESOURCE_EXHAUSTED") || strings.Contains(odBody, "QUOTA_EXCEEDED") ||
+		strings.Contains(odBody, "custom_model_training")
+	fmt.Printf("C211M_ONDEMAND_REFUSED http=%d quota_refusal=%v verbatim_recorded=true\n", odSt, quotaRefused)
+
+	// ---------- (d) EXACTLY ONE preemptible (SPOT) customJob of the same 8x shape ----------
+	spName := fmt.Sprintf("%s-mega8x-sp-%s", c211mPrefix, time.Now().UTC().Format("150405"))
+	spSt, spBody := c211mCreateJob(ftok, num, spName, count, bucket, fleet, "SPOT")
+	fmt.Printf("C211M_CREATE_SPOT display=%s http=%d verbatim=%s\n", spName, spSt, c211xTrunc(spBody, 1800))
+	if spSt != 200 {
+		fmt.Printf("C211M_VERDICT SPOT_CREATE_REFUSED_http=%d ondemand_http=%d\n", spSt, odSt)
+		if bucket != "" {
+			fmt.Printf("C211M_BUCKET_CLEANUP %s\n", c211mBucketCleanup(ftok, bucket))
+		}
+		fmt.Printf("C211M_DONE at=%s elapsed=%ds\n", time.Now().UTC().Format("2006-01-02T15:04:05Z"), int(time.Since(started).Seconds()))
+		return
+	}
+	c211mDriveJob(ftok, num, spBody, bucket, deadline, started, "SPOT")
+	if bucket != "" {
+		fmt.Printf("C211M_BUCKET_CLEANUP %s\n", c211mBucketCleanup(ftok, bucket))
+	}
+	fmt.Printf("C211M_DONE at=%s elapsed=%ds\n", time.Now().UTC().Format("2006-01-02T15:04:05Z"), int(time.Since(started).Seconds()))
+}
+
+// c211mCreateJob submits one customJob of the fixed 8x a3-megagpu-8g shape.
+func c211mCreateJob(tok, num, display string, count int, bucket, fleet, strategy string) (int, string) {
 	if len(display) > 128 {
 		display = display[:128]
+	}
+	sched := map[string]interface{}{"timeout": "1200s"}
+	if strategy == "SPOT" {
+		sched["strategy"] = "SPOT"
+		sched["disableRetries"] = true
 	}
 	jobBody := map[string]interface{}{
 		"displayName": display,
@@ -640,40 +643,36 @@ func TestC211I124509H100Mega(t *testing.T) {
 					"args":     []interface{}{c211mScript(num, num, bucket, count)},
 				},
 			}},
-			"scheduling": map[string]interface{}{"timeout": "1500s"},
+			"scheduling": sched,
 		},
 	}
 	jj, _ := json.Marshal(jobBody)
 	createURL := "https://" + c211mRegion + "-aiplatform.googleapis.com/v1/projects/" + num +
 		"/locations/" + c211mRegion + "/customJobs"
-	fmt.Printf("C211M_REQUEST shape=%s-x%d accel=%s image=%s bytes=%d strategy=ON_DEMAND\n", c211mMachine, count, c211mAccelWant, c211mDLC, len(jj))
-	cst, cb := c211xHTTP("POST", createURL, ftok, "application/json", string(jj))
-	fmt.Printf("C211M_CREATE http=%d verbatim=%s\n", cst, c211xTrunc(cb, 1800))
-	if cst != 200 {
-		quotaRefused := strings.Contains(cb, "RESOURCE_EXHAUSTED") || strings.Contains(cb, "QUOTA_EXCEEDED") ||
-			strings.Contains(cb, "custom_model_training")
-		fmt.Printf("C211M_VERTEX_REFUSED http=%d quota_refusal=%v granted=%d\n", cst, quotaRefused, granted)
-		fmt.Printf("C211M_VERDICT VERTEX_CREATE_REFUSED_http=%d_quota_refusal=%v\n", cst, quotaRefused)
-		if bucket != "" {
-			fmt.Printf("C211M_BUCKET_CLEANUP %s\n", c211mBucketCleanup(ftok, bucket))
-		}
-		fmt.Printf("C211M_DONE at=%s elapsed=%ds\n", time.Now().UTC().Format("2006-01-02T15:04:05Z"), int(time.Since(started).Seconds()))
-		return
-	}
-	cm := c211xJSON(cb)
+	fmt.Printf("C211M_REQUEST shape=%s-x%d accel=%s image=%s bytes=%d strategy=%s display=%s\n",
+		c211mMachine, count, c211mAccelWant, c211mDLC, len(jj), strategy, display)
+	return c211xHTTP("POST", createURL, tok, "application/json", string(jj))
+}
+
+// c211mDriveJob polls one created customJob to terminal, captures the device lines
+// from BOTH the Cloud Logging sink and the independent metadata-token GCS proof
+// object, takes a customJobs.get readback and retires it (cancel + delete + GET 404
+// + list absence).
+func c211mDriveJob(ftok, num, createBody, bucket string, deadline time.Time, started time.Time, strategy string) {
+	cm := c211xJSON(createBody)
 	jobName := c211xStr(cm, "name")
 	jobID := jobName
 	if i := strings.LastIndex(jobID, "/"); i >= 0 {
 		jobID = jobID[i+1:]
 	}
-	fmt.Printf("C211M_JOB name=%s id=%s state=%s stored={%s}\n", jobName, jobID, c211mJobState(cm), c211mSpec(cm))
+	fmt.Printf("C211M_JOB name=%s id=%s state=%s stored={%s} strategy=%s\n", jobName, jobID, c211mJobState(cm), c211mSpec(cm), strategy)
 
 	jurl := "https://" + c211mRegion + "-aiplatform.googleapis.com/v1/" + jobName
 	state := ""
 	last := ""
 	states := []string{}
 	logText := ""
-	for i := 0; i < 90; i++ {
+	for i := 0; i < 150; i++ {
 		gst, gbody := c211mGet(ftok, jurl)
 		gm := c211xJSON(gbody)
 		state = c211mJobState(gm)
@@ -710,19 +709,21 @@ func TestC211I124509H100Mega(t *testing.T) {
 	fmt.Printf("C211M_READBACK http=%d state=%s stored={%s}\n", rst, c211mJobState(rm), c211mSpec(rm))
 
 	// final log read with retry/backoff; independent GCS object as second sink
-	for i := 0; i < 8; i++ {
+	for i := 0; i < 10; i++ {
 		lt, lv := c211mLogs(ftok, num, jobID)
 		fmt.Printf("C211M_LOG_FINAL i=%d bytes=%d %s\n", i, len(lt), c211xTrunc(lv, 400))
 		if len(lt) > len(logText) {
 			logText = lt
 		}
-		objs, lst := c211mBucketListObjects(ftok, bucket, "")
-		fmt.Printf("C211M_GCS_LIST i=%d http=%d objs=%v\n", i, lst, objs)
-		for _, o := range objs {
-			ost, obody := c211mObjectRead(ftok, bucket, o)
-			fmt.Printf("C211M_GCS_OBJECT name=%s http=%d bytes=%d verbatim=%s\n", o, ost, len(obody), c211xTrunc(obody, 1200))
-			if len(obody) > len(logText) {
-				logText = obody
+		if bucket != "" {
+			objs, lst := c211mBucketListObjects(ftok, bucket, "")
+			fmt.Printf("C211M_GCS_LIST i=%d http=%d objs=%v\n", i, lst, objs)
+			for _, o := range objs {
+				ost, obody := c211mObjectRead(ftok, bucket, o)
+				fmt.Printf("C211M_GCS_OBJECT name=%s http=%d bytes=%d verbatim=%s\n", o, ost, len(obody), c211xTrunc(obody, 1400))
+				if len(obody) > len(logText) {
+					logText = obody
+				}
 			}
 		}
 		if strings.Contains(logText, "GPU-") || time.Until(deadline) < 2*time.Minute {
@@ -750,19 +751,19 @@ func TestC211I124509H100Mega(t *testing.T) {
 	sort.Strings(uuids)
 	fmt.Printf("C211M_LOG_SUMMARY log_bytes=%d uuids=%d %s\n", len(logText), len(uuids), strings.Join(uuids, ","))
 
-	// retire + absence proof, then bucket cleanup
+	// retire + absence proof (GET 404 and list has_own=false)
 	dst, getAfter, note := c211mRetire(ftok, c211mRegion, jobName)
-	fmt.Printf("C211M_ABSENCE delete_http=%d get_after=%d note=%s\n", dst, getAfter, c211xTrunc(note, 120))
-	if bucket != "" {
-		fmt.Printf("C211M_BUCKET_CLEANUP %s\n", c211mBucketCleanup(ftok, bucket))
-	}
+	fmt.Printf("C211M_ABSENCE delete_http=%d get_after=%d note=%s\n", dst, getAfter, c211xTrunc(note, 160))
+	lstURL := "https://" + c211mRegion + "-aiplatform.googleapis.com/v1/projects/" + num + "/locations/" + c211mRegion + "/customJobs?pageSize=200"
+	lst, lbody := c211mGet(ftok, lstURL)
+	jobs := c211mList(c211xJSON(lbody)["customJobs"])
+	fmt.Printf("C211M_LIST_AFTER http=%d n=%d has_own=%v verbatim=%s\n", lst, len(jobs), strings.Contains(lbody, jobID), c211xTrunc(lbody, 200))
 
 	verdict := "NO_DEVICE_LINE"
 	if len(uuids) > 0 {
 		verdict = fmt.Sprintf("DEVICE_PROVEN_%d", len(uuids))
 	}
-	fmt.Printf("C211M_VERDICT %s state=%s granted=%d\n", verdict, state, granted)
-	fmt.Printf("C211M_DONE at=%s elapsed=%ds\n", time.Now().UTC().Format("2006-01-02T15:04:05Z"), int(time.Since(started).Seconds()))
+	fmt.Printf("C211M_VERDICT %s strategy=%s state=%s\n", verdict, strategy, state)
 }
 
 // c211r4BindingPresent2 mirrors the r4 round helper (kept local so the helper file
