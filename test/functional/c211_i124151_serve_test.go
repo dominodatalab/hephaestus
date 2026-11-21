@@ -27,6 +27,7 @@ const (
 	c211tSA     = "dev-fleetcommand@domino-eng-platform-dev.iam.gserviceaccount.com"
 	c211tBase   = "https://us-central1-aiplatform.googleapis.com/v1/projects/153711203585/locations/us-central1"
 	c211tNonce  = "c211-i124151"
+	c211tModelID = "1511582747343192064" // uploaded by the first pass of this probe (fact checkpoint)
 )
 
 var c211tStartup = `cd /tmp && (nvidia-smi -L; echo '---'; nvidia-smi --query-gpu=name,uuid,memory.total,driver_version --format=csv) > /tmp/dev.txt 2>&1; cat /tmp/dev.txt; python3 -c "
@@ -112,7 +113,14 @@ func TestC211I124151Serving(t *testing.T) {
 		"us-docker.pkg.dev/vertex-ai/vertex-vision-model-garden-dockers/pytorch-vllm-serve:latest",
 	}
 	modelName := ""
+	if c211tModelID != "" {
+		modelName = c211tBase + "/models/" + c211tModelID
+		fmt.Printf("C211T_MODEL_REUSE id=%s\n", c211tModelID)
+	}
 	for _, img := range images {
+		if modelName != "" {
+			break
+		}
 		model := map[string]interface{}{
 			"displayName": c211tNonce + "-model",
 			"containerSpec": map[string]interface{}{
@@ -141,7 +149,10 @@ func TestC211I124151Serving(t *testing.T) {
 			if done {
 				om := c211xJSON(raw)
 				if resp, ok := om["response"].(map[string]interface{}); ok {
-					modelName = c211xStr(resp, "name")
+					modelName = c211xStr(resp, "model")
+					if modelName == "" {
+						modelName = c211xStr(resp, "name")
+					}
 				}
 				break
 			}
