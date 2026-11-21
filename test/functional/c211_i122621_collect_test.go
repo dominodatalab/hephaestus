@@ -17,11 +17,14 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 var (
 	c3RunRe  = regexp.MustCompile(`STAGE=run ts=(\d+) acc=(\d+) rej=(\d+) uuids=([^ ]*)`)
 	c3DetRe  = regexp.MustCompile(`g(\d+):a(\d+):r(\d+):la(\d+)`)
+	c3DetTok = regexp.MustCompile(`det=(g\d+:a\d+:r\d+:la\d+(?: g\d+:a\d+:r\d+:la\d+)*)`)
+	c3NowRe  = regexp.MustCompile(`STAGE=run ts=(\d+)`)
 	c3UUIDRe = regexp.MustCompile(`GPU-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`)
 	c3DiagRe = regexp.MustCompile(`C211M (DIAG [^\n]*)`)
 	c3Stage  = regexp.MustCompile(`C211M (STAGE=[^\n]*)`)
@@ -113,11 +116,8 @@ func TestC211CollectInstances(t *testing.T) {
 					}
 					last = x[0]
 				}
-				if dets := c3DetRe.FindAllStringSubmatch(content, -1); len(dets) > 0 {
-					det = ""
-					for _, d := range dets {
-						det += d[0] + " "
-					}
+				if dt := c3DetTok.FindAllStringSubmatch(content, -1); len(dt) > 0 {
+					det = dt[len(dt)-1][1]
 				}
 			}
 			if guest != "" {
@@ -137,15 +137,18 @@ func TestC211CollectInstances(t *testing.T) {
 						last = x[0]
 					}
 				}
-				if gd := c3DetRe.FindAllStringSubmatch(guest, -1); len(gd) > 0 && det == "" {
-					for _, d := range gd {
-						det += d[0] + " "
-					}
+				if dt := c3DetTok.FindAllStringSubmatch(guest, -1); len(dt) > 0 && det == "" {
+					det = dt[len(dt)-1][1]
 				}
 			}
 			fmt.Printf("C211C_LAST zone=%s name=%s guest_http=%d serial_bytes=%d acc=%d rej=%d uuid_n=%d uuids=%s last=%s\n",
 				zone, name, gst, len(content), acc, rej, len(uuids), strings.Join(uuids, ","), c211xTrunc(last, 900))
 			fmt.Printf("C211C_DET zone=%s name=%s det=%s\n", zone, name, c211xTrunc(det, 1400))
+			tsnow := int64(0)
+			if tm := c3NowRe.FindAllStringSubmatch(content+guest, -1); len(tm) > 0 {
+				tsnow, _ = strconv.ParseInt(tm[len(tm)-1][1], 10, 64)
+			}
+			fmt.Printf("C211C_NOW zone=%s name=%s ts=%d now=%d\n", zone, name, tsnow, time.Now().Unix())
 			if diag := c3DiagRe.FindAllStringSubmatch(content, -1); len(diag) > 0 {
 				fmt.Printf("C211C_DIAG zone=%s name=%s %s\n", zone, name, c211xTrunc(diag[0][1], 700))
 			} else if sg := c3Stage.FindAllStringSubmatch(content, -1); len(sg) > 0 {
