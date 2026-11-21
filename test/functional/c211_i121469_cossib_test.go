@@ -43,9 +43,12 @@ import (
 )
 
 const (
-	c211cNonce   = "i121469"
+	c211cNonce   = "i121733"
 	c211cHostNum = "153711203585"
 )
+
+// Markers left behind by earlier rounds of this lane that must be reaped.
+var c211cOldNonces = []string{"i121180", "i121469"}
 
 // The four sibling projects fact 121169/121209/121388 measured.
 var c211cSiblings = []string{
@@ -68,8 +71,11 @@ var c211cZones = map[string][]string{
 // Candidate image families in preference order: COS with Google-supplied GPU
 // driver first, then the current Deep Learning VM family project.
 var c211cImages = []struct{ p, f, kind string }{
-	{"cos-cloud", "cos-stable", "cos"},
 	{"ml-images", "common-cu124-debian-11", "dlvm"},
+	{"ml-images", "common-cu121-debian-11", "dlvm"},
+	{"ml-images", "common-cu118-debian-11", "dlvm"},
+	{"deeplearning-platform-release", "common-cu121-debian-11", "dlvm"},
+	{"deeplearning-platform-release", "common-cu118-debian-11", "dlvm"},
 }
 
 type c211cQuotaRow struct {
@@ -538,6 +544,61 @@ func c211cReaper(tok, proj string) {
 	}
 }
 
+// c211cCleanup reaps EVERY leftover own marker from earlier rounds of this lane
+// (nonces i121180 and i121469, any zone) in the four sibling projects, then
+// re-lists the label queries to prove the residue count.
+func c211cCleanup(tok string, projects []string) {
+	for _, proj := range projects {
+		for _, nonce := range c211cOldNonces {
+			filter := "labels.c211=" + nonce
+			st, body := c211xHTTP("GET", "https://compute.googleapis.com/compute/v1/projects/"+url.PathEscape(proj)+"/aggregated/instances?filter="+url.QueryEscape(filter)+"&maxResults=500", tok, "", "")
+			found := 0
+			names := []string{}
+			if st == 200 {
+				m := c211xJSON(body)
+				if it, ok := m["items"].(map[string]interface{}); ok {
+					for zoneKey, zv := range it {
+						zm, _ := zv.(map[string]interface{})
+						list, _ := zm["instances"].([]interface{})
+						zone := strings.TrimPrefix(zoneKey, "zones/")
+						for _, x := range list {
+							im, _ := x.(map[string]interface{})
+							n := c211xStr(im, "name")
+							if n == "" {
+								continue
+							}
+							found++
+							names = append(names, zone+"/"+n)
+							ds, db := c211xHTTP("DELETE", "https://compute.googleapis.com/compute/v1/projects/"+url.PathEscape(proj)+"/zones/"+zone+"/instances/"+n, tok, "", "")
+							fmt.Printf("C211C_CLEAN_REMOVE project=%s nonce=%s zone=%s name=%s status=%d verbatim=%s\n", proj, nonce, zone, n, ds, c211xTrunc(db, 300))
+						}
+					}
+				}
+			}
+			fmt.Printf("C211C_CLEAN_LIST project=%s nonce=%s status=%d found=%d instances=%s verbatim=%s\n", proj, nonce, st, found, strings.Join(names, ","), c211xTrunc(body, 300))
+		}
+	}
+	time.Sleep(15 * time.Second)
+	for _, proj := range projects {
+		for _, nonce := range c211cOldNonces {
+			filter := "labels.c211=" + nonce
+			st, body := c211xHTTP("GET", "https://compute.googleapis.com/compute/v1/projects/"+url.PathEscape(proj)+"/aggregated/instances?filter="+url.QueryEscape(filter)+"&maxResults=500", tok, "", "")
+			remain := -1
+			if st == 200 {
+				m := c211xJSON(body)
+				it, _ := m["items"].(map[string]interface{})
+				remain = 0
+				for _, zv := range it {
+					zm, _ := zv.(map[string]interface{})
+					list, _ := zm["instances"].([]interface{})
+					remain += len(list)
+				}
+			}
+			fmt.Printf("C211C_CLEAN_ABSENCE project=%s nonce=%s status=%d remaining=%d verbatim=%s\n", proj, nonce, st, remain, c211xTrunc(body, 240))
+		}
+	}
+}
+
 func TestC211XCOSSib(t *testing.T) {
 	started := time.Now()
 	markerDeadline := started.Add(62 * time.Minute)
@@ -590,6 +651,9 @@ func TestC211XCOSSib(t *testing.T) {
 		fmt.Printf("C211C_FLEET_TOKEN fallback=wif_minted\n")
 	}
 
+	// Reap every leftover own marker from earlier rounds of this lane.
+	c211cCleanup(ftok, c211cSiblings)
+
 	// ---------- image selection (COS first, DLVM fallback) ----------
 	imgP, imgF, imgKind := "", "", ""
 	for _, c := range c211cImages {
@@ -624,6 +688,7 @@ func TestC211XCOSSib(t *testing.T) {
 	readyProjects := []string{}
 	readyUUIDs := map[string]string{}
 	markers := 0
+	maxMarkers := 1
 	stopMarkers := false
 
 	for _, id := range c211cSiblings {
@@ -702,6 +767,11 @@ func TestC211XCOSSib(t *testing.T) {
 		}
 		saEmail := num + "-compute@developer.gserviceaccount.com"
 		instName := "c211-" + c211cNonce + "-" + strings.ReplaceAll(specAccel, "nvidia-tesla-", "")
+		if markers >= maxMarkers {
+			fmt.Printf("C211C_VERDICT project=%s MARKER_SKIPPED_BOUND maxMarkers=%d\n", id, maxMarkers)
+			res["verdict"] = "MARKER_SKIPPED_BOUND"
+			continue
+		}
 		markers++
 		fmt.Printf("C211C_VERDICT project=%s MARKER_ATTEMPT zone=%s accel=%s machine=%s instance=%s sa=%s\n", id, zone, specAccel, machine, instName, saEmail)
 		uuid, meta, absent, opErr, caps := c211cMarker(ftok, id, zone, instName, saEmail, imgP, imgF, machine, startup, cos, diskGB)
@@ -738,8 +808,8 @@ func TestC211XCOSSib(t *testing.T) {
 		verdict = "READY_NEW_PROJECT_GPU"
 	}
 	sum := map[string]interface{}{
-		"probe":           "c211_i121469_cossib",
-		"mechanism":       "cos-gpu-driver-version=latest (cos-stable) + nvidia/cuda container, DLVM fallback",
+		"probe":           "c211_i121733_cossib2",
+		"mechanism":       "leftover-reaper (i121180,i121469) + DLVM ml-images driver path, one bounded marker",
 		"host_project":    projNum,
 		"host_project_id": c211xShort(hostID),
 		"fleet_token_ok":  ftok != "",
