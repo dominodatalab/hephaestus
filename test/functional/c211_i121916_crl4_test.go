@@ -28,8 +28,9 @@
 //      serviceusage.services.get (plus a separate storage batch;
 //      per-permission fallback when a batch is refused as invalid);
 //   E. lists Cloud Run v2 jobs in europe-west4 and us-central1;
-//   F. only where the L4 quota is NONZERO in a supported region AND
-//      run.jobs.create + run.jobs.run are held: creates EXACTLY ONE nonce
+//   F. when run.jobs.create + run.jobs.run are held (the quota read is a
+//      degenerate null-limit rate metric per corpus fact 120750/venue 121522):
+//      creates EXACTLY ONE nonce
 //      Cloud Run L4 job (gpuZonalRedundancyDisabled, nodeSelector
 //      accelerator=nvidia-l4, 4 vCPU / 16Gi / 1 GPU, nvidia/cuda image) whose
 //      container prints nvidia-smi -L and
@@ -668,9 +669,20 @@ func c211rProject(fleet, fleetEmail string, p c211rTarget, t0 time.Time) map[str
 			}
 		}
 	}
-	if region == "" || !canCreate || !canRun {
-		res["device_attempt"] = "SKIPPED_QUOTA_OR_PERMS"
-		res["verdict"] = "NO_L4_QUOTA_OR_NO_RUN_PERMISSION"
+	// The serviceusage consumerQuotaMetrics reading for nvidia_l4_gpu_allocation is
+	// DEGENERATE: the 14-project corpus sweep (fact 120750) recorded an empty
+	// nonzero set for every project, including venue-review-seng365, which later
+	// ran a real Cloud Run L4 job (finding 121522). A null/absent bucket therefore
+	// does NOT mean zero availability, so the only faithful measurement is ONE
+	// bounded create+run attempt in a supported region; the provider's verbatim
+	// response decides the verdict.
+	if region == "" {
+		region = c211rRegions[0]
+		res["region_basis"] = "quota buckets null/empty (degenerate read); bounded create+run attempt in a supported region"
+	}
+	if !canCreate || !canRun {
+		res["device_attempt"] = "SKIPPED_NO_RUN_PERMISSION"
+		res["verdict"] = "NO_RUN_PERMISSION"
 		return res
 	}
 	if !budgetLeft() {
