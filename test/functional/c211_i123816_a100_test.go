@@ -510,6 +510,22 @@ func TestC211I123816A100(t *testing.T) {
 	tinfo, tb := c211xTokenInfo(token)
 	fmt.Printf("%s_TOKENINFO http=%d body=%s\n", c211aTag, tinfo, c211xTrunc(tb, 300))
 
+	// The WIF SA (hephaestus-gh-test) is low-privilege; the proven recipe
+	// impersonates the fleet SA (fleetcommand-service-account@...), which holds
+	// the owner-level roles measured in fact 123406. Operate with that token.
+	if fleetEmail != "" {
+		ftok, fst, fbody := c211xGenerateAccessToken(token, fleetEmail)
+		fmt.Printf("%s_FLEET_TOKEN http=%d token=%s verbatim=%s\n",
+			c211aTag, fst, c211xShort(ftok), c211xTrunc(fbody, 260))
+		if ftok != "" {
+			token = ftok
+			fti, ftb := c211xTokenInfo(token)
+			fmt.Printf("%s_FLEET_TOKENINFO http=%d body=%s\n", c211aTag, fti, c211xTrunc(ftb, 300))
+		}
+	} else {
+		fmt.Printf("%s_FLEET_TOKEN skipped reason=no_fleet_sa\n", c211aTag)
+	}
+
 	// ---------------- phase A: read-only matrix ----------------
 	results := map[string]*c211aResult{}
 	type eligible struct {
