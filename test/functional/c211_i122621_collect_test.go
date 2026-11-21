@@ -189,7 +189,12 @@ func TestC211CollectInstances(t *testing.T) {
 				if strings.TrimSpace(e) == "" {
 					continue
 				}
-				fmt.Printf("C211C_TAIL zone=%s name=%s %s\n", zone, name, c211xTrunc(e, 300))
+				fmt.Printf("C211C_TAIL zone=%s name=%s %s\n", zone, name, c211xTrunc(e, 1500))
+			}
+			detRe := regexp.MustCompile(`STAGE=run ts=(\d+)[^\n]*?det=([^\n]*)`)
+			if dm := detRe.FindAllStringSubmatch(content, -1); len(dm) > 0 {
+				x := dm[len(dm)-1]
+				fmt.Printf("C211C_DETNOW zone=%s name=%s ts=%s n=%d det=%s\n", zone, name, x[1], len(dm), c211xTrunc(x[2], 1200))
 			}
 			for pos, d := range dg {
 				pm := c3DiagPg.FindStringSubmatch(d[1])
