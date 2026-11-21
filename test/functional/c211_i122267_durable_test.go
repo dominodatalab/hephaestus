@@ -1,7 +1,8 @@
 //go:build functional && gke
 
-// C211 i122267 v3 — DURABLE GCP UNLOCK, corrected and idempotent (adds the
-// attributeMapping that run 2 proved is mandatory for OIDC providers).
+// C211 i122267 v4 — DURABLE GCP UNLOCK, corrected and idempotent (adds the
+// attributeMapping that run 2 proved is mandatory for OIDC providers, and an
+// eventual-consistency poll on the provider readback).
 //
 // Run 1 (44896579852) proved on the HOST project domino-eng-platform-dev
 // (153711203585) that the fleet identity already holds iam.serviceAccountKeys.create,
@@ -259,10 +260,19 @@ func c211uEnsureProvider(tok, projID, poolID, provID, repo string) (int, string)
 	body := fmt.Sprintf(`{"displayName":"c211 %s github oidc","attributeMapping":{"google.subject":"assertion.sub","attribute.actor":"assertion.actor","attribute.repository":"assertion.repository","attribute.repository_owner":"assertion.repository_owner","attribute.ref":"assertion.ref"},"attributeCondition":"assertion.repository=='%s'","oidc":{"issuerUri":"https://token.actions.githubusercontent.com","allowedAudiences":["https://github.com/%s"]}}`,
 		c211uNonce, repo, owner)
 	cst, cbody := c211xHTTP("POST", "https://iam.googleapis.com/v1/projects/"+url.PathEscape(projID)+"/locations/global/workloadIdentityPools/"+url.PathEscape(poolID)+"/providers?workloadIdentityPoolProviderId="+url.QueryEscape(provID), tok, "application/json", body)
-	if cst != 200 {
+	if cst != 200 && cst != 409 {
 		return cst, cbody
 	}
-	gst2, gbody2 := c211xHTTP("GET", u, tok, "", "")
+	// Provider creation is eventually consistent: poll the readback until ACTIVE.
+	var gst2 int
+	var gbody2 string
+	for i := 0; i < 12; i++ {
+		gst2, gbody2 = c211xHTTP("GET", u, tok, "", "")
+		if gst2 == 200 {
+			break
+		}
+		time.Sleep(8 * time.Second)
+	}
 	return gst2, gbody2
 }
 
