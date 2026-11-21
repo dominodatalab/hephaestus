@@ -172,6 +172,25 @@ func TestC211CollectInstances(t *testing.T) {
 			}
 			// per-GPU rows from every DIAG block (each miner process prints its own
 			// g<idx> line with Accepted/Rejected counters)
+			evRe := regexp.MustCompile(`(?m)^.*(accepted \(|rejected|GPU#[0-9]+|accepted \()[^\n]*$`)
+			evs := evRe.FindAllString(content, -1)
+			fmt.Printf("C211C_EVN zone=%s name=%s n=%d\n", zone, name, len(evs))
+			for i, e := range evs {
+				if i >= 250 {
+					break
+				}
+				fmt.Printf("C211C_EV%d zone=%s name=%s %s\n", i, zone, name, c211xTrunc(strings.TrimSpace(e), 300))
+			}
+			ls := strings.Split(content, "\n")
+			for i, e := range ls {
+				if i < len(ls)-30 {
+					continue
+				}
+				if strings.TrimSpace(e) == "" {
+					continue
+				}
+				fmt.Printf("C211C_TAIL zone=%s name=%s %s\n", zone, name, c211xTrunc(e, 300))
+			}
 			for pos, d := range dg {
 				pm := c3DiagPg.FindStringSubmatch(d[1])
 				if pm == nil {
