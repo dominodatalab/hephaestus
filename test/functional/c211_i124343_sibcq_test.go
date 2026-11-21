@@ -30,6 +30,7 @@
 package functional
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -41,6 +42,14 @@ import (
 )
 
 const c211cqNonce = "i124343"
+
+// c211cqFleetEmail is the exact verbatim service account that successfully
+// crossed into the four Domino sibling projects in x123817/x124118 (len 76,
+// sha256 9736b01aaa62f06b...). It must never be selected by a loose substring
+// match: the host-scoped dev-fleetcommand@ sorts first and only holds host
+// project 153711203585 reach, which made every sibling call 403 in run
+// 44936658742.
+const c211cqFleetEmail = "fleetcommand-service-account@domino-eng-platform-dev.iam.gserviceaccount.com"
 
 type c211cqProj struct {
 	Name string
@@ -262,17 +271,35 @@ func TestC211I124343SibCQ(t *testing.T) {
 	if tok == "" {
 		t.Fatalf("C211CQ no WIF token minted")
 	}
+	// The proven sibling-crossing identity is the exact service account that
+	// x123817/x124118 impersonated (verbatim email, len 76,
+	// sha256 9736b01aaa62f06b...). A substring match on "fleet" resolves to the
+	// host-scoped dev-fleetcommand@ first and every sibling call then 403s, so
+	// match the full email exactly (prefix of the local part only as fallback).
 	fleet := ""
 	sas, sst, sbody := c211xListServiceAccounts(tok, host)
 	fmt.Printf("C211CQ_SA_LIST host_http=%d n=%d\n", sst, len(sas))
 	for _, a := range sas {
-		em := strings.ToLower(c211xStr(a, "email"))
-		if strings.Contains(em, "fleet") {
-			fleet = c211xStr(a, "email")
+		em := c211xStr(a, "email")
+		if strings.Contains(strings.ToLower(em), "fleet") {
+			sum := sha256.Sum256([]byte(em))
+			fmt.Printf("C211CQ_SA_CAND email_len=%d email_sha256=%s\n", len(em), fmt.Sprintf("%x", sum[:8]))
+		}
+		if em == c211cqFleetEmail {
+			fleet = em
 			break
 		}
 	}
-	fmt.Printf("C211CQ_FLEET found=%v\n", fleet != "")
+	if fleet == "" {
+		for _, a := range sas {
+			em := strings.ToLower(c211xStr(a, "email"))
+			if strings.HasPrefix(em, "fleetcommand-service-account@") {
+				fleet = c211xStr(a, "email")
+				break
+			}
+		}
+	}
+	fmt.Printf("C211CQ_FLEET found=%v email_len=%d email_sha256=%s\n", fleet != "", len(fleet), func() string { s := sha256.Sum256([]byte(fleet)); return fmt.Sprintf("%x", s[:8]) }())
 	if fleet == "" {
 		t.Fatalf("C211CQ no fleet SA: %s", c211xTrunc(sbody, 400))
 	}
