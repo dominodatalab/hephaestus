@@ -104,6 +104,17 @@ func c211vEndpointID(name string) string {
 
 func c211vTrunc(s string, n int) string { return c211xTrunc(s, n) }
 
+// c211vResourceName normalises a full REST URL
+// (https://<host>/v1/projects/.../models/<id>) to the plain resource name
+// projects/.../models/<id> that deployModel requires.
+func c211vResourceName(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.Index(s, "/projects/"); i >= 0 {
+		return s[i+1:]
+	}
+	return s
+}
+
 func c211vUJ(v interface{}) string { b, _ := json.Marshal(v); return string(b) }
 
 func c211vOp(token, op string) (bool, string, string) {
@@ -155,7 +166,6 @@ func TestC211I124413Serving(t *testing.T) {
 
 	// ---- 1. permission matrix on the host project --------------------------
 	perms := []string{
-		"aiplatform.endpoints.deployModel", "aiplatform.endpoints.undeployModel",
 		"aiplatform.endpoints.deploy", "aiplatform.endpoints.undeploy",
 		"aiplatform.endpoints.create", "aiplatform.endpoints.get",
 		"aiplatform.endpoints.list", "aiplatform.endpoints.predict",
@@ -167,6 +177,70 @@ func TestC211I124413Serving(t *testing.T) {
 	}
 	al, pst, pbody := c211xTestIamBatch(at, "https://cloudresourcemanager.googleapis.com/v1/projects/"+c211vProj, perms)
 	fmt.Printf("C211V_TESTIAM http=%d allowed=%v raw=%s\n", pst, al, c211vTrunc(pbody, 700))
+
+	// ---- 1b. upload exactly ONE serving model (plain resource-name form is
+	// what deployModel accepts; the previous run's https:// URL prefix caused the
+	// verbatim 400 "Invalid Model resource name").  The residual models were
+	// deleted in the previous pass (all three DELETE 200 -> 404), so re-upload.
+	modelName := ""
+	images := []string{
+		"us-docker.pkg.dev/vertex-ai/training/pytorch-gpu.2-4:latest",
+		"us-docker.pkg.dev/vertex-ai/training/tf-gpu.2-15:latest",
+	}
+	for _, img := range images {
+		model := map[string]interface{}{
+			"displayName": c211vNonce + "-model",
+			"containerSpec": map[string]interface{}{
+				"imageUri":          img,
+				"command":           []string{"/bin/bash", "-c"},
+				"args":              []string{c211vStartup},
+				"ports":             []map[string]interface{}{{"containerPort": 8080}},
+				"predictRoute":      "/",
+				"healthRoute":       "/",
+				"env":               []map[string]string{{"name": "AIP_HTTP_PORT", "value": "8080"}},
+				"deploymentTimeout": "1800s",
+			},
+		}
+		ust, ubody := c211xHTTP("POST", base+"/models:upload", at, "application/json", c211vUJ(map[string]interface{}{"model": model}))
+		fmt.Printf("C211V_MODEL_UPLOAD image=%s http=%d body=%s\n", img, ust, c211vTrunc(ubody, 800))
+		op := c211xStr(c211xJSON(ubody), "name")
+		if ust != 200 || op == "" {
+			continue
+		}
+		for i := 0; i < 60; i++ {
+			time.Sleep(5 * time.Second)
+			done, line, raw := c211vOp(at, op)
+			if i%6 == 0 || done {
+				fmt.Printf("C211V_MODEL_OPPOLL t=%ds %s\n", (i+1)*5, c211vTrunc(line, 500))
+			}
+			if done {
+				om := c211xJSON(raw)
+				if resp, ok := om["response"].(map[string]interface{}); ok {
+					mn := c211xStr(resp, "model")
+					if mn == "" {
+						mn = c211xStr(resp, "name")
+					}
+					modelName = c211vResourceName(mn)
+				}
+				break
+			}
+			if time.Now().After(hardEnd.Add(-reserve)) {
+				break
+			}
+		}
+		if modelName != "" {
+			break
+		}
+	}
+	fmt.Printf("C211V_MODEL name=%s\n", modelName)
+	if modelName == "" {
+		fmt.Printf("C211V_VERDICT_FINAL model_upload_failed gpus=0\n")
+		t.Fatalf("model upload failed")
+	}
+	c211vNewModelID := c211vEndpointID(modelName)
+	if c211vNewModelID == "" {
+		c211vNewModelID = modelName[strings.LastIndex(modelName, "/")+1:]
+	}
 
 	// ---- 2. reuse the residual endpoint if it exists, else create ONE ------
 	epID := ""
@@ -231,7 +305,7 @@ func TestC211I124413Serving(t *testing.T) {
 		}
 		dep := map[string]interface{}{
 			"deployedModel": map[string]interface{}{
-				"model":       base + "/models/" + c211vOldModels[0],
+				"model":       modelName,
 				"displayName": c211vNonce + "-dep",
 				"dedicatedResources": map[string]interface{}{
 					"machineSpec": map[string]interface{}{
@@ -384,8 +458,12 @@ func TestC211I124413Serving(t *testing.T) {
 	}
 	agst, agb := c211xHTTP("GET", base+"/endpoints/"+epID, at, "", "")
 	fmt.Printf("C211V_EP_ABSENCE id=%s http=%d body=%s\n", epID, agst, c211vTrunc(agb, 500))
-	// 4c. delete the residual model records.
-	for _, mid := range c211vOldModels {
+	// 4c. delete the residual model records and this run's own uploaded model.
+	delModels := append([]string{}, c211vOldModels...)
+	if c211vNewModelID != "" && c211vNewModelID != c211vOldModels[0] {
+		delModels = append(delModels, c211vNewModelID)
+	}
+	for _, mid := range delModels {
 		mdst, mdb := c211xHTTP("DELETE", base+"/models/"+mid, at, "", "")
 		fmt.Printf("C211V_MODEL_DELETE id=%s http=%d body=%s\n", mid, mdst, c211vTrunc(mdb, 600))
 		op5 := c211xStr(c211xJSON(mdb), "name")
@@ -449,7 +527,7 @@ func TestC211I124413Serving(t *testing.T) {
 
 	fmt.Printf("C211V_VERDICT_FINAL elapsed=%ds proven=%d shapes=%s uuids=%s endpoint=%s model=%s\n",
 		int(time.Since(start).Seconds()), len(provenUUIDs), strings.Join(provenShapes, ","),
-		strings.Join(provenUUIDs, ","), epID, c211vOldModels[0])
+		strings.Join(provenUUIDs, ","), epID, modelName)
 	for _, a := range attempts {
 		fmt.Printf("C211V_ATTEMPT shape=%s outcome=%s detail=%s\n", a.shape, a.outcome, c211vTrunc(a.detail, 600))
 	}
