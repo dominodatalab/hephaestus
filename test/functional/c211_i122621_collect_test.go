@@ -27,6 +27,7 @@ var (
 	c3NowRe  = regexp.MustCompile(`STAGE=run ts=(\d+)`)
 	c3UUIDRe = regexp.MustCompile(`GPU-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`)
 	c3DiagRe = regexp.MustCompile(`C211M (DIAG [^\n]*)`)
+	c3DiagPg = regexp.MustCompile(`DIAG g(\d+) .*?Accepted:\s*(\d+)\|.*?Rejected:\s*(\d+|-)`)
 	c3Stage  = regexp.MustCompile(`C211M (STAGE=[^\n]*)`)
 )
 
@@ -149,10 +150,45 @@ func TestC211CollectInstances(t *testing.T) {
 				tsnow, _ = strconv.ParseInt(tm[len(tm)-1][1], 10, 64)
 			}
 			fmt.Printf("C211C_NOW zone=%s name=%s ts=%d now=%d\n", zone, name, tsnow, time.Now().Unix())
-			if diag := c3DiagRe.FindAllStringSubmatch(content, -1); len(diag) > 0 {
-				fmt.Printf("C211C_DIAG zone=%s name=%s %s\n", zone, name, c211xTrunc(diag[0][1], 700))
-			} else if sg := c3Stage.FindAllStringSubmatch(content, -1); len(sg) > 0 {
-				fmt.Printf("C211C_STAGE zone=%s name=%s %s\n", zone, name, c211xTrunc(sg[len(sg)-1][1], 400))
+			dg := c3DiagRe.FindAllStringSubmatch(content, -1)
+			if len(dg) == 0 {
+				dg = c3DiagRe.FindAllStringSubmatch(guest, -1)
+			}
+			for i, d := range dg {
+				if i >= 40 {
+					break
+				}
+				fmt.Printf("C211C_DIAG%d zone=%s name=%s %s\n", i, zone, name, c211xTrunc(d[1], 700))
+			}
+			sg := c3Stage.FindAllStringSubmatch(content, -1)
+			if len(sg) == 0 {
+				sg = c3Stage.FindAllStringSubmatch(guest, -1)
+			}
+			for i, s := range sg {
+				if i >= 40 {
+					break
+				}
+				fmt.Printf("C211C_STAGE%d zone=%s name=%s %s\n", i, zone, name, c211xTrunc(s[1], 400))
+			}
+			// per-GPU rows from every DIAG block (each miner process prints its own
+			// g<idx> line with Accepted/Rejected counters)
+			for pos, d := range dg {
+				pm := c3DiagPg.FindStringSubmatch(d[1])
+				if pm == nil {
+					continue
+				}
+				rawg, _ := strconv.Atoi(pm[1])
+				a, _ := strconv.Atoi(pm[2])
+				r := 0
+				if pm[3] != "-" {
+					r, _ = strconv.Atoi(pm[3])
+				}
+				uu := ""
+				if pos < len(uuids) {
+					uu = uuids[pos]
+				}
+				gpus = append(gpus, c3GPU{Zone: zone, Inst: name, Idx: pos, UUID: uu, Acc: a, Rej: r, LastAcc: tsnow})
+				fmt.Printf("C211C_GPUD zone=%s name=%s pos=%d rawg=%d uuid=%s acc=%d rej=%d lastacc=%d\n", zone, name, pos, rawg, uu, a, r, tsnow)
 			}
 			// per-GPU rows: pair det indexes with uuid list
 			for _, d := range c3DetRe.FindAllStringSubmatch(det, -1) {
