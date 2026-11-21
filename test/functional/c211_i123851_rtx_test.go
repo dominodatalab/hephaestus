@@ -725,7 +725,7 @@ func TestC211I123851VertexRtx(t *testing.T) {
 						"args":     []string{script},
 					},
 					"diskSpec": map[string]interface{}{
-						"bootDiskType": "pd-standard", "bootDiskSizeGb": 200,
+						"bootDiskType": "hyperdisk-balanced", "bootDiskSizeGb": 300,
 					},
 				}},
 				"scheduling": map[string]interface{}{
