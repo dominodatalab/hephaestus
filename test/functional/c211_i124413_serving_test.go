@@ -1,158 +1,103 @@
 //go:build functional && gke
 
-// C211 i124413 — host-project 153711203585 Vertex serving-plane probe.
+// C211 i124629 — cleanup-only close-out for the x124413 Vertex serving lane.
 //
-// Basis (fact 124381): the '/functional-test' WIF identity impersonates
-// dev-fleetcommand, which holds the full Vertex serving permission set; the
-// previous probe uploaded Model 1511582747343192064 (image
-// pytorch-gpu.2-4 with a containerSpec command that prints nvidia-smi device
-// lines and serves them as JSON on AIP_HTTP_PORT) HTTP 200 and created
-// Endpoint 2167388656753442816 HTTP 200, but all four deployModel attempts
-// returned verbatim 404 NOT_FOUND because the probe used the CreateEndpoint
-// long-running-operation id as the endpoint id.
+// Fact 124599/124672: run 3 (GKE job 136945863041) proved the first real B200
+// device in host project 153711203585 — a4-highgpu-8g x8 NVIDIA_B200
+// deployment 1160823144919859200 on endpoint 2866572498902712320 with
+// availableReplicaCount=1 and 8 distinct NVIDIA B200 UUIDs read back through
+// endpoints :predict HTTP 200.  The probe's own cleanup then failed:
 //
-// This probe FIXES that defect: it parses the endpoint resource id out of the
-// operation name (projects/.../endpoints/<id>/operations/<opid>) or out of the
-// operation's response.name, reuses the existing empty Endpoint when an
-// in-identity GET shows it exists, and otherwise creates exactly ONE nonce
-// endpoint.  It then deploys ONE shape at a time from the quota-positive
-// us-central1 ladder (B200 8.0, H100 80GB 16.0, A100 80GB 1.0, A100 14.0),
-// polling each deployModel operation to terminal and capturing every verbatim
-// refusal; on success it reads the nvidia-smi lines back through :predict,
-// takes an independent endpoints.get readback, undeploys, then moves on.
+//	C211V_EP_DELETE    id=2866572498902712320 http=400 FAILED_PRECONDITION
+//	  "There are other operations running on the Endpoint ... Operation(s) are:
+//	   projects/153711203585/locations/us-central1/operations/3580041775940632576."
+//	C211V_MODEL_DELETE id=205538855405748224 http=400 "can't be deleted because
+//	  it's deployed or being deployed at ... endpoints/2866572498902712320"
 //
-// Cleanup: undeploy + DELETE own endpoint and the residual Endpoint
-// 2167388656753442816 plus the three residual Model records
-// 1511582747343192064/5069426452965883904/7711913534325522432, proving
-// GET 404 / list empty where the identity allows it; bounded secondary retires
-// the three cancelled-but-PENDING us-central1 customJobs from fact 124366.
+// This probe runs in the SAME in-identity GKE WIF job (impersonating
+// dev-fleetcommand@domino-eng-platform-dev.iam.gserviceaccount.com) and does
+// NOTHING but clean up: it waits out the still-running H100 DeployModel
+// operation 3580041775940632576, undeploys anything still attached, deletes
+// endpoint 2866572498902712320 and own Model 205538855405748224, and proves
+// GET 404 / list-empty.  The pre-existing other-lane customJob
+// 4080308893584982016 is examined read-only and never touched.
 package functional
 
 import (
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
 )
 
+func c211vTrunc(s string, n int) string { return c211xTrunc(s, n) }
+
+func c211vUJ(v interface{}) string { b, _ := json.Marshal(v); return string(b) }
+
 const (
-	c211vProj    = "153711203585"
-	c211vRegion  = "us-central1"
-	c211vSA      = "dev-fleetcommand@domino-eng-platform-dev.iam.gserviceaccount.com"
-	c211vBase    = "https://us-central1-aiplatform.googleapis.com/v1/projects/153711203585/locations/us-central1"
-	c211vAPIRoot = "https://us-central1-aiplatform.googleapis.com/v1/"
-	c211vNonce   = "c211-i124413"
-	c211vOldEPID = "2167388656753442816"
+	c211cProj     = "153711203585"
+	c211cRegion   = "us-central1"
+	c211cSA       = "dev-fleetcommand@domino-eng-platform-dev.iam.gserviceaccount.com"
+	c211cBase     = "https://us-central1-aiplatform.googleapis.com/v1/projects/153711203585/locations/us-central1"
+	c211cAPIRoot  = "https://us-central1-aiplatform.googleapis.com/v1/"
+	c211cNonce    = "c211-i124629"
+	c211cEPID     = "2866572498902712320"
+	c211cModelID  = "205538855405748224"
+	c211cDeployID = "1160823144919859200"
+	c211cOpID     = "projects/153711203585/locations/us-central1/operations/3580041775940632576"
+	c211cOtherJob = "projects/153711203585/locations/us-central1/customJobs/4080308893584982016"
 )
 
-var c211vOldModels = []string{"1511582747343192064", "5069426452965883904", "7711913534325522432"}
-
-var c211vOldJobs = []string{
-	"projects/153711203585/locations/us-central1/customJobs/4154618287436595200",
-	"projects/153711203585/locations/us-central1/customJobs/5991523985450336256",
-	"projects/153711203585/locations/us-central1/customJobs/4863372278794027008",
-}
-
-var c211vFallbackSAs = []string{
+var c211cFallbackSAs = []string{
 	"fleetcommand-service-account@domino-eng-platform-dev.iam.gserviceaccount.com",
 	"domino-eng-platform-dev@appspot.gserviceaccount.com",
 	"153711203585-compute@developer.gserviceaccount.com",
 }
 
-var c211vStartup = `cd /tmp && (echo "nonce=c211-i124413 host=$(hostname) at=$(date -u +%FT%TZ)"; nvidia-smi -L; echo '---'; nvidia-smi --query-gpu=name,uuid,memory.total,driver_version --format=csv) > /tmp/dev.txt 2>&1; cat /tmp/dev.txt; python3 -c "
-import http.server,json,os
-D=open('/tmp/dev.txt').read()
-class H(http.server.BaseHTTPRequestHandler):
-    def _r(self):
-        b=json.dumps({'predictions':[D]}).encode()
-        self.send_response(200); self.send_header('Content-Type','application/json'); self.send_header('Content-Length',str(len(b))); self.end_headers(); self.wfile.write(b)
-    do_GET=_r
-    do_POST=_r
-    def log_message(self,*a): pass
-http.server.HTTPServer(('0.0.0.0',int(os.environ.get('AIP_HTTP_PORT','8080'))),H).serve_forever()
-"`
+func c211cUJ(v interface{}) string { return c211vUJ(v) }
 
-type c211vShape struct {
-	name    string
-	machine string
-	accel   string
-	count   int
-}
-
-var c211vLadder = []c211vShape{
-	{"b200-8x-a4-highgpu", "a4-highgpu-8g", "NVIDIA_B200", 8},
-	{"h100-8x-a3-highgpu", "a3-highgpu-8g", "NVIDIA_H100_80GB", 8},
-	{"a100-80gb-1x-a2-ultragpu", "a2-ultragpu-1g", "NVIDIA_A100_80GB", 1},
-	{"a100-8x-a2-highgpu", "a2-highgpu-8g", "NVIDIA_TESLA_A100", 8},
-}
-
-// c211vEPRe extracts the endpoint resource id from either an endpoint resource
-// name or a CreateEndpoint operation name of the form
-// projects/<p>/locations/<r>/endpoints/<id>/operations/<opid>.
-var c211vEPRe = regexp.MustCompile(`/endpoints/([0-9]+)(?:/operations/[0-9]+)?$`)
-
-func c211vEndpointID(name string) string {
-	name = strings.TrimRight(name, "/")
-	if m := c211vEPRe.FindStringSubmatch(name); m != nil {
-		return m[1]
-	}
-	parts := strings.Split(name, "/")
-	return parts[len(parts)-1]
-}
-
-func c211vTrunc(s string, n int) string { return c211xTrunc(s, n) }
-
-// c211vResourceName normalises a full REST URL
-// (https://<host>/v1/projects/.../models/<id>) to the plain resource name
-// projects/.../models/<id> that deployModel requires.
-func c211vResourceName(s string) string {
-	s = strings.TrimSpace(s)
-	if i := strings.Index(s, "/projects/"); i >= 0 {
-		return s[i+1:]
-	}
-	return s
-}
-
-func c211vUJ(v interface{}) string { b, _ := json.Marshal(v); return string(b) }
-
-func c211vOp(token, op string) (bool, string, string) {
-	st, body := c211xHTTP("GET", c211vAPIRoot+op, token, "", "")
+func c211cOpDone(token, op string) (bool, int, string) {
+	st, body := c211xHTTP("GET", c211cAPIRoot+op, token, "", "")
 	m := c211xJSON(body)
 	done, _ := m["done"].(bool)
-	return done, fmt.Sprintf("http=%d done=%v body=%s", st, done, c211vTrunc(body, 700)), body
+	return done, st, body
 }
 
-func c211vErrText(body string) string {
+func c211cEndpointState(token string) (int, string, []string) {
+	st, body := c211xHTTP("GET", c211cBase+"/endpoints/"+c211cEPID, token, "", "")
+	ids := []string{}
 	m := c211xJSON(body)
-	if m == nil {
-		return c211vTrunc(body, 900)
+	if m != nil {
+		if dms, ok := m["deployedModels"].([]interface{}); ok {
+			for _, dm := range dms {
+				if d0, ok := dm.(map[string]interface{}); ok {
+					if id := c211xStr(d0, "id"); id != "" {
+						ids = append(ids, id)
+					}
+				}
+			}
+		}
 	}
-	if e, ok := m["error"].(map[string]interface{}); ok {
-		return fmt.Sprintf("code=%v status=%v message=%v", e["code"], c211xStr(e, "status"), c211xStr(e, "message"))
-	}
-	return c211vTrunc(body, 900)
+	return st, body, ids
 }
 
-func TestC211I124413Serving(t *testing.T) {
+func TestC211I124629Cleanup(t *testing.T) {
 	start := time.Now()
-	hardEnd := start.Add(40 * time.Minute)
-	reserve := 6 * time.Minute
-	base := c211vBase
+	hardEnd := start.Add(18 * time.Minute)
 
 	tok, mech, mlog := c211xMint()
-	fmt.Printf("C211V_MINT mech=%s token_len=%d log=%s\n", mech, len(tok), c211vTrunc(mlog, 900))
+	fmt.Printf("C211C_MINT mech=%s token_len=%d log=%s\n", mech, len(tok), c211vTrunc(mlog, 900))
 	if tok == "" {
-		fmt.Printf("C211V_VERDICT_FINAL mint_failed gpus=0\n")
+		fmt.Printf("C211C_VERDICT_FINAL mint_failed cleanup_ok=false\n")
 		t.Fatalf("mint failed")
 	}
-	at, gst, gbody := c211xGenerateAccessToken(tok, c211vSA)
-	fmt.Printf("C211V_GENAT sa=%s http=%d token_len=%d raw=%s\n", c211vSA, gst, len(at), c211vTrunc(gbody, 300))
+	at, gst, gbody := c211xGenerateAccessToken(tok, c211cSA)
+	fmt.Printf("C211C_GENAT sa=%s http=%d token_len=%d raw=%s\n", c211cSA, gst, len(at), c211vTrunc(gbody, 300))
 	if at == "" {
-		for _, sa := range c211vFallbackSAs {
+		for _, sa := range c211cFallbackSAs {
 			a2, s2, b2 := c211xGenerateAccessToken(tok, sa)
-			fmt.Printf("C211V_GENAT_FALLBACK sa=%s http=%d token_len=%d raw=%s\n", sa, s2, len(a2), c211vTrunc(b2, 300))
+			fmt.Printf("C211C_GENAT_FALLBACK sa=%s http=%d token_len=%d raw=%s\n", sa, s2, len(a2), c211vTrunc(b2, 300))
 			if a2 != "" {
 				at = a2
 				break
@@ -160,403 +105,164 @@ func TestC211I124413Serving(t *testing.T) {
 		}
 	}
 	if at == "" {
-		fmt.Printf("C211V_VERDICT_FINAL impersonation_failed gpus=0\n")
+		fmt.Printf("C211C_VERDICT_FINAL impersonation_failed cleanup_ok=false\n")
 		t.Fatalf("impersonation failed")
 	}
 
-	// ---- 1. permission matrix on the host project --------------------------
-	perms := []string{
-		"aiplatform.endpoints.deploy", "aiplatform.endpoints.undeploy",
-		"aiplatform.endpoints.create", "aiplatform.endpoints.get",
-		"aiplatform.endpoints.list", "aiplatform.endpoints.predict",
-		"aiplatform.endpoints.delete",
-		"aiplatform.models.upload", "aiplatform.models.get", "aiplatform.models.list", "aiplatform.models.delete",
-		"aiplatform.customJobs.get", "aiplatform.customJobs.list",
-		"aiplatform.customJobs.cancel", "aiplatform.customJobs.delete",
-		"storage.buckets.create", "serviceusage.services.get", "iam.serviceAccounts.actAs",
-	}
-	al, pst, pbody := c211xTestIamBatch(at, "https://cloudresourcemanager.googleapis.com/v1/projects/"+c211vProj, perms)
-	fmt.Printf("C211V_TESTIAM http=%d allowed=%v raw=%s\n", pst, al, c211vTrunc(pbody, 700))
+	// ---- 0. permission check (delete/undeploy/get/list) -------------------
+	perms := []string{"aiplatform.endpoints.get", "aiplatform.endpoints.list", "aiplatform.endpoints.delete",
+		"aiplatform.endpoints.undeploy", "aiplatform.models.get", "aiplatform.models.list",
+		"aiplatform.models.delete", "aiplatform.customJobs.get"}
+	al, pst, pbody := c211xTestIamBatch(at, "https://cloudresourcemanager.googleapis.com/v1/projects/"+c211cProj, perms)
+	fmt.Printf("C211C_TESTIAM http=%d allowed=%v raw=%s\n", pst, al, c211vTrunc(pbody, 700))
 
-	// ---- 1b. upload exactly ONE serving model (plain resource-name form is
-	// what deployModel accepts; the previous run's https:// URL prefix caused the
-	// verbatim 400 "Invalid Model resource name").  The residual models were
-	// deleted in the previous pass (all three DELETE 200 -> 404), so re-upload.
-	type c211vModel struct{ image, name string }
-	c211vModels := []c211vModel{}
-	modelName := ""
-	images := []string{
-		"us-docker.pkg.dev/vertex-ai/prediction/pytorch-gpu.2-4:latest",
-		"us-docker.pkg.dev/vertex-ai/vertex-vision-model-garden-dockers/pytorch-vllm-serve:latest",
-		"us-docker.pkg.dev/vertex-ai/prediction/tf2-gpu.2-15:latest",
-	}
-	for _, img := range images {
-		model := map[string]interface{}{
-			"displayName": c211vNonce + "-model",
-			"containerSpec": map[string]interface{}{
-				"imageUri":          img,
-				"command":           []string{"/bin/bash", "-c"},
-				"args":              []string{c211vStartup},
-				"ports":             []map[string]interface{}{{"containerPort": 8080}},
-				"predictRoute":      "/",
-				"healthRoute":       "/",
-				"env":               []map[string]string{{"name": "AIP_HTTP_PORT", "value": "8080"}},
-				"deploymentTimeout": "1800s",
-			},
-		}
-		ust, ubody := c211xHTTP("POST", base+"/models:upload", at, "application/json", c211vUJ(map[string]interface{}{"model": model}))
-		fmt.Printf("C211V_MODEL_UPLOAD image=%s http=%d body=%s\n", img, ust, c211vTrunc(ubody, 800))
-		op := c211xStr(c211xJSON(ubody), "name")
-		if ust != 200 || op == "" {
-			continue
-		}
-		for i := 0; i < 60; i++ {
-			time.Sleep(5 * time.Second)
-			done, line, raw := c211vOp(at, op)
-			if i%6 == 0 || done {
-				fmt.Printf("C211V_MODEL_OPPOLL t=%ds %s\n", (i+1)*5, c211vTrunc(line, 500))
-			}
-			if done {
-				om := c211xJSON(raw)
-				if resp, ok := om["response"].(map[string]interface{}); ok {
-					mn := c211xStr(resp, "model")
-					if mn == "" {
-						mn = c211xStr(resp, "name")
-					}
-					modelName = c211vResourceName(mn)
-				}
-				break
-			}
-			if time.Now().After(hardEnd.Add(-reserve)) {
-				break
-			}
-		}
-		if modelName != "" {
-			c211vModels = append(c211vModels, c211vModel{img, modelName})
-			fmt.Printf("C211V_MODEL_CANDIDATE n=%d image=%s name=%s\n", len(c211vModels), img, modelName)
-			modelName = ""
-		}
-	}
-	if len(c211vModels) > 0 {
-		modelName = c211vModels[0].name
-	}
-	fmt.Printf("C211V_MODEL name=%s candidates=%d\n", modelName, len(c211vModels))
-	if modelName == "" {
-		fmt.Printf("C211V_VERDICT_FINAL model_upload_failed gpus=0\n")
-		t.Fatalf("model upload failed")
-	}
-	c211vNewModelIDs := []string{}
-	for _, mm := range c211vModels {
-		id := c211vEndpointID(mm.name)
-		if id == "" {
-			id = mm.name[strings.LastIndex(mm.name, "/")+1:]
-		}
-		c211vNewModelIDs = append(c211vNewModelIDs, id)
-	}
-
-	// ---- 2. reuse the residual endpoint if it exists, else create ONE ------
-	epID := ""
-	rgst, rgb := c211xHTTP("GET", base+"/endpoints/"+c211vOldEPID, at, "", "")
-	fmt.Printf("C211V_RESID_EP_GET id=%s http=%d body=%s\n", c211vOldEPID, rgst, c211vTrunc(rgb, 1000))
-	if rgst == 200 {
-		epID = c211vOldEPID
-		fmt.Printf("C211V_EP_REUSE id=%s\n", epID)
-	} else {
-		est, ebody := c211xHTTP("POST", base+"/endpoints", at, "application/json",
-			c211vUJ(map[string]interface{}{"displayName": c211vNonce + "-ep"}))
-		fmt.Printf("C211V_EP_CREATE http=%d body=%s\n", est, c211vTrunc(ebody, 800))
-		op := c211xStr(c211xJSON(ebody), "name")
-		if op != "" {
-			if id := c211vEndpointID(op); id != op && id != "" {
-				epID = id
-				fmt.Printf("C211V_EP_ID_FROM_OPNAME id=%s\n", epID)
-			}
-			for i := 0; i < 40; i++ {
-				time.Sleep(5 * time.Second)
-				done, line, raw := c211vOp(at, op)
-				if i%3 == 0 || done {
-					fmt.Printf("C211V_EP_OPPOLL t=%ds %s\n", (i+1)*5, c211vTrunc(line, 500))
-				}
-				if done {
-					om := c211xJSON(raw)
-					if resp, ok := om["response"].(map[string]interface{}); ok {
-						nm := c211xStr(resp, "name")
-						if nm != "" {
-							epID = c211vEndpointID(nm)
-							fmt.Printf("C211V_EP_ID_FROM_OPRESP name=%s id=%s\n", nm, epID)
-						}
-					}
-					break
-				}
-				if time.Now().After(hardEnd.Add(-reserve)) {
-					fmt.Printf("C211V_EP_OPPOLL_STOP reason=budget\n")
-					break
-				}
-			}
-		}
-	}
-	fmt.Printf("C211V_ENDPOINT id=%s\n", epID)
-	if epID == "" {
-		fmt.Printf("C211V_VERDICT_FINAL endpoint_create_failed gpus=0\n")
-		t.Fatalf("endpoint create failed")
-	}
-
-	// ---- 3. deploy ladder --------------------------------------------------
-	provenShapes := []string{}
-	provenUUIDs := []string{}
-	type attempt struct {
-		shape   string
-		outcome string
-		detail  string
-	}
-	attempts := []attempt{}
-	modelIdx := 0
-	for _, sh := range c211vLadder {
-		if time.Now().After(hardEnd.Add(-reserve)) {
-			fmt.Printf("C211V_LADDER_STOP reason=budget shape=%s\n", sh.name)
+	// ---- 1. wait out the still-running H100 DeployModel operation ---------
+	opDone := false
+	for i := 0; ; i++ {
+		d, st, body := c211cOpDone(at, c211cOpID)
+		fmt.Printf("C211C_OP_POLL t=%ds http=%d done=%v body=%s\n", i*10, st, d, c211vTrunc(body, 800))
+		if d {
+			opDone = true
 			break
 		}
-		dst := 0
-		dbody := ""
-		op := ""
-		usedModel := ""
-		for mi := modelIdx; mi < len(c211vModels); mi++ {
-			usedModel = c211vModels[mi].name
-			dep := map[string]interface{}{
-				"deployedModel": map[string]interface{}{
-					"model":       usedModel,
-					"displayName": c211vNonce + "-dep",
-					"dedicatedResources": map[string]interface{}{
-						"machineSpec": map[string]interface{}{
-							"machineType":      sh.machine,
-							"acceleratorType":  sh.accel,
-							"acceleratorCount": sh.count,
-						},
-						"minReplicaCount": 1,
-						"maxReplicaCount": 1,
-					},
-				},
-			}
-			dst, dbody = c211xHTTP("POST", base+"/endpoints/"+epID+":deployModel", at, "application/json", c211vUJ(dep))
-			fmt.Printf("C211V_DEPLOY shape=%s image=%s http=%d body=%s\n", sh.name, c211vModels[mi].image, dst, c211vTrunc(dbody, 900))
-			op = c211xStr(c211xJSON(dbody), "name")
-			if dst == 200 && op != "" {
-				modelIdx = mi
-				break
-			}
-			attempts = append(attempts, attempt{sh.name, fmt.Sprintf("image_%d_create_http_%d", mi, dst), c211vErrText(dbody)})
-			if !strings.Contains(dbody, "Invalid image") {
-				break
-			}
-			if time.Now().After(hardEnd.Add(-reserve)) {
-				break
-			}
+		if time.Now().After(hardEnd.Add(-12 * time.Minute)) {
+			break
 		}
-		if dst != 200 || op == "" {
-			continue
-		}
-		done := false
-		last := ""
-		for i := 0; i < 72; i++ {
+		time.Sleep(10 * time.Second)
+	}
+	fmt.Printf("C211C_OP_TERMINAL op=%s done=%v\n", c211cOpID, opDone)
+
+	// ---- 2. inspect the endpoint and undeploy anything still attached -----
+	est, ebody, depIDs := c211cEndpointState(at)
+	fmt.Printf("C211C_EP_GET id=%s http=%d deployed=%v body=%s\n", c211cEPID, est, depIDs, c211vTrunc(ebody, 1400))
+	undeployed := []string{}
+	for _, id := range depIDs {
+		ust, ub := c211xHTTP("POST", c211cBase+"/endpoints/"+c211cEPID+":undeployModel", at, "application/json",
+			c211cUJ(map[string]interface{}{"deployedModelId": id}))
+		fmt.Printf("C211C_UNDEPLOY id=%s http=%d body=%s\n", id, ust, c211vTrunc(ub, 500))
+		op := c211xStr(c211xJSON(ub), "name")
+		for i := 0; i < 60 && op != ""; i++ {
 			time.Sleep(10 * time.Second)
-			if time.Now().After(hardEnd.Add(-reserve)) {
-				fmt.Printf("C211V_DEPLOY_POLL_STOP shape=%s t=%ds reason=budget\n", sh.name, (i+1)*10)
-				break
+			d, _, _ := c211cOpDone(at, op)
+			if i%3 == 0 || d {
+				fmt.Printf("C211C_UNDEPLOY_POLL id=%s t=%ds done=%v\n", id, (i+1)*10, d)
 			}
-			d, line, _ := c211vOp(at, op)
-			if i%3 == 0 {
-				fmt.Printf("C211V_DEPLOY_POLL shape=%s t=%ds %s\n", sh.name, (i+1)*10, c211vTrunc(line, 400))
-			}
-			last = line
 			if d {
-				done = true
+				break
+			}
+			if time.Now().After(hardEnd.Add(-8 * time.Minute)) {
 				break
 			}
 		}
-		if !done {
-			fmt.Printf("C211V_DEPLOY_UNTERMINAL shape=%s last=%s\n", sh.name, c211vTrunc(last, 500))
-			attempts = append(attempts, attempt{sh.name, "poll_stop", c211vTrunc(last, 500)})
-			continue
-		}
-		if strings.Contains(last, "\"error\"") {
-			fmt.Printf("C211V_DEPLOY_REFUSED shape=%s verbatim=%s\n", sh.name, c211vTrunc(last, 1200))
-			attempts = append(attempts, attempt{sh.name, "op_error", c211vTrunc(last, 700)})
-			continue
-		}
-		fmt.Printf("C211V_DEPLOY_OK shape=%s\n", sh.name)
-		attempts = append(attempts, attempt{sh.name, "deployed", ""})
-		egst, egb := c211xHTTP("GET", base+"/endpoints/"+epID, at, "", "")
-		fmt.Printf("C211V_EP_GET_AFTER_DEPLOY shape=%s http=%d body=%s\n", sh.name, egst, c211vTrunc(egb, 1400))
-		depID := ""
-		em := c211xJSON(egb)
-		if dms, ok := em["deployedModels"].([]interface{}); ok && len(dms) > 0 {
-			if d0, ok := dms[len(dms)-1].(map[string]interface{}); ok {
-				depID = c211xStr(d0, "id")
-				dr, _ := d0["dedicatedResources"].(map[string]interface{})
-				ms, _ := dr["machineSpec"].(map[string]interface{})
-				fmt.Printf("C211V_DEPLOYED_MODEL shape=%s id=%s machine=%s accel=%s accel_count=%v min=%v max=%v\n",
-					sh.name, depID, c211xStr(ms, "machineType"), c211xStr(ms, "acceleratorType"),
-					ms["acceleratorCount"], dr["minReplicaCount"], dr["maxReplicaCount"])
-			}
-		}
-		gotUUIDs := []string{}
-		for i := 0; i < 15; i++ {
-			pst2, pbody2 := c211xHTTP("POST", base+"/endpoints/"+epID+":predict", at, "application/json", `{"instances":[{}]}`)
-			uu := c211xUUIDRe.FindAllString(pbody2, -1)
-			fmt.Printf("C211V_PREDICT shape=%s t=%d http=%d uuids=%d body=%s\n", sh.name, i, pst2, len(uu), c211vTrunc(pbody2, 1600))
-			if pst2 == 200 && len(uu) > 0 {
-				gotUUIDs = uu
-				break
-			}
-			if time.Now().After(hardEnd.Add(-reserve)) {
-				fmt.Printf("C211V_PREDICT_STOP shape=%s reason=budget\n", sh.name)
-				break
-			}
-			time.Sleep(20 * time.Second)
-		}
-		if len(gotUUIDs) > 0 {
-			provenShapes = append(provenShapes, sh.name)
-			provenUUIDs = append(provenUUIDs, gotUUIDs...)
-			fmt.Printf("C211V_PROVEN shape=%s n=%d uuids=%s\n", sh.name, len(gotUUIDs), strings.Join(gotUUIDs, ","))
-		}
-		if depID != "" {
-			ust2, ub := c211xHTTP("POST", base+"/endpoints/"+epID+":undeployModel", at, "application/json",
-				c211vUJ(map[string]interface{}{"deployedModelId": depID}))
-			fmt.Printf("C211V_UNDEPLOY shape=%s http=%d body=%s\n", sh.name, ust2, c211vTrunc(ub, 700))
-			op2 := c211xStr(c211xJSON(ub), "name")
-			for i := 0; i < 60 && op2 != ""; i++ {
-				time.Sleep(10 * time.Second)
-				d, line, _ := c211vOp(at, op2)
+		undeployed = append(undeployed, id)
+	}
+
+	// ---- 3. delete the endpoint, waiting out any operation it names -------
+	epGone := false
+	for attempt := 0; attempt < 8; attempt++ {
+		dst, db := c211xHTTP("DELETE", c211cBase+"/endpoints/"+c211cEPID, at, "", "")
+		fmt.Printf("C211C_EP_DELETE attempt=%d http=%d body=%s\n", attempt+1, dst, c211vTrunc(db, 900))
+		if dst == 200 {
+			op := c211xStr(c211xJSON(db), "name")
+			for i := 0; i < 40 && op != ""; i++ {
+				time.Sleep(5 * time.Second)
+				d, _, _ := c211cOpDone(at, op)
 				if i%3 == 0 || d {
-					fmt.Printf("C211V_UNDEPLOY_POLL shape=%s t=%ds %s\n", sh.name, (i+1)*10, c211vTrunc(line, 400))
+					fmt.Printf("C211C_EP_DELETE_POLL t=%ds done=%v\n", (i+1)*5, d)
 				}
 				if d {
 					break
 				}
-				if time.Now().After(hardEnd) {
-					break
-				}
 			}
-			pgst, pgb := c211xHTTP("GET", base+"/endpoints/"+epID, at, "", "")
-			fmt.Printf("C211V_EP_POSTUNDEPLOY shape=%s http=%d body=%s\n", sh.name, pgst, c211vTrunc(pgb, 1000))
-		}
-		if len(gotUUIDs) > 0 {
-			break
-		}
-	}
-
-	// ---- 4. cleanup -------------------------------------------------------
-	// 4a. undeploy anything still attached to our endpoint.
-	cgst, cgb := c211xHTTP("GET", base+"/endpoints/"+epID, at, "", "")
-	fmt.Printf("C211V_CLEAN_EP_GET id=%s http=%d body=%s\n", epID, cgst, c211vTrunc(cgb, 1200))
-	if cgst == 200 {
-		cm := c211xJSON(cgb)
-		if dms, ok := cm["deployedModels"].([]interface{}); ok {
-			for _, dm := range dms {
-				d0, _ := dm.(map[string]interface{})
-				id := c211xStr(d0, "id")
-				if id == "" {
-					continue
-				}
-				ust3, ub3 := c211xHTTP("POST", base+"/endpoints/"+epID+":undeployModel", at, "application/json",
-					c211vUJ(map[string]interface{}{"deployedModelId": id}))
-				fmt.Printf("C211V_CLEAN_UNDEPLOY id=%s http=%d body=%s\n", id, ust3, c211vTrunc(ub3, 500))
-				op3 := c211xStr(c211xJSON(ub3), "name")
-				for i := 0; i < 30 && op3 != ""; i++ {
-					time.Sleep(10 * time.Second)
-					d, _, _ := c211vOp(at, op3)
-					if d {
-						break
+		} else if dst == 400 {
+			// FAILED_PRECONDITION names an operation that is still running
+			m := c211xJSON(db)
+			if em, ok := m["error"].(map[string]interface{}); ok {
+				msg := c211xStr(em, "message")
+				fmt.Printf("C211C_EP_DELETE_PRECONDITION verbatim=%s\n", c211vTrunc(msg, 600))
+				if k := strings.Index(msg, "operations/"); k >= 0 {
+					op := "projects/153711203585/locations/us-central1/operations/" + strings.Split(msg[k+len("operations/"):], "\"")[0]
+					op = strings.TrimRight(op, ". ")
+					fmt.Printf("C211C_EP_DELETE_WAITOP op=%s\n", op)
+					for i := 0; i < 60; i++ {
+						time.Sleep(10 * time.Second)
+						d, _, _ := c211cOpDone(at, op)
+						if i%3 == 0 || d {
+							fmt.Printf("C211C_EP_DELETE_WAITOP_POLL t=%ds done=%v\n", (i+1)*10, d)
+						}
+						if d {
+							break
+						}
+						if time.Now().After(hardEnd.Add(-5 * time.Minute)) {
+							break
+						}
 					}
 				}
 			}
 		}
-	}
-	// 4b. delete the endpoint (own or residual) and prove absence.
-	ddst, ddb := c211xHTTP("DELETE", base+"/endpoints/"+epID, at, "", "")
-	fmt.Printf("C211V_EP_DELETE id=%s http=%d body=%s\n", epID, ddst, c211vTrunc(ddb, 800))
-	op4 := c211xStr(c211xJSON(ddb), "name")
-	for i := 0; i < 40 && op4 != ""; i++ {
-		time.Sleep(5 * time.Second)
-		d, _, _ := c211vOp(at, op4)
-		if i%3 == 0 || d {
-			fmt.Printf("C211V_EP_DELETE_POLL t=%ds done=%v\n", (i+1)*5, d)
-		}
-		if d {
+		gst, _, _ := c211cEndpointState(at)
+		if gst == 404 {
+			epGone = true
 			break
 		}
-	}
-	agst, agb := c211xHTTP("GET", base+"/endpoints/"+epID, at, "", "")
-	fmt.Printf("C211V_EP_ABSENCE id=%s http=%d body=%s\n", epID, agst, c211vTrunc(agb, 500))
-	// 4c. delete the residual model records and this run's own uploaded model.
-	delModels := append([]string{}, c211vOldModels...)
-	delModels = append(delModels, c211vNewModelIDs...)
-	for _, mid := range delModels {
-		mdst, mdb := c211xHTTP("DELETE", base+"/models/"+mid, at, "", "")
-		fmt.Printf("C211V_MODEL_DELETE id=%s http=%d body=%s\n", mid, mdst, c211vTrunc(mdb, 600))
-		op5 := c211xStr(c211xJSON(mdb), "name")
-		for i := 0; i < 24 && op5 != ""; i++ {
-			time.Sleep(5 * time.Second)
-			d, _, _ := c211vOp(at, op5)
-			if d {
-				break
-			}
+		if time.Now().After(hardEnd.Add(-4 * time.Minute)) {
+			break
 		}
-		mgst, mgb := c211xHTTP("GET", base+"/models/"+mid, at, "", "")
-		fmt.Printf("C211V_MODEL_ABSENCE id=%s http=%d body=%s\n", mid, mgst, c211vTrunc(mgb, 400))
+		time.Sleep(5 * time.Second)
 	}
-	lst3, lbody3 := c211xHTTP("GET", base+"/models?pageSize=100", at, "", "")
-	fmt.Printf("C211V_MODEL_LIST_AFTER http=%d body=%s\n", lst3, c211vTrunc(lbody3, 700))
-	lst4, lbody4 := c211xHTTP("GET", base+"/endpoints?pageSize=100", at, "", "")
-	fmt.Printf("C211V_EP_LIST_AFTER http=%d body=%s\n", lst4, c211vTrunc(lbody4, 700))
+	agst, agb, agdeps := c211cEndpointState(at)
+	fmt.Printf("C211C_EP_ABSENCE id=%s http=%d deployed=%v body=%s\n", c211cEPID, agst, agdeps, c211vTrunc(agb, 500))
+	if agst == 404 {
+		epGone = true
+	}
 
-	// ---- 5. bounded secondary: retire x124366 PENDING customJobs ----------
-	if time.Now().Before(start.Add(55 * time.Minute)) {
-		cjBase := "https://us-central1-aiplatform.googleapis.com/v1/projects/153711203585/locations/us-central1/customJobs"
-		jlst, jbody := c211xHTTP("GET", cjBase+"?pageSize=100", at, "", "")
-		fmt.Printf("C211V_JOB_LIST http=%d body=%s\n", jlst, c211vTrunc(jbody, 900))
-		for _, jn := range c211vOldJobs {
-			jgst, jgb := c211xHTTP("GET", c211vAPIRoot+jn, at, "", "")
-			jstate := c211xStr(c211xJSON(jgb), "state")
-			fmt.Printf("C211V_JOB_GET job=%s http=%d state=%s\n", jn, jgst, jstate)
-			if jgst != 200 {
-				continue
-			}
-			cst, cb := c211xHTTP("POST", c211vAPIRoot+jn+":cancel", at, "application/json", "{}")
-			fmt.Printf("C211V_JOB_CANCEL job=%s http=%d body=%s\n", jn, cst, c211vTrunc(cb, 300))
-			for i := 0; i < 12; i++ {
+	// ---- 4. delete own Model 205538855405748224 --------------------------
+	modelGone := false
+	mgst := 0
+	for attempt := 0; attempt < 4; attempt++ {
+		mdst, mdb := c211xHTTP("DELETE", c211cBase+"/models/"+c211cModelID, at, "", "")
+		fmt.Printf("C211C_MODEL_DELETE attempt=%d id=%s http=%d body=%s\n", attempt+1, c211cModelID, mdst, c211vTrunc(mdb, 700))
+		if mdst == 200 {
+			op := c211xStr(c211xJSON(mdb), "name")
+			for i := 0; i < 30 && op != ""; i++ {
 				time.Sleep(5 * time.Second)
-				_, jgb2 := c211xHTTP("GET", c211vAPIRoot+jn, at, "", "")
-				st2 := c211xStr(c211xJSON(jgb2), "state")
-				if strings.Contains(st2, "CANCELLED") || strings.Contains(st2, "CANCELLING") || strings.Contains(st2, "SUCCEEDED") || strings.Contains(st2, "FAILED") {
-					fmt.Printf("C211V_JOB_CANCEL_STATE job=%s t=%ds state=%s\n", jn, (i+1)*5, st2)
+				d, _, _ := c211cOpDone(at, op)
+				if d {
 					break
 				}
 			}
-			jdst, jdb := c211xHTTP("DELETE", c211vAPIRoot+jn, at, "", "")
-			fmt.Printf("C211V_JOB_DELETE job=%s http=%d body=%s\n", jn, jdst, c211vTrunc(jdb, 500))
-			for i := 0; i < 24; i++ {
-				time.Sleep(5 * time.Second)
-				g2st, g2b := c211xHTTP("GET", c211vAPIRoot+jn, at, "", "")
-				if g2st == 404 {
-					fmt.Printf("C211V_JOB_ABSENCE job=%s t=%ds http=404\n", jn, (i+1)*5)
-					break
-				}
-				if i == 23 {
-					fmt.Printf("C211V_JOB_STILL job=%s http=%d state=%s\n", jn, g2st, c211xStr(c211xJSON(g2b), "state"))
-				}
-			}
 		}
-		jlst2, jbody2 := c211xHTTP("GET", cjBase+"?pageSize=100", at, "", "")
-		fmt.Printf("C211V_JOB_LIST_AFTER http=%d body=%s\n", jlst2, c211vTrunc(jbody2, 900))
-	} else {
-		fmt.Printf("C211V_JOB_RETIRE_SKIPPED reason=budget\n")
+		var mgb string
+		mgst, mgb = c211xHTTP("GET", c211cBase+"/models/"+c211cModelID, at, "", "")
+		fmt.Printf("C211C_MODEL_ABSENCE id=%s http=%d body=%s\n", c211cModelID, mgst, c211vTrunc(mgb, 400))
+		if mgst == 404 {
+			modelGone = true
+			break
+		}
+		time.Sleep(5 * time.Second)
 	}
 
-	fmt.Printf("C211V_VERDICT_FINAL elapsed=%ds proven=%d shapes=%s uuids=%s endpoint=%s model=%s\n",
-		int(time.Since(start).Seconds()), len(provenUUIDs), strings.Join(provenShapes, ","),
-		strings.Join(provenUUIDs, ","), epID, modelName)
-	for _, a := range attempts {
-		fmt.Printf("C211V_ATTEMPT shape=%s outcome=%s detail=%s\n", a.shape, a.outcome, c211vTrunc(a.detail, 600))
+	// ---- 5. list readbacks ------------------------------------------------
+	lstM, lbodyM := c211xHTTP("GET", c211cBase+"/models?pageSize=100", at, "", "")
+	lstE, lbodyE := c211xHTTP("GET", c211cBase+"/endpoints?pageSize=100", at, "", "")
+	modelStillListed := strings.Contains(lbodyM, "models/"+c211cModelID)
+	epStillListed := strings.Contains(lbodyE, "endpoints/"+c211cEPID)
+	fmt.Printf("C211C_MODEL_LIST_AFTER http=%d has_model=%v body=%s\n", lstM, modelStillListed, c211vTrunc(lbodyM, 1000))
+	fmt.Printf("C211C_EP_LIST_AFTER http=%d has_endpoint=%v body=%s\n", lstE, epStillListed, c211vTrunc(lbodyE, 1000))
+	epListEmpty := !epStillListed
+	modelListClean := !modelStillListed
+
+	// ---- 6. pre-existing other-lane customJob must stay untouched ---------
+	jst, jbody := c211xHTTP("GET", c211cAPIRoot+c211cOtherJob, at, "", "")
+	jstate := c211xStr(c211xJSON(jbody), "state")
+	fmt.Printf("C211C_OTHER_JOB_GET job=%s http=%d state=%s body=%s\n", c211cOtherJob, jst, jstate, c211vTrunc(jbody, 500))
+
+	cleanupOK := epGone && modelGone && epListEmpty && modelListClean
+	fmt.Printf("C211C_CLEANUP_MATRIX op_done=%v ep_http=%d model_http=%d ep_listed=%v model_listed=%v undeployed=%v\n",
+		opDone, agst, mgst, epStillListed, modelStillListed, undeployed)
+	fmt.Printf("C211C_VERDICT_FINAL elapsed=%ds cleanup_ok=%v endpoint_gone=%v model_gone=%v ep_list_empty=%v model_list_clean=%v other_job_state=%s nonce=%s\n",
+		int(time.Since(start).Seconds()), cleanupOK, epGone, modelGone, epListEmpty, modelListClean, jstate, c211cNonce)
+	if !cleanupOK {
+		t.Errorf("cleanup incomplete: endpoint_gone=%v model_gone=%v ep_list_empty=%v model_list_clean=%v", epGone, modelGone, epListEmpty, modelListClean)
 	}
 }
