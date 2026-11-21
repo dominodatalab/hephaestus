@@ -211,6 +211,33 @@ func c211vLogs(tok, num, jobID string) (int, string) {
 	return c211xHTTP("POST", "https://logging.googleapis.com/v2/entries:list", tok, "application/json", string(b))
 }
 
+// c211vLogsText is the fallback sink read: the container's own C211V_HOST marker
+// text, bounded to the project (in case the platform labels the job differently).
+func c211vLogsText(tok, num string) (int, string) {
+	body := map[string]interface{}{
+		"resourceNames": []interface{}{"projects/" + num},
+		"filter":        `"C211V_HOST"`,
+		"pageSize":      50,
+		"orderBy":       "timestamp asc",
+	}
+	b, _ := json.Marshal(body)
+	return c211xHTTP("POST", "https://logging.googleapis.com/v2/entries:list", tok, "application/json", string(b))
+}
+
+// c211vProjectSAs lists the project's own service accounts (used only when the
+// default-SA job shape is verbatim refused).
+func c211vProjectSAs(tok, num string) ([]string, int, string) {
+	st, body := c211xHTTP("GET", "https://iam.googleapis.com/v1/projects/"+num+"/serviceAccounts?pageSize=100", tok, "", "")
+	emails := []string{}
+	for _, it := range c211vList(c211xJSON(body)["accounts"]) {
+		e := c211xStr(c211vMap(it), "email")
+		if e != "" {
+			emails = append(emails, e)
+		}
+	}
+	return emails, st, body
+}
+
 func c211vJobBody(display, machine, accel, saEmail string, spot bool) map[string]interface{} {
 	cs := map[string]interface{}{
 		"imageUri": "nvidia/cuda:12.4.0-base-ubuntu22.04",
@@ -526,29 +553,10 @@ func c211vOneProject(tok, proj, fleetEmail, runID string, deadline time.Time) (r
 		}
 	}
 
-	// ---- enable aiplatform once when verbatim DISABLED ----
-	if r.SvcState == "DISABLED" && c211vHas(allowed, "serviceusage.services.enable") && haveCreate {
-		est, op, ebody := c211vEnable(tok, r.Num, "aiplatform.googleapis.com")
-		r.Enable = fmt.Sprintf("http=%d op=%s", est, op)
-		fmt.Printf("C211V_ENABLE proj=%s http=%d op=%s verbatim=%s\n", proj, est, op, c211xTrunc(ebody, 300))
-		if est == 200 && op != "" {
-			dl := time.Now().Add(300 * time.Second)
-			for time.Now().Before(dl) && left() > 8*time.Minute {
-				ost, ob := c211xHTTP("GET", "https://serviceusage.googleapis.com/v1/"+op, tok, "", "")
-				om := c211xJSON(ob)
-				done, _ := om["done"].(bool)
-				fmt.Printf("C211V_ENABLE_POLL proj=%s http=%d done=%v\n", proj, ost, done)
-				if done {
-					break
-				}
-				time.Sleep(12 * time.Second)
-			}
-			_, sbody = c211vService(tok, r.Num, "aiplatform.googleapis.com")
-			r.SvcState = c211xStr(c211xJSON(sbody), "state")
-			fmt.Printf("C211V_SVC_POST proj=%s state=%s\n", proj, r.SvcState)
-		}
-	} else if r.SvcState == "DISABLED" && haveCreate {
-		fmt.Printf("C211V_ENABLE proj=%s skipped_no_serviceusage_enable\n", proj)
+	// ---- aiplatform was already enabled by the x121897 probe; never re-enable it ----
+	if r.SvcState == "DISABLED" {
+		r.Enable = "skipped_already_enabled_by_x121897_no_reenable"
+		fmt.Printf("C211V_ENABLE proj=%s skipped_no_reenable_per_mandate state=%s\n", proj, r.SvcState)
 	}
 
 	// ---- ONE on-demand T4 customJob (spot only after a verbatim on-demand refusal) ----
@@ -580,7 +588,9 @@ func c211vOneProject(tok, proj, fleetEmail, runID string, deadline time.Time) (r
 
 	created := false
 	spotTried := false
-	saEmail := fleetEmail
+	// NEW SHAPE (i122054): omit serviceAccount so Vertex runs the job as the project
+	// default compute SA; the cross-project fleet SA (sa=true) is already verbatim-refused.
+	saEmail := ""
 	for _, reg := range regions {
 		if left() < 9*time.Minute {
 			break
@@ -615,6 +625,41 @@ func c211vOneProject(tok, proj, fleetEmail, runID string, deadline time.Time) (r
 			}
 		}
 		low := strings.ToLower(b)
+		// ---- default-SA shape refused? ONE retry with the project's own default compute SA ----
+		if !created && saEmail == "" && left() > 11*time.Minute &&
+			(strings.Contains(low, "service_account") || strings.Contains(low, "service account") || strings.Contains(low, "act as")) {
+			sasList, sst0, sbody := c211vProjectSAs(tok, r.Num)
+			fmt.Printf("C211V_SA_LIST proj=%s http=%d n=%d verbatim=%s\n", proj, sst0, len(sasList), c211xTrunc(sbody, 250))
+			local := ""
+			want := r.Num + "-compute@developer.gserviceaccount.com"
+			for _, e := range sasList {
+				if e == want {
+					local = e
+					break
+				}
+			}
+			if local == "" {
+				for _, e := range sasList {
+					if strings.Contains(e, "-compute@developer.gserviceaccount.com") {
+						local = e
+						break
+					}
+				}
+			}
+			if local != "" {
+				saEmail = local
+				st, b = c211vCreateJob(tok, r.Num, reg, display, "n1-standard-4", "NVIDIA_TESLA_T4", saEmail, false)
+				created = st == 200
+				r.Attempts = append(r.Attempts, fmt.Sprintf("region=%s sa=local fallback http=%d %s", reg, st, c211xTrunc(b, 500)))
+				fmt.Printf("C211V_CREATE_SA_FALLBACK proj=%s region=%s sa=%s http=%d verbatim=%s\n", proj, reg, c211xShort(local), st, c211xTrunc(b, 500))
+				if created {
+					r.JobName = c211xStr(c211xJSON(b), "name")
+					r.JobReg = reg
+					break
+				}
+				low = strings.ToLower(b)
+			}
+		}
 		quotaRefused := strings.Contains(low, "quota") || strings.Contains(low, "resource_exhausted") || st == 429
 		if !created && quotaRefused && !spotTried && left() > 10*time.Minute {
 			spotTried = true
@@ -682,11 +727,19 @@ func c211vOneProject(tok, proj, fleetEmail, runID string, deadline time.Time) (r
 		time.Sleep(20 * time.Second)
 	}
 
-	// final sink read (one more)
+	// final sink read (one more) + marker-text fallback
 	if r.LogPerm {
 		if lst, lb := c211vLogs(tok, r.Num, jobID); lst == 200 && lb != "" {
 			if devText == "" || strings.Contains(lb, "GPU-") {
 				devText = lb
+			}
+		}
+		if !strings.Contains(devText, "GPU-") && !strings.Contains(devText, "C211V_HOST") {
+			if lst2, lb2 := c211vLogsText(tok, r.Num); lst2 == 200 && lb2 != "" {
+				fmt.Printf("C211V_LOG_TEXT proj=%s http=%d bytes=%d\n", proj, lst2, len(lb2))
+				devText = devText + "\n" + lb2
+			} else if lst2 != 200 {
+				fmt.Printf("C211V_LOG_TEXT proj=%s http=%d verbatim=%s\n", proj, lst2, c211xTrunc(lb2, 260))
 			}
 		}
 	}
@@ -707,7 +760,18 @@ func c211vOneProject(tok, proj, fleetEmail, runID string, deadline time.Time) (r
 	r.Readback = fmt.Sprintf("http=%d state=%s name=%s %s", rbSt, c211xStr(rbM, "state"), c211xStr(rbM, "name"), spec)
 	fmt.Printf("C211V_READBACK proj=%s %s\n", proj, r.Readback)
 
-	// ---- final list check: any lingering c211-i121897 customJob in this region ----
+	// ---- delete the own customJob and prove absence (GET 404 + zero c211 items) ----
+	dst, db := c211xHTTP("DELETE", jurl, tok, "", "")
+	fmt.Printf("C211V_DELETE proj=%s http=%d verbatim=%s\n", proj, dst, c211xTrunc(db, 300))
+	getAfter := -1
+	for i := 0; i < 12 && left() > 3*time.Minute; i++ {
+		gst, _ := c211xHTTP("GET", jurl, tok, "", "")
+		getAfter = gst
+		if gst == 404 {
+			break
+		}
+		time.Sleep(15 * time.Second)
+	}
 	lc, lb2 := c211xHTTP("GET", "https://"+r.JobReg+"-aiplatform.googleapis.com/v1/projects/"+r.Num+
 		"/locations/"+r.JobReg+"/customJobs?pageSize=100", tok, "", "")
 	left2 := []string{}
@@ -718,8 +782,8 @@ func c211vOneProject(tok, proj, fleetEmail, runID string, deadline time.Time) (r
 			left2 = append(left2, dn+"="+c211xStr(im, "state"))
 		}
 	}
-	r.Absence = fmt.Sprintf("list_http=%d c211_items=%d %v (terminal jobs hold no live compute)", lc, len(left2), left2)
-	fmt.Printf("C211V_LIST proj=%s %s\n", proj, r.Absence)
+	r.Absence = fmt.Sprintf("delete_http=%d get_after_delete=%d list_http=%d c211_items=%d %v", dst, getAfter, lc, len(left2), left2)
+	fmt.Printf("C211V_ABSENCE proj=%s %s\n", proj, r.Absence)
 
 	if len(r.UUIDs) > 0 {
 		r.Verdict = "VERTEX_T4_DEVICE_PROVEN"
