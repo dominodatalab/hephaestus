@@ -510,6 +510,8 @@ func c211sProjectName(m map[string]interface{}) string {
 }
 
 func TestC211XSibGPU(t *testing.T) {
+	t.Skip("superseded by c211_i121095_reaper_test.go (intent 121095): the four c211-i120969-t4 markers " +
+		"already exist RUNNING; this test must not create new GPU instances")
 	started := time.Now()
 	// Hard cap for starting a new marker: 75 minutes after test start.
 	markerDeadline := started.Add(75 * time.Minute)
