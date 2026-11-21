@@ -597,7 +597,7 @@ func c211xListServiceAccounts(token, proj string) ([]map[string]interface{}, int
 }
 
 func c211xGenerateAccessToken(token, email string) (string, int, string) {
-	body := fmt.Sprintf(`{"scope":["%s"],"lifetime":"1800s"}`, c211xScope)
+	body := fmt.Sprintf(`{"scope":["%s"],"lifetime":"3600s"}`, c211xScope)
 	u := "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/" + url.PathEscape(email) + ":generateAccessToken"
 	st, rb := c211xHTTP("POST", u, token, "application/json", body)
 	m := c211xJSON(rb)
