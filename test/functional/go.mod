@@ -1,6 +1,6 @@
 module github.com/dominodatalab/hephaestus/test/functional
 
-go 1.26.11
+go 1.26.3
 
 toolchain go1.26.11
 
