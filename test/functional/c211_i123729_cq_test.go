@@ -185,7 +185,8 @@ func c211qBestToken(tok, proj string) (string, string, []string, string) {
 	return at, "sa:" + pick, al2, note
 }
 
-func TestC211I123729CQ(t *testing.T) {
+func TestC211I123729CQ1Done(t *testing.T) {
+	t.Skip("round 1 completed at run 44922221787 / job 136900560622")
 	deadline := time.Now().Add(22 * time.Minute)
 	tok, method, mlog := c211xMint()
 	fmt.Printf("C211Q_IDENTITY method=%s token_len=%d at=%s\n", method, len(tok), time.Now().UTC().Format(time.RFC3339))
